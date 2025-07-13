@@ -111,10 +111,14 @@ function createCardElement(cardData) {
   const back = document.createElement("div");
   back.className = "card-face card-back";
 
-  // Use the user-specified icon for VS Code
   const vscodeLink = cardData.projectPath
     ? `<a href="vscode://file${cardData.projectPath}" class="primary-link" title="Open in VS Code"><button class="icon-btn"><i class="iconoir iconoir-code"></i></button></a>`
     : "";
+  
+  const githubLink = cardData.githubUrl
+    ? `<a href="${cardData.githubUrl}" target="_blank" class="primary-link github-link" title="Click to open repo, Shift+Click to copy URL"><button class="icon-btn"><i class="iconoir iconoir-github"></i></button></a>`
+    : "";
+
 
   front.innerHTML = `
         <div class="card-header"><div class="card-title" contenteditable="true"></div></div>
@@ -126,6 +130,7 @@ function createCardElement(cardData) {
             <div class="card-links">
                 <a href="${cardData.primaryUrl}" target="_blank" class="primary-link" title="Open Link"><button class="icon-btn"><i class="iconoir iconoir-link"></i></button></a>
                 ${vscodeLink}
+                ${githubLink}
             </div>
             <div class="card-actions">
                 <button class="icon-btn folder-btn" title="Set project folder"><i class="iconoir iconoir-folder"></i></button>
@@ -157,14 +162,13 @@ function renderContextList(cardElement, cardData) {
     (cardData.contextItems || []).forEach(item => {
         const itemEl = document.createElement('div');
         itemEl.className = 'context-item';
-        itemEl.setAttribute('draggable', true); // Re-add draggable to the whole item for simplicity
+        itemEl.setAttribute('draggable', true);
         itemEl.dataset.itemId = item.id;
         itemEl.title = new Date(item.createdAt).toLocaleString();
 
         const viewEl = document.createElement('div');
         viewEl.className = 'context-item-view';
         
-        // Regex to find :icon: and optional :color:
         const match = item.text.match(/^:([a-z0-9\-]+):(?:\s*:([a-z]+):)?/);
         let textContent = item.text;
 
@@ -209,8 +213,7 @@ function addCardEventListeners(cardElement, initialCardData) {
 
   const contextListEl = cardElement.querySelector(".context-list");
 
-  // Switch to edit mode on click
-contextListEl.addEventListener('click', (e) => {
+  contextListEl.addEventListener('click', (e) => {
     const viewEl = e.target.closest('.context-item-view');
     if (viewEl) {
         const itemEl = viewEl.closest('.context-item');
@@ -224,7 +227,6 @@ contextListEl.addEventListener('click', (e) => {
         textarea.className = 'context-item-edit-area';
         textarea.value = item.text;
         
-        // Auto-resize logic
         function resizeTextarea() {
             textarea.style.height = 'auto';
             textarea.style.height = textarea.scrollHeight + 'px';
@@ -235,7 +237,7 @@ contextListEl.addEventListener('click', (e) => {
         itemEl.prepend(textarea);
         textarea.focus();
         textarea.select();
-        resizeTextarea(); // Set initial size
+        resizeTextarea();
 
         const saveAndSwitchToView = () => {
             const newText = textarea.value.trim();
@@ -250,7 +252,7 @@ contextListEl.addEventListener('click', (e) => {
 
         textarea.addEventListener('blur', saveAndSwitchToView);
         textarea.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) { // Save on Enter, allow newlines with Shift+Enter
+            if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 textarea.blur();
             } else if (e.key === 'Escape') {
@@ -261,7 +263,6 @@ contextListEl.addEventListener('click', (e) => {
     }
 });
 
-  // Handle item deletion
   contextListEl.addEventListener("click", (e) => {
     if (e.target.classList.contains("delete-item-btn")) {
       const itemId = e.target.closest(".context-item").dataset.itemId;
@@ -288,20 +289,17 @@ contextListEl.addEventListener('click', (e) => {
       renderContextList(cardElement, getCardById(cardId));
     });
 
-  // Drag and Drop for context items
   let draggedItemId = null;
   contextListEl.addEventListener("dragstart", (e) => {
     const handle = e.target.closest(".drag-handle");
     if (handle) {
       const itemEl = handle.closest(".context-item");
       draggedItemId = itemEl.dataset.itemId;
-      // Add dragging class to the whole item for visual feedback
       itemEl.classList.add("dragging");
     }
   });
 
   contextListEl.addEventListener("dragend", (e) => {
-    // Find any item that is currently being dragged and remove the class
     const draggingEl = contextListEl.querySelector(".context-item.dragging");
     if (draggingEl) {
       draggingEl.classList.remove("dragging");
@@ -386,35 +384,45 @@ contextListEl.addEventListener('click', (e) => {
     cardElement.querySelector(".card").style.border =
       "1px solid var(--primary-border-color)";
   });
+    
   cardElement.addEventListener("drop", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    cardElement.querySelector(".card").style.border =
-      "1px solid var(--primary-border-color)";
-    const url =
-      e.dataTransfer.getData("URL") || e.dataTransfer.getData("text/uri-list");
+    cardElement.querySelector(".card").style.border = "1px solid var(--primary-border-color)";
+    const url = e.dataTransfer.getData("URL") || e.dataTransfer.getData("text/uri-list");
     const cardData = getCardById(cardId);
-    if (url && url !== cardData.primaryUrl) {
-      const newHistory = [cardData.primaryUrl, ...(cardData.urlHistory || [])];
-      updateCard(cardId, { primaryUrl: url, urlHistory: newHistory });
+    
+    if (url) {
+      if (url.includes('github.com')) {
+          updateCard(cardId, { githubUrl: url });
+      } else if (url !== cardData.primaryUrl) {
+          const newHistory = [cardData.primaryUrl, ...(cardData.urlHistory || [])];
+          updateCard(cardId, { primaryUrl: url, urlHistory: newHistory });
+      }
       renderBoard();
     }
   });
-  // Add this block inside the addCardEventListeners function
+  
+  const githubLinkEl = cardElement.querySelector(".github-link");
+  if (githubLinkEl) {
+      githubLinkEl.addEventListener('click', (e) => {
+          if (e.shiftKey) {
+              e.preventDefault();
+              navigator.clipboard.writeText(githubLinkEl.href).then(() => {
+                  const icon = githubLinkEl.querySelector('i');
+                  icon.style.color = 'var(--accent-color)';
+                  setTimeout(() => { icon.style.color = ''; }, 500);
+              }).catch(err => console.error('Failed to copy URL: ', err));
+          }
+      });
+  }
 
 const cardBody = cardElement.querySelector('.card-body');
 cardBody.addEventListener('wheel', function(e) {
-    // First, check if the element's content is actually overflowing.
-    // If not, we don't need to do anything and can let the page scroll normally.
     if (this.scrollHeight <= this.clientHeight) {
         return;
     }
-
-    // If the element IS scrollable, take control.
-    // Prevent the default browser action (which is to scroll the page).
     e.preventDefault();
-
-    // Manually apply the scroll delta from the mouse wheel to this element.
     this.scrollTop += e.deltaY;
 });
 }
@@ -441,7 +449,10 @@ addCardBtn.addEventListener("drop", (e) => {
       contextItems: [],
       createdAt: new Date().toISOString(),
       projectPath: "",
+      githubUrl: url.includes('github.com') ? url : ""
     };
+    if (newCard.githubUrl) newCard.title = new URL(url).pathname.split('/')[2] || "New GitHub Project";
+
     localCards.push(newCard);
     saveCardsToStorage();
     renderBoard();
@@ -495,7 +506,6 @@ function importData() {
         const content = readerEvent.target.result;
         const importedCards = JSON.parse(content);
         if (Array.isArray(importedCards)) {
-          // Basic validation
           localCards = importedCards;
           saveCardsToStorage();
           renderBoard();
