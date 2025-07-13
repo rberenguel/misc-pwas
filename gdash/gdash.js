@@ -115,9 +115,7 @@ function createCardElement(cardData) {
   const back = document.createElement("div");
   back.className = "card-face card-back";
 
-  const vscodeLink = cardData.projectPath
-    ? `<a href="vscode://file${cardData.projectPath}" class="primary-link" title="Open in VS Code"><button class="icon-btn"><i class="iconoir iconoir-code"></i></button></a>`
-    : "";
+  const vscodeLink = `<a href="${cardData.projectPath ? `vscode://file${cardData.projectPath}` : "javascript:void(0)"}" class="primary-link vscode-link" title="${cardData.projectPath ? "Open in VS Code (Shift+Click to edit)" : "Set project folder"}"><button class="icon-btn ${!cardData.projectPath ? "disabled" : ""}"><i class="iconoir iconoir-code"></i></button></a>`;
 
   const githubLink = cardData.githubUrl
     ? `<a href="${cardData.githubUrl}" target="_blank" class="primary-link github-link" title="Click to open repo, Shift+Click to copy URL"><button class="icon-btn"><i class="iconoir iconoir-github"></i></button></a>`
@@ -136,7 +134,6 @@ function createCardElement(cardData) {
                 ${githubLink}
             </div>
             <div class="card-actions">
-                <button class="icon-btn folder-btn" title="Set project folder"><i class="iconoir iconoir-folder"></i></button>
                 <button class="icon-btn flip-btn" title="View History"><i class="iconoir iconoir-refresh"></i></button>
                 <button class="icon-btn delete-btn" title="Delete Card"><i class="iconoir iconoir-trash"></i></button>
             </div>
@@ -393,13 +390,20 @@ function addCardEventListeners(cardElement, initialCardData) {
     draggedItemId = null;
   });
 
-  cardElement.querySelector(".folder-btn").addEventListener("click", () => {
-    const cardData = getCardById(cardId);
-    pathInput.value = cardData.projectPath || "";
-    pathModal.dataset.cardId = cardId;
-    pathModal.classList.add("visible");
-    pathInput.focus();
-  });
+  const vscodeLinkEl = cardElement.querySelector(".vscode-link");
+  if (vscodeLinkEl) {
+    vscodeLinkEl.addEventListener("click", (e) => {
+      const cardData = getCardById(cardId);
+      if (e.shiftKey || !cardData.projectPath) {
+        e.preventDefault();
+        pathInput.value = cardData.projectPath || "";
+        pathModal.dataset.cardId = cardId;
+        pathModal.classList.add("visible");
+        pathInput.focus();
+      }
+      // If projectPath exists and no shift key, the default link behavior will trigger
+    });
+  }
 
   cardElement.querySelector(".delete-btn").addEventListener("click", () => {
     deleteModal.classList.add("visible");
@@ -417,18 +421,21 @@ function addCardEventListeners(cardElement, initialCardData) {
     );
 
   cardElement.addEventListener("dragover", (e) => {
+    if (draggedCardId) return; // Defer to container dragover for reordering
     e.preventDefault();
     e.stopPropagation();
     cardElement.querySelector(".card").style.border =
       "1px solid var(--accent-color)";
   });
   cardElement.addEventListener("dragleave", (e) => {
+    if (draggedCardId) return;
     e.stopPropagation();
     cardElement.querySelector(".card").style.border =
       "1px solid var(--primary-border-color)";
   });
 
   cardElement.addEventListener("drop", (e) => {
+    if (draggedCardId) return; // Defer to container drop for reordering
     e.preventDefault();
     e.stopPropagation();
     cardElement.querySelector(".card").style.border =

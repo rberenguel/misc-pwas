@@ -182,6 +182,11 @@ body {
   border-bottom: 2px solid var(--accent-color);
 }
 
+.icon-btn.disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .card-scene.dragging {
   opacity: 0.5;
 }
