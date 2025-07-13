@@ -1,0 +1,377 @@
+/* --- Base Styles & Dark Theme --- */
+:root {
+  --bg-color: #1a1a1a;
+  --surface-color: #2b2b2b;
+  --surface-hover: #3c3c3c;
+  --primary-border-color: #444;
+  --secondary-border-color: #333;
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0a0;
+  --accent-color: #4a90e2;
+  --danger-color: #e54b4b;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Monoid", "Roboto Mono", monospace;
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  height: 100%;
+}
+
+/* --- Main Layout --- */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 24px;
+}
+
+/* --- Cards Container --- */
+#cards-container {
+  flex-grow: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+  align-content: start;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+/* --- Card Styling --- */
+.card-scene {
+  perspective: 1000px;
+}
+
+.card {
+  display: grid; /* Use grid to layer the faces */
+  /* All other properties (transform, border, etc.) remain the same */
+  width: 100%;
+  background-color: var(--surface-color);
+  border: 1px solid var(--primary-border-color);
+  position: relative;
+  transition:
+    transform 0.6s,
+    box-shadow 0.2s ease;
+  transform-style: preserve-3d;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.card.is-flipped {
+  transform: rotateY(180deg);
+}
+
+.card-face {
+  grid-area: 1 / 1; /* Place both faces in the same grid cell */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 220px; /* Prevent card from collapsing when empty */
+}
+
+.card-back {
+  transform: rotateY(180deg);
+  background-color: var(--surface-hover);
+  cursor: pointer;
+}
+
+/* --- Card Content --- */
+.card-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--primary-border-color);
+}
+
+.card-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  outline: none;
+  min-height: 1.2em;
+}
+.card-title:focus {
+  background-color: var(--surface-hover);
+}
+
+.card-body {
+  flex-grow: 1;
+  padding: 16px;
+  overflow-y: auto; /* Changed from 'auto' to always show for styling */
+  min-height: 80px; /* Ensures a minimum size */
+  max-height: 30vh; /* Caps the growth at 30% of the viewport height */
+  scrollbar-width: thin; /* For Firefox */
+  scrollbar-color: var(--primary-border-color) var(--surface-color); /* For Firefox */
+}
+
+/* Add this new block for the custom scrollbar */
+.card-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.card-body::-webkit-scrollbar-track {
+  background: var(--surface-color);
+}
+
+.card-body::-webkit-scrollbar-thumb {
+  background-color: var(--primary-border-color);
+  border-radius: 4px;
+  border: 2px solid var(--surface-color);
+}
+
+.card-body::-webkit-scrollbar-thumb:hover {
+  background-color: var(--accent-color);
+}
+
+.context-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.context-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  margin-bottom: 4px;
+  cursor: grab;
+  border: 1px solid transparent;
+}
+.context-item-edit-area {
+    width: 100%;
+    background-color: var(--surface-hover);
+    border: 1px solid var(--accent-color);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: inherit;
+    padding: 2px 4px;
+    resize: none; /* Disables the manual resize handle */
+    overflow: hidden; /* Hides the scrollbar */
+    box-sizing: border-box;
+}
+.context-item:hover .delete-item-btn {
+  opacity: 1;
+}
+.context-item-view {
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: text; /* Changed from default */
+}
+.context-item-text {
+  flex-grow: 1;
+}
+.context-item-edit {
+  width: 100%;
+  background-color: var(--surface-hover);
+  border: 1px solid var(--accent-color);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: inherit;
+  padding: 2px 4px;
+}
+
+.context-item.dragging {
+  opacity: 0.5;
+}
+.context-item.drag-over-top {
+  border-top: 2px solid var(--accent-color);
+}
+.context-item.drag-over-bottom {
+  border-bottom: 2px solid var(--accent-color);
+}
+.context-item .iconoir {
+  font-size: 1.2em;
+}
+
+.delete-item-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.2s,
+    color 0.2s;
+  padding: 0 4px;
+}
+.delete-item-btn:hover {
+  color: var(--danger-color);
+}
+
+.add-context-btn {
+  background: none;
+  border: 1px dashed var(--primary-border-color);
+  color: var(--text-secondary);
+  width: 100%;
+  padding: 6px;
+  margin-top: 8px;
+  cursor: pointer;
+}
+.add-context-btn:hover {
+  background-color: var(--surface-hover);
+}
+
+.card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  border-top: 1px solid var(--primary-border-color);
+  background-color: rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+.card-links,
+.card-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--text-secondary);
+  display: flex;
+}
+.icon-btn:hover {
+  color: var(--text-primary);
+}
+.icon-btn .iconoir {
+  font-size: 20px;
+}
+
+.primary-link {
+  text-decoration: none;
+}
+
+.history-list {
+  list-style: none;
+  padding: 0 16px;
+  margin: 16px 0;
+  font-size: 0.8rem;
+  overflow-y: auto;
+}
+.history-list li {
+  margin-bottom: 8px;
+  word-break: break-all;
+}
+.history-list a {
+  color: var(--accent-color);
+  text-decoration: none;
+}
+.history-list a:hover {
+  text-decoration: underline;
+}
+
+/* --- Modal --- */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.3s,
+    visibility 0.3s;
+}
+.modal-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+}
+.modal {
+  background: var(--surface-color);
+  padding: 24px;
+  border: 1px solid var(--primary-border-color);
+  min-width: 300px;
+  max-width: 90%;
+}
+.modal h2 {
+  margin-top: 0;
+}
+.modal p {
+  margin: 16px 0;
+}
+.modal-input {
+  width: 100%;
+  padding: 8px;
+  background-color: var(--bg-color);
+  border: 1px solid var(--primary-border-color);
+  color: var(--text-primary);
+  font-family: "Monoid", "Roboto Mono", monospace;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+.modal-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--primary-border-color);
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.modal-btn.confirm {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+}
+.modal-btn.danger {
+  background: var(--danger-color);
+  border-color: var(--danger-color);
+}
+
+/* --- Floating Add Button --- */
+#add-card-btn {
+  position: fixed;
+  top: 30px;
+  right: 30px;
+  width: 72px;
+  height: 72px;
+  background-color: var(--surface-color);
+  border: 2px dashed var(--primary-border-color);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 999;
+}
+#add-card-btn:hover {
+  transform: scale(1.1);
+  border-color: var(--accent-color);
+}
+#add-card-btn.drag-over {
+  transform: scale(1.2);
+  background-color: var(--surface-hover);
+  border-color: var(--accent-color);
+}
+#add-card-btn svg {
+  width: 36px;
+  height: 36px;
+  stroke: var(--text-secondary);
+}
+
+.drag-handle {
+  cursor: grab;
+  color: var(--text-secondary);
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+}
+.drag-handle:active {
+  cursor: grabbing;
+}
