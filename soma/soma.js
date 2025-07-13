@@ -334,10 +334,37 @@ function addEventListeners() {
         if (selectedPiece && ghostPiece) {
             updatePointer(event);
             raycaster.setFromCamera(pointer, camera);
-            const intersects = raycaster.intersectObject(placementPlane);
-            if (intersects.length > 0) {
-                const point = intersects[0].point;
-                ghostPiece.position.set(Math.round(point.x), Math.round(point.y), Math.round(point.z));
+            
+            // Try to intersect with other pieces first
+            const allIntersects = raycaster.intersectObjects(pieces, true);
+            const intersectsWithPieces = allIntersects.filter(
+                (i) => i.object instanceof THREE.Mesh && i.face
+            );
+
+            if (intersectsWithPieces.length > 0) {
+                const intersect = intersectsWithPieces[0];
+                const point = intersect.point;
+                const normal = intersect.face.normal.clone();
+                
+                const normalMatrix = new THREE.Matrix3().getNormalMatrix(intersect.object.matrixWorld);
+                const worldNormal = normal.applyMatrix3(normalMatrix).normalize();
+
+                // Move the new position slightly along the normal
+                const newPos = point.clone().add(worldNormal.multiplyScalar(0.5));
+                
+                ghostPiece.position.set(
+                    Math.round(newPos.x),
+                    Math.round(newPos.y),
+                    Math.round(newPos.z)
+                );
+
+            } else {
+                // Fallback to ground plane
+                const intersectsWithPlane = raycaster.intersectObject(placementPlane);
+                if (intersectsWithPlane.length > 0) {
+                    const point = intersectsWithPlane[0].point;
+                    ghostPiece.position.set(Math.round(point.x), Math.round(point.y), Math.round(point.z));
+                }
             }
         } else if (isDragging) {
             const camRotSensitivity = 0.004;
