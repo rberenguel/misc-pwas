@@ -2,14 +2,14 @@
   "name": "GDash",
   "short_name": "GDash",
   "description": "A local-first project board to track Gemini projects.",
-  "start_url": ".",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#1a1a1a",
   "theme_color": "#2b2b2b",
   "icons": [
     {
       "src": "media/icon.svg",
-      "sizes": "192x192",
+      "sizes": "512x512",
       "type": "image/svg",
       "purpose": "any"
     }
