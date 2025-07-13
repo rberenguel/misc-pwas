@@ -2,6 +2,8 @@
 
 A simple, local-first, PWA-based Kanban-like board to visually track projects and associated links.
 
+![](https://raw.githubusercontent.com/rberenguel/misc-pwas/gdash/gh-pages/media/gdash.png)
+
 ## Features
 
 -   **Local-First:** All data is stored directly in your browser's IndexedDB. No third-party services or network connection required.
