@@ -1,31 +1,34 @@
 import { get, set } from "./libs/idb-keyval.js";
 
 const COLOR_MAP = {
-    // Primary
-    red: '#c00',
-    green: '#0c0',
-    blue: '#00c',
+  // Primary
+  red: "#c00",
+  green: "#0c0",
+  blue: "#00c",
+  grey: "#ccc",
+  darkgrey: "#666",
+  black: "#000",
 
-    // Secondary (bright)
-    yellow: '#cc0',
-    magenta: '#c0c',
-    cyan: '#0cc',
+  // Secondary (bright)
+  yellow: "#cc0",
+  magenta: "#c0c",
+  cyan: "#0cc",
 
-    // Tertiary / Mixed
-    orange: '#c60',
-    lime: '#6c0',
-    purple: '#60c',
-    rose: '#c66',
-    teal: '#0c6',
-    violet: '#c06',
+  // Tertiary / Mixed
+  orange: "#c60",
+  lime: "#6c0",
+  purple: "#60c",
+  rose: "#c66",
+  teal: "#0c6",
+  violet: "#c06",
 
-    // Dark versions
-    darkred: '#600',
-    darkgreen: '#060',
-    darkblue: '#006',
-    olive: '#660',
-    maroon: '#606',
-    navy: '#066'
+  // Dark versions
+  darkred: "#600",
+  darkgreen: "#060",
+  darkblue: "#006",
+  olive: "#660",
+  maroon: "#606",
+  navy: "#066",
 };
 
 function generateUUID() {
@@ -101,6 +104,7 @@ function createCardElement(cardData) {
   const scene = document.createElement("div");
   scene.className = "card-scene";
   scene.dataset.id = cardData.id;
+  scene.setAttribute("draggable", true);
 
   const card = document.createElement("div");
   card.className = "card";
@@ -114,11 +118,10 @@ function createCardElement(cardData) {
   const vscodeLink = cardData.projectPath
     ? `<a href="vscode://file${cardData.projectPath}" class="primary-link" title="Open in VS Code"><button class="icon-btn"><i class="iconoir iconoir-code"></i></button></a>`
     : "";
-  
+
   const githubLink = cardData.githubUrl
     ? `<a href="${cardData.githubUrl}" target="_blank" class="primary-link github-link" title="Click to open repo, Shift+Click to copy URL"><button class="icon-btn"><i class="iconoir iconoir-github"></i></button></a>`
     : "";
-
 
   front.innerHTML = `
         <div class="card-header"><div class="card-title" contenteditable="true"></div></div>
@@ -138,8 +141,20 @@ function createCardElement(cardData) {
                 <button class="icon-btn delete-btn" title="Delete Card"><i class="iconoir iconoir-trash"></i></button>
             </div>
         </div>`;
-  front.querySelector(".card-title").textContent =
-    cardData.title || "New Project";
+  const titleEl = front.querySelector(".card-title");
+  const titleText = cardData.title || "New Project";
+  const match = titleText.match(/^:([a-z]+):/);
+  let textContent = titleText;
+
+  if (match) {
+    const colorName = match[1];
+    if (COLOR_MAP[colorName]) {
+      titleEl.parentElement.style.backgroundColor = COLOR_MAP[colorName];
+      titleEl.style.color = "black";
+    }
+    textContent = titleText.substring(match[0].length).trim();
+  }
+  titleEl.textContent = textContent;
 
   const historyItems = (cardData.urlHistory || [])
     .map((url) => `<li><a href="${url}" target="_blank">${url}</a></li>`)
@@ -157,111 +172,139 @@ function createCardElement(cardData) {
 }
 
 function renderContextList(cardElement, cardData) {
-    const contextListEl = cardElement.querySelector('.context-list');
-    contextListEl.innerHTML = '';
-    (cardData.contextItems || []).forEach(item => {
-        const itemEl = document.createElement('div');
-        itemEl.className = 'context-item';
-        itemEl.setAttribute('draggable', true);
-        itemEl.dataset.itemId = item.id;
-        itemEl.title = new Date(item.createdAt).toLocaleString();
+  const contextListEl = cardElement.querySelector(".context-list");
+  contextListEl.innerHTML = "";
+  (cardData.contextItems || []).forEach((item) => {
+    const itemEl = document.createElement("div");
+    itemEl.className = "context-item";
+    itemEl.setAttribute("draggable", true);
+    itemEl.dataset.itemId = item.id;
+    itemEl.title = new Date(item.createdAt).toLocaleString();
 
-        const viewEl = document.createElement('div');
-        viewEl.className = 'context-item-view';
-        
-        const match = item.text.match(/^:([a-z0-9\-]+):(?:\s*:([a-z]+):)?/);
-        let textContent = item.text;
+    const viewEl = document.createElement("div");
+    viewEl.className = "context-item-view";
 
-        if (match) {
-            const iconName = match[1];
-            const colorName = match[2];
-            
-            const iconEl = document.createElement('i');
-            iconEl.className = `iconoir iconoir-${iconName}`;
-            
-            if (colorName && COLOR_MAP[colorName]) {
-                iconEl.style.color = COLOR_MAP[colorName];
-            }
-            
-            viewEl.appendChild(iconEl);
-            textContent = item.text.substring(match[0].length).trim();
-        }
-        
-        const textSpan = document.createElement('span');
-        textSpan.className = 'context-item-text';
-        textSpan.textContent = textContent;
-        viewEl.appendChild(textSpan);
-        itemEl.appendChild(viewEl);
+    const match = item.text.match(/^:([a-z0-9\-]+):(?:\s*:([a-z]+):)?/);
+    let textContent = item.text;
 
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'delete-item-btn';
-        deleteBtn.innerHTML = '&times;';
-        deleteBtn.title = 'Delete item';
-        itemEl.appendChild(deleteBtn);
+    if (match) {
+      const iconName = match[1];
+      const colorName = match[2];
 
-        contextListEl.appendChild(itemEl);
-    });
+      const iconEl = document.createElement("i");
+      iconEl.className = `iconoir iconoir-${iconName}`;
+
+      if (colorName && COLOR_MAP[colorName]) {
+        iconEl.style.color = COLOR_MAP[colorName];
+      }
+
+      viewEl.appendChild(iconEl);
+      textContent = item.text.substring(match[0].length).trim();
+    }
+
+    const textSpan = document.createElement("span");
+    textSpan.className = "context-item-text";
+    textSpan.textContent = textContent;
+    viewEl.appendChild(textSpan);
+    itemEl.appendChild(viewEl);
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "delete-item-btn";
+    deleteBtn.innerHTML = "&times;";
+    deleteBtn.title = "Delete item";
+    itemEl.appendChild(deleteBtn);
+
+    contextListEl.appendChild(itemEl);
+  });
 }
 
 // --- EVENT LISTENERS ---
 function addCardEventListeners(cardElement, initialCardData) {
   const cardId = initialCardData.id;
 
-  cardElement.querySelector(".card-title").addEventListener("blur", (e) => {
-    updateCard(cardId, { title: e.target.textContent });
+  const titleEl = cardElement.querySelector(".card-title");
+
+  titleEl.addEventListener("focus", () => {
+    const cardData = getCardById(cardId);
+    titleEl.textContent = cardData.title || "New Project";
+    titleEl.style.color = "white";
+  });
+
+  titleEl.addEventListener("blur", () => {
+    const newTitle = titleEl.textContent.trim();
+    updateCard(cardId, { title: newTitle });
+
+    // Re-render the title to apply color
+    const match = newTitle.match(/^:([a-z]+):/);
+    let textContent = newTitle;
+
+    titleEl.style.backgroundColor = ""; // Reset color
+    titleEl.style.color = "";
+
+    if (match) {
+      const colorName = match[1];
+      if (COLOR_MAP[colorName]) {
+        titleEl.parentElement.style.backgroundColor = COLOR_MAP[colorName];
+        titleEl.style.color = "black";
+      }
+      textContent = newTitle.substring(match[0].length).trim();
+    }
+    titleEl.textContent = textContent;
   });
 
   const contextListEl = cardElement.querySelector(".context-list");
 
-  contextListEl.addEventListener('click', (e) => {
-    const viewEl = e.target.closest('.context-item-view');
+  contextListEl.addEventListener("click", (e) => {
+    const viewEl = e.target.closest(".context-item-view");
     if (viewEl) {
-        const itemEl = viewEl.closest('.context-item');
-        if (itemEl.querySelector('.context-item-edit-area')) return;
+      const itemEl = viewEl.closest(".context-item");
+      if (itemEl.querySelector(".context-item-edit-area")) return;
 
-        const itemId = itemEl.dataset.itemId;
-        const cardData = getCardById(cardId);
-        const item = cardData.contextItems.find(i => i.id === itemId);
+      const itemId = itemEl.dataset.itemId;
+      const cardData = getCardById(cardId);
+      const item = cardData.contextItems.find((i) => i.id === itemId);
 
-        const textarea = document.createElement('textarea');
-        textarea.className = 'context-item-edit-area';
-        textarea.value = item.text;
-        
-        function resizeTextarea() {
-            textarea.style.height = 'auto';
-            textarea.style.height = textarea.scrollHeight + 'px';
+      const textarea = document.createElement("textarea");
+      textarea.className = "context-item-edit-area";
+      textarea.value = item.text;
+
+      function resizeTextarea() {
+        textarea.style.height = "auto";
+        textarea.style.height = textarea.scrollHeight + "px";
+      }
+      textarea.addEventListener("input", resizeTextarea);
+
+      viewEl.style.display = "none";
+      itemEl.prepend(textarea);
+      textarea.focus();
+      textarea.select();
+      resizeTextarea();
+
+      const saveAndSwitchToView = () => {
+        const newText = textarea.value.trim();
+        if (newText) {
+          item.text = newText;
+        } else {
+          cardData.contextItems = cardData.contextItems.filter(
+            (i) => i.id !== itemId,
+          );
         }
-        textarea.addEventListener('input', resizeTextarea);
+        updateCard(cardId, { contextItems: cardData.contextItems });
+        renderContextList(cardElement, getCardById(cardId));
+      };
 
-        viewEl.style.display = 'none';
-        itemEl.prepend(textarea);
-        textarea.focus();
-        textarea.select();
-        resizeTextarea();
-
-        const saveAndSwitchToView = () => {
-            const newText = textarea.value.trim();
-            if (newText) {
-                item.text = newText;
-            } else {
-                cardData.contextItems = cardData.contextItems.filter(i => i.id !== itemId);
-            }
-            updateCard(cardId, { contextItems: cardData.contextItems });
-            renderContextList(cardElement, getCardById(cardId));
-        };
-
-        textarea.addEventListener('blur', saveAndSwitchToView);
-        textarea.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                textarea.blur();
-            } else if (e.key === 'Escape') {
-                textarea.value = item.text;
-                textarea.blur();
-            }
-        });
+      textarea.addEventListener("blur", saveAndSwitchToView);
+      textarea.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          textarea.blur();
+        } else if (e.key === "Escape") {
+          textarea.value = item.text;
+          textarea.blur();
+        }
+      });
     }
-});
+  });
 
   contextListEl.addEventListener("click", (e) => {
     if (e.target.classList.contains("delete-item-btn")) {
@@ -384,50 +427,109 @@ function addCardEventListeners(cardElement, initialCardData) {
     cardElement.querySelector(".card").style.border =
       "1px solid var(--primary-border-color)";
   });
-    
+
   cardElement.addEventListener("drop", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    cardElement.querySelector(".card").style.border = "1px solid var(--primary-border-color)";
-    const url = e.dataTransfer.getData("URL") || e.dataTransfer.getData("text/uri-list");
+    cardElement.querySelector(".card").style.border =
+      "1px solid var(--primary-border-color)";
+    const url =
+      e.dataTransfer.getData("URL") || e.dataTransfer.getData("text/uri-list");
     const cardData = getCardById(cardId);
-    
+
     if (url) {
-      if (url.includes('github.com')) {
-          updateCard(cardId, { githubUrl: url });
+      if (url.includes("github.com")) {
+        updateCard(cardId, { githubUrl: url });
       } else if (url !== cardData.primaryUrl) {
-          const newHistory = [cardData.primaryUrl, ...(cardData.urlHistory || [])];
-          updateCard(cardId, { primaryUrl: url, urlHistory: newHistory });
+        const newHistory = [
+          cardData.primaryUrl,
+          ...(cardData.urlHistory || []),
+        ];
+        updateCard(cardId, { primaryUrl: url, urlHistory: newHistory });
       }
       renderBoard();
     }
   });
-  
+
   const githubLinkEl = cardElement.querySelector(".github-link");
   if (githubLinkEl) {
-      githubLinkEl.addEventListener('click', (e) => {
-          if (e.shiftKey) {
-              e.preventDefault();
-              navigator.clipboard.writeText(githubLinkEl.href).then(() => {
-                  const icon = githubLinkEl.querySelector('i');
-                  icon.style.color = 'var(--accent-color)';
-                  setTimeout(() => { icon.style.color = ''; }, 500);
-              }).catch(err => console.error('Failed to copy URL: ', err));
-          }
-      });
+    githubLinkEl.addEventListener("click", (e) => {
+      if (e.shiftKey) {
+        e.preventDefault();
+        navigator.clipboard
+          .writeText(githubLinkEl.href)
+          .then(() => {
+            const icon = githubLinkEl.querySelector("i");
+            icon.style.color = "var(--accent-color)";
+            setTimeout(() => {
+              icon.style.color = "";
+            }, 500);
+          })
+          .catch((err) => console.error("Failed to copy URL: ", err));
+      }
+    });
   }
 
-const cardBody = cardElement.querySelector('.card-body');
-cardBody.addEventListener('wheel', function(e) {
+  const cardBody = cardElement.querySelector(".card-body");
+  cardBody.addEventListener("wheel", function (e) {
     if (this.scrollHeight <= this.clientHeight) {
-        return;
+      return;
     }
     e.preventDefault();
     this.scrollTop += e.deltaY;
-});
+  });
 }
 
 // --- GLOBAL EVENT LISTENERS ---
+
+let draggedCardId = null;
+
+cardsContainer.addEventListener("dragstart", (e) => {
+  const cardScene = e.target.closest(".card-scene");
+  if (cardScene) {
+    draggedCardId = cardScene.dataset.id;
+    setTimeout(() => cardScene.classList.add("dragging"), 0);
+  }
+});
+
+cardsContainer.addEventListener("dragend", (e) => {
+  const cardScene = e.target.closest(".card-scene");
+  if (cardScene) {
+    cardScene.classList.remove("dragging");
+  }
+  draggedCardId = null;
+});
+
+cardsContainer.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  const targetCard = e.target.closest(".card-scene");
+  if (targetCard && targetCard.dataset.id !== draggedCardId) {
+    const draggingCard = document.querySelector(".card-scene.dragging");
+    if (!draggingCard) return;
+
+    const rect = targetCard.getBoundingClientRect();
+    const isAfter = e.clientY > rect.top + rect.height / 2;
+
+    if (isAfter) {
+      cardsContainer.insertBefore(draggingCard, targetCard.nextSibling);
+    } else {
+      cardsContainer.insertBefore(draggingCard, targetCard);
+    }
+  }
+});
+
+cardsContainer.addEventListener("drop", (e) => {
+  e.preventDefault();
+  if (draggedCardId) {
+    const cardElements = [...cardsContainer.querySelectorAll(".card-scene")];
+    const newOrder = cardElements.map((card) => card.dataset.id);
+
+    localCards.sort((a, b) => newOrder.indexOf(a.id) - newOrder.indexOf(b.id));
+
+    saveCardsToStorage();
+  }
+});
+
 addCardBtn.addEventListener("dragover", (e) => {
   e.preventDefault();
   addCardBtn.classList.add("drag-over");
@@ -449,9 +551,11 @@ addCardBtn.addEventListener("drop", (e) => {
       contextItems: [],
       createdAt: new Date().toISOString(),
       projectPath: "",
-      githubUrl: url.includes('github.com') ? url : ""
+      githubUrl: url.includes("github.com") ? url : "",
     };
-    if (newCard.githubUrl) newCard.title = new URL(url).pathname.split('/')[2] || "New GitHub Project";
+    if (newCard.githubUrl)
+      newCard.title =
+        new URL(url).pathname.split("/")[2] || "New GitHub Project";
 
     localCards.push(newCard);
     saveCardsToStorage();

@@ -138,16 +138,16 @@ body {
   border: 1px solid transparent;
 }
 .context-item-edit-area {
-    width: 100%;
-    background-color: var(--surface-hover);
-    border: 1px solid var(--accent-color);
-    color: var(--text-primary);
-    font-family: inherit;
-    font-size: inherit;
-    padding: 2px 4px;
-    resize: none; /* Disables the manual resize handle */
-    overflow: hidden; /* Hides the scrollbar */
-    box-sizing: border-box;
+  width: 100%;
+  background-color: var(--surface-hover);
+  border: 1px solid var(--accent-color);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: inherit;
+  padding: 2px 4px;
+  resize: none; /* Disables the manual resize handle */
+  overflow: hidden; /* Hides the scrollbar */
+  box-sizing: border-box;
 }
 .context-item:hover .delete-item-btn {
   opacity: 1;
@@ -181,6 +181,11 @@ body {
 .context-item.drag-over-bottom {
   border-bottom: 2px solid var(--accent-color);
 }
+
+.card-scene.dragging {
+  opacity: 0.5;
+}
+
 .context-item .iconoir {
   font-size: 1.2em;
 }
