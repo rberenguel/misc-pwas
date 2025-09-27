@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ed Editor Simulator & Exercises</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Mastering `ed`: The Standard Text Editor</h1>
+      <p>
+        A minimalist simulator and interactive exercises to get you familiar
+        with `ed`'s power.
+      </p>
+    </header>
+
+    <main>
+      <section id="ed-interface">
+        <h2>`ed` Simulator</h2>
+        <div class="terminal">
+          <pre id="output" class="output"></pre>
+          <div class="input-area">
+            <span class="prompt"></span
+            ><input
+              type="text"
+              id="command-input"
+              class="command-input"
+              autofocus
+            />
+          </div>
+        </div>
+        <p class="hint">Type `h` for help, `reset` to clear the buffer.</p>
+      </section>
+
+      <section id="exercises">
+        <h2>Exercises</h2>
+        <div id="exercise-area">
+          <p><strong>Goal:</strong> <span id="exercise-goal"></span></p>
+          <p>
+            <strong>Initial Buffer:</strong> (Type `1,$p` in the simulator to
+            see)
+          </p>
+          <button id="next-exercise-btn">Next Exercise</button>
+          <div id="exercise-feedback" class="feedback"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>&copy; 2023 `ed` Simulator. Created for learning purposes.</p>
+    </footer>
+
+    <script src="script.js"></script>
+  </body>
+</html>
