@@ -26,14 +26,6 @@
             align-items: center;
             pointer-events: none; 
         }
-        .ui-element {
-            background-color: rgba(255, 255, 255, 0.8);
-            padding: 1rem 2rem;
-            border-radius: 0.75rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            text-align: center;
-            pointer-events: auto; 
-        }
         #height-score {
             position: absolute;
             top: 30px;
@@ -50,40 +42,21 @@
             top: 100px;
             width: 100%;
             text-align: center;
-            font-size: 0.7rem;
+            font-size: 0.8em;
             font-weight: 700;
-            color: rgba(200, 200, 50, 0.7);
             text-shadow: 0px 1px 4px rgba(0, 0, 0, 0.2);
             pointer-events: none;
+            transition: color 0.5s;
         }
-        #game-over-ui {
-            display: none; 
-            flex-direction: column;
-            gap: 0.25rem;
-            padding: 1.5rem 3rem;
-        }
-        #game-over-ui h1 {
-            font-size: 2.5rem;
-            font-weight: 800;
-            margin: 0;
-        }
-        #game-over-ui p {
-            font-size: 1.1rem;
-            margin: 0.1rem 0;
-        }
-        #restart-button {
-             background-color: #4f46e5;
-             color: white;
-             border: none;
-             padding: 0.75rem 1.5rem;
-             border-radius: 0.5rem;
-             font-weight: bold;
-             cursor: pointer;
-             margin-top: 1rem;
-             transition: background-color 0.2s;
-        }
-        #restart-button:hover {
-            background-color: #4338ca;
+        #instructions {
+             background-color: rgba(255, 255, 255, 0.8);
+            padding: 0.5rem 1rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            pointer-events: auto;
+            position: absolute;
+            bottom: 20px;
         }
     </style>
 </head>
@@ -94,14 +67,8 @@
     <!-- UI Elements -->
     <div class="ui-container">
         <div id="height-score">0</div>
-        <div id="precision-score">Score: 0</div>
-        <div id="instructions" class="ui-element" style="position: absolute; bottom: 20px; padding: 0.5rem 1rem;">Click to start and place the block</div>
-        <div id="game-over-ui" class="ui-element">
-            <h1>Game Over</h1>
-            <p>Final Height: <span id="final-height">0</span></p>
-            <p>Final Score: <span id="final-score">0</span></p>
-            <button id="restart-button">Restart</button>
-        </div>
+        <div id="precision-score">0</div>
+        <div id="instructions">Click to start and place the block</div>
     </div>
 
     <!-- Libraries -->
@@ -114,18 +81,14 @@
         let stack = [];
         let overhangs = [];
         let perfectEffects = []; 
-        let gameStarted = false; 
         let animationTime = 0; 
         let lookAtTarget = new THREE.Vector3(0, 0, 0); 
         let precisionScore = 0;
+        let gameState = 'loading'; // loading, playing, zoomOut, awaitingReset
         
         const heightScoreElement = document.getElementById('height-score');
         const precisionScoreElement = document.getElementById('precision-score');
         const instructionsElement = document.getElementById('instructions');
-        const gameOverUI = document.getElementById('game-over-ui');
-        const finalHeightElement = document.getElementById('final-height');
-        const finalScoreElement = document.getElementById('final-score');
-        const restartButton = document.getElementById('restart-button');
 
         // --- Core Functions ---
         function init() {
@@ -160,19 +123,27 @@
         }
         
         function resetGame() {
-            gameStarted = false;
+            gameState = 'playing';
             speed = 0.15;
             animationTime = 0;
             lookAtTarget.set(0, 0, 0);
             precisionScore = 0;
 
+            const aspect = window.innerWidth / window.innerHeight;
+            const width = 40;
+            const height = width / aspect;
+            camera.left = width / -2;
+            camera.right = width / 2;
+            camera.top = height / 2;
+            camera.bottom = height / -2;
             camera.position.set(4, 4, 4);
             camera.lookAt(lookAtTarget);
+            camera.updateProjectionMatrix();
             
             instructionsElement.style.display = 'block';
-            gameOverUI.style.display = 'none';
             heightScoreElement.innerText = 0;
             precisionScoreElement.innerText = "0";
+            precisionScoreElement.style.color = `hsl(30, 90%, 60%)`;
 
             [...stack, ...overhangs].forEach(element => {
                 scene.remove(element.threejs);
@@ -271,29 +242,29 @@
                     const overhangZ = direction === 'z' ? topLayer.threejs.position.z + overhangShift : topLayer.threejs.position.z;
                     addOverhang(overhangX, overhangZ, overhangWidth, overhangDepth);
                 }
-
                 return true;
             } else {
-                topLayer.cannonjs.mass = 5;
-                topLayer.cannonjs.updateMassProperties();
-                overhangs.push(topLayer);
-                stack.pop(); 
                 endGame();
                 return false;
             }
         }
         
         function endGame() {
-            gameStarted = false;
-            gameOverUI.style.display = 'flex';
-            finalHeightElement.innerText = (stack.length - 1).toLocaleString();
-            finalScoreElement.innerText = precisionScore.toLocaleString();
+            const topLayer = stack[stack.length - 1];
+            topLayer.cannonjs.mass = 5;
+            topLayer.cannonjs.updateMassProperties();
+            overhangs.push(topLayer);
+            stack.pop();
+            gameState = 'zoomOut';
         }
 
         function addEventListeners() {
             window.addEventListener('resize', () => {
                 const aspect = window.innerWidth / window.innerHeight;
-                const width = 60;
+                let width = 40;
+                if(gameState !== 'playing') {
+                    width = Math.max(40, stack.length * 3);
+                }
                 const height = width / aspect;
                 camera.left = width / -2;
                 camera.right = width / 2;
@@ -304,33 +275,30 @@
             });
             
             renderer.domElement.addEventListener('click', () => {
-                if (gameOverUI.style.display === 'flex') return;
-
-                if (!gameStarted) {
-                    gameStarted = true;
-                    instructionsElement.style.display = 'none';
+                if (gameState === 'awaitingReset') {
+                    resetGame();
+                    return;
                 }
                 
-                if (placeBlock()) {
-                    heightScoreElement.innerText = (stack.length - 1).toLocaleString();
-                    precisionScoreElement.innerText = precisionScore.toLocaleString();
+                if (gameState === 'playing') {
+                    instructionsElement.style.display = 'none';
+                    if (placeBlock()) {
+                        heightScoreElement.innerText = (stack.length - 1).toLocaleString();
+                        precisionScoreElement.innerText = precisionScore.toLocaleString();
+                        precisionScoreElement.style.color = `#${stack[stack.length-1].threejs.material.color.getHexString()}`;
 
-                    const topLayer = stack[stack.length - 1];
-                    const nextDirection = topLayer.direction === 'x' ? 'z' : 'x';
-                    speed = 0.15 + (stack.length * 0.005);
-                    addLayer(
-                        nextDirection === 'x' ? -15 : topLayer.threejs.position.x, 
-                        nextDirection === 'z' ? -15 : topLayer.threejs.position.z, 
-                        topLayer.width, 
-                        topLayer.depth,
-                        nextDirection
-                    );
+                        const topLayer = stack[stack.length - 1];
+                        const nextDirection = topLayer.direction === 'x' ? 'z' : 'x';
+                        speed = 0.15 + (stack.length * 0.005);
+                        addLayer(
+                            nextDirection === 'x' ? -15 : topLayer.threejs.position.x, 
+                            nextDirection === 'z' ? -15 : topLayer.threejs.position.z, 
+                            topLayer.width, 
+                            topLayer.depth,
+                            nextDirection
+                        );
+                    }
                 }
-            });
-
-            restartButton.addEventListener('click', (e) => {
-                e.stopPropagation();
-                resetGame();
             });
         }
 
@@ -339,7 +307,7 @@
             if (stack.length === 0) return;
             const topLayer = stack[stack.length - 1];
 
-            if (topLayer.direction !== 'foundation') {
+            if (gameState === 'playing' && topLayer.direction !== 'foundation') {
                 topLayer.threejs.position[topLayer.direction] += speed;
                 topLayer.cannonjs.position[topLayer.direction] += speed;
 
@@ -348,7 +316,8 @@
                 }
             }
 
-            if (gameStarted) {
+            // --- Camera Movement ---
+            if (gameState === 'playing') {
                 animationTime += 0.01;
                 const sway = Math.sin(animationTime) * 2;
                 
@@ -360,8 +329,30 @@
 
                 const targetLookAtY = (stack.length - 1) * 2;
                 lookAtTarget.y += (targetLookAtY - lookAtTarget.y) * 0.05;
+                camera.lookAt(lookAtTarget);
+            } else if (gameState === 'zoomOut') {
+                 const towerHeight = stack.length * 2;
+                 const targetWidth = Math.max(40, towerHeight * 1.5);
+                 const aspect = window.innerWidth / window.innerHeight;
+                 const targetHeight = targetWidth / aspect;
+
+                 const targetCameraY = towerHeight / 2;
+                 const targetLookAtY = towerHeight / 2;
+                 
+                 camera.position.y += (targetCameraY + 4 - camera.position.y) * 0.05;
+                 lookAtTarget.y += (targetLookAtY - lookAtTarget.y) * 0.05;
+
+                 camera.left += (targetWidth / -2 - camera.left) * 0.05;
+                 camera.right += (targetWidth / 2 - camera.right) * 0.05;
+                 camera.top += (targetHeight / 2 - camera.top) * 0.05;
+                 camera.bottom += (targetHeight / -2 - camera.bottom) * 0.05;
+                 camera.updateProjectionMatrix();
+                 camera.lookAt(lookAtTarget);
+
+                 if(Math.abs(camera.right - (targetWidth / 2)) < 0.1) {
+                     gameState = 'awaitingReset';
+                 }
             }
-            camera.lookAt(lookAtTarget);
 
             for (let i = perfectEffects.length - 1; i >= 0; i--) {
                 const effect = perfectEffects[i];
