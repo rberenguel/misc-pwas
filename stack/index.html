@@ -34,7 +34,7 @@
             text-align: center;
             pointer-events: auto; 
         }
-        #score {
+        #height-score {
             position: absolute;
             top: 30px;
             width: 100%;
@@ -43,6 +43,17 @@
             font-weight: 900;
             color: rgba(255, 255, 255, 0.8);
             text-shadow: 0px 2px 6px rgba(0, 0, 0, 0.3);
+            pointer-events: none;
+        }
+        #precision-score {
+            position: absolute;
+            top: 100px;
+            width: 100%;
+            text-align: center;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: rgba(200, 200, 50, 0.7);
+            text-shadow: 0px 1px 4px rgba(0, 0, 0, 0.2);
             pointer-events: none;
         }
         #game-over-ui {
@@ -58,7 +69,7 @@
         }
         #game-over-ui p {
             font-size: 1.1rem;
-            margin-bottom: 0.75rem;
+            margin: 0.1rem 0;
         }
         #restart-button {
              background-color: #4f46e5;
@@ -82,11 +93,13 @@
 
     <!-- UI Elements -->
     <div class="ui-container">
-        <div id="score">0</div>
+        <div id="height-score">0</div>
+        <div id="precision-score">Score: 0</div>
         <div id="instructions" class="ui-element" style="position: absolute; bottom: 20px; padding: 0.5rem 1rem;">Click to start and place the block</div>
         <div id="game-over-ui" class="ui-element">
             <h1>Game Over</h1>
-            <p>Your final score is <span id="final-score">0</span></p>
+            <p>Final Height: <span id="final-height">0</span></p>
+            <p>Final Score: <span id="final-score">0</span></p>
             <button id="restart-button">Restart</button>
         </div>
     </div>
@@ -104,39 +117,31 @@
         let gameStarted = false; 
         let animationTime = 0; 
         let lookAtTarget = new THREE.Vector3(0, 0, 0); 
+        let precisionScore = 0;
         
-        const scoreElement = document.getElementById('score');
+        const heightScoreElement = document.getElementById('height-score');
+        const precisionScoreElement = document.getElementById('precision-score');
         const instructionsElement = document.getElementById('instructions');
         const gameOverUI = document.getElementById('game-over-ui');
+        const finalHeightElement = document.getElementById('final-height');
         const finalScoreElement = document.getElementById('final-score');
         const restartButton = document.getElementById('restart-button');
 
         // --- Core Functions ---
         function init() {
-            // --- CANNON.js World Setup ---
             world = new CANNON.World();
             world.gravity.set(0, -10, 0); 
             world.broadphase = new CANNON.NaiveBroadphase();
             world.solver.iterations = 40;
 
-            // --- THREE.js Scene Setup ---
             scene = new THREE.Scene();
 
-            // --- Camera ---
             const aspect = window.innerWidth / window.innerHeight;
             const width = 40;
             const height = width / aspect;
 
-            camera = new THREE.OrthographicCamera(
-                width / -2,
-                width / 2, 
-                height / 2,
-                height / -2,
-                -30,
-                100 
-            );
+            camera = new THREE.OrthographicCamera(width / -2, width / 2, height / 2, height / -2, -30, 100);
 
-            // --- Renderer ---
             renderer = new THREE.WebGLRenderer({
                 antialias: true,
                 canvas: document.getElementById('game-canvas')
@@ -144,51 +149,41 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setAnimationLoop(animation);
 
-            // --- Lights ---
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
-
             const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
             directionalLight.position.set(10, 20, 0);
             scene.add(directionalLight);
 
-            // --- Event Listeners ---
             addEventListeners();
-            
-            // --- Start a new game ---
             resetGame();
         }
         
-        // This function resets the game to its initial state
         function resetGame() {
             gameStarted = false;
             speed = 0.15;
             animationTime = 0;
             lookAtTarget.set(0, 0, 0);
+            precisionScore = 0;
 
-            // Reset camera to initial position and focus
             camera.position.set(4, 4, 4);
             camera.lookAt(lookAtTarget);
             
-            // UI updates
             instructionsElement.style.display = 'block';
             gameOverUI.style.display = 'none';
-            scoreElement.innerText = 0;
+            heightScoreElement.innerText = 0;
+            precisionScoreElement.innerText = "0";
 
-            // Clear old blocks from scene and physics world
             [...stack, ...overhangs].forEach(element => {
                 scene.remove(element.threejs);
                 if (element.cannonjs) world.remove(element.cannonjs);
             });
-
             stack = [];
             overhangs = [];
             
-            // Clear old perfect effects
             perfectEffects.forEach(effect => scene.remove(effect.mesh));
             perfectEffects = [];
 
-            // Add foundation and first moving block
             addLayer(0, 0, 10, 10, 'foundation');
             addLayer(-15, 0, 10, 10, 'x');
         }
@@ -224,19 +219,12 @@
             const mesh = new THREE.Mesh(geometry, material);
             mesh.position.set(x, y, z);
             scene.add(mesh);
-
             const shape = new CANNON.Box(new CANNON.Vec3(width / 2, 1, depth / 2));
             let mass = falls ? 5 : 0;
             const body = new CANNON.Body({ mass, shape });
             body.position.set(x, y, z);
             world.addBody(body);
-
-            return {
-                threejs: mesh,
-                cannonjs: body,
-                width,
-                depth
-            };
+            return { threejs: mesh, cannonjs: body, width, depth };
         }
 
         function placeBlock() {
@@ -252,6 +240,9 @@
             const overlap = size - overhangSize;
 
             if (overlap > 0) {
+                const precisionBonus = Math.floor(100 * (overlap / size));
+                precisionScore += precisionBonus;
+
                 const newWidth = direction === 'x' ? overlap : topLayer.width;
                 const newDepth = direction === 'z' ? overlap : topLayer.depth;
 
@@ -267,6 +258,7 @@
 
                 const PERFECT_THRESHOLD = 0.1;
                 if (overhangSize < PERFECT_THRESHOLD) {
+                    precisionScore += 200;
                     const topY = topLayer.threejs.position.y + 1.01;
                     triggerPerfectEffect(topLayer.threejs.position.x, topY, topLayer.threejs.position.z, topLayer.threejs.material.color);
                 }
@@ -274,11 +266,9 @@
                 if (overhangSize > 0) {
                     const overhangWidth = direction === 'x' ? overhangSize : newWidth;
                     const overhangDepth = direction === 'z' ? overhangSize : newDepth;
-                    
                     const overhangShift = (overlap / 2 + overhangSize / 2) * Math.sign(delta);
                     const overhangX = direction === 'x' ? topLayer.threejs.position.x + overhangShift : topLayer.threejs.position.x;
                     const overhangZ = direction === 'z' ? topLayer.threejs.position.z + overhangShift : topLayer.threejs.position.z;
-
                     addOverhang(overhangX, overhangZ, overhangWidth, overhangDepth);
                 }
 
@@ -288,7 +278,6 @@
                 topLayer.cannonjs.updateMassProperties();
                 overhangs.push(topLayer);
                 stack.pop(); 
-                
                 endGame();
                 return false;
             }
@@ -297,11 +286,10 @@
         function endGame() {
             gameStarted = false;
             gameOverUI.style.display = 'flex';
-            finalScoreElement.innerText = stack.length - 1;
+            finalHeightElement.innerText = (stack.length - 1).toLocaleString();
+            finalScoreElement.innerText = precisionScore.toLocaleString();
         }
 
-
-        // --- Event Listeners ---
         function addEventListeners() {
             window.addEventListener('resize', () => {
                 const aspect = window.innerWidth / window.innerHeight;
@@ -324,7 +312,9 @@
                 }
                 
                 if (placeBlock()) {
-                    scoreElement.innerText = stack.length - 1;
+                    heightScoreElement.innerText = (stack.length - 1).toLocaleString();
+                    precisionScoreElement.innerText = precisionScore.toLocaleString();
+
                     const topLayer = stack[stack.length - 1];
                     const nextDirection = topLayer.direction === 'x' ? 'z' : 'x';
                     speed = 0.15 + (stack.length * 0.005);
@@ -344,8 +334,6 @@
             });
         }
 
-
-        // --- Animation Loop ---
         let speed = 0.15;
         function animation() {
             if (stack.length === 0) return;
@@ -360,7 +348,6 @@
                 }
             }
 
-            // --- Camera Movement ---
             if (gameStarted) {
                 animationTime += 0.01;
                 const sway = Math.sin(animationTime) * 2;
@@ -376,7 +363,6 @@
             }
             camera.lookAt(lookAtTarget);
 
-            // Animate perfect placement effects
             for (let i = perfectEffects.length - 1; i >= 0; i--) {
                 const effect = perfectEffects[i];
                 effect.life -= 0.03;
@@ -400,7 +386,6 @@
             renderer.render(scene, camera);
         }
 
-        // --- Start ---
         init();
     </script>
 </body>
