@@ -24,7 +24,7 @@
         }
 				#orientation-lock{ display:none;}
         #app-container { width: 90%; max-width: 860px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
-        #top-bar { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0 10px; box-sizing: border-box; min-height: 20px; }
+        #top-bar { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0 10px; box-sizing: border-box; min-height: 40px; }
         #controls { display: flex; gap: 15px; }
         .control-button {
             background-color: transparent; border: 1px solid var(--orange); color: var(--orange);
@@ -32,9 +32,17 @@
             font-weight: 700; border-radius: 5px; cursor: pointer; display: flex;
             justify-content: center; align-items: center;
         }
+        #display-area {
+            display: flex; flex-direction: column; align-items: flex-end;
+            flex-grow: 1; padding-right: 10px;
+        }
+        #problem-display {
+            font-family: 'Inter', sans-serif; font-size: 0.9rem;
+            color: var(--cyan); min-height: 1.2em;
+        }
         #display-value {
             font-family: 'Orbitron', monospace; font-size: 2rem; color: var(--yellow);
-            text-align: right; flex-grow: 1; padding-right: 10px; transition: color 0.2s;
+            text-align: right; transition: color 0.2s;
         }
         #display-value.correct { color: var(--green); }
         #soroban {
@@ -94,7 +102,10 @@
                 <button id="info-button" class="control-button">I</button>
                 <button id="lesson-button" class="control-button">L</button>
             </div>
-            <div id="display-value">0</div>
+            <div id="display-area">
+                <div id="problem-display"></div>
+                <div id="display-value">0</div>
+            </div>
         </div>
         <div id="soroban"></div>
     </div>
@@ -112,4 +123,3 @@
     </script>
 </body>
 </html>
-
