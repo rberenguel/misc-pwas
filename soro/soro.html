@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+		  <link rel="manifest" href="./manifest.json" />
+    <title>Haptic Soroban</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --base03:  #001111; --base02:  #073642; --base01:  #586e75;
+            --base00:  #657b83; --base0:   #839496; --base1:   #93a1a1;
+            --yellow:  #b58900; --orange:  #cb4b16; --red:     #dc322f;
+            --magenta: #d33682; --violet:  #6c71c4; --blue:    #268bd2;
+            --cyan:    #2aa198; --green:   #859900;
+        }
+        body {
+            margin: 0; font-family: 'Inter', sans-serif; background-color: var(--base03);
+            color: var(--base0); display: flex; justify-content: center; align-items: center;
+            height: 100vh; overflow: hidden; touch-action: manipulation; user-select: none;
+            -webkit-user-select: none;
+        }
+				#orientation-lock{ display:none;}
+        #app-container { width: 90%; max-width: 860px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+        #top-bar { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0 10px; box-sizing: border-box; min-height: 30px; }
+        #controls { display: flex; gap: 15px; }
+        .control-button {
+            background-color: transparent; border: 1px solid var(--orange); color: var(--orange);
+            width: 40px; height: 40px; font-size: 1.0rem; font-family: 'Inter', sans-serif;
+            font-weight: 700; border-radius: 5px; cursor: pointer; display: flex;
+            justify-content: center; align-items: center;
+        }
+        #display-value {
+            font-family: 'Orbitron', monospace; font-size: 2rem; color: var(--yellow);
+            text-align: right; flex-grow: 1; padding-right: 10px; transition: color 0.2s;
+        }
+        #display-value.correct { color: var(--green); }
+        #soroban {
+            display: flex; background-color: var(--base02); padding: 20px 10px;
+            border-radius: 8px; position: relative; border: 1px solid var(--base01);
+        }
+        .rod { margin: 0 10px; position: relative; width: 40px; height: 300px; display: flex; flex-direction: column; align-items: center; }
+        .rod::before {
+            content: ''; position: absolute; left: 50%; transform: translateX(-50%); top: 0;
+            width: 4px; height: 100%; background-color: var(--base01); border-radius: 2px; z-index: 0;
+        }
+        .heaven-beads, .earth-beads { width: 100%; display: flex; flex-direction: column; align-items: center; z-index: 2; }
+        .heaven-beads { margin-bottom: 20px; }
+        .earth-beads { margin-top: 20px; }
+        .reckoning-bar { width: 110%; height: 2px; background-color: var(--base01); z-index: 1; }
+        .bead {
+            width: 40px; height: 40px; background-color: var(--blue); border-radius: 50%;
+            margin: 5px 0; cursor: pointer; transition: transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1), background-color 0.2s;
+            border: 2px solid var(--base02); box-sizing: border-box; flex-shrink: 0;
+        }
+        .bead.active { background-color: var(--magenta); }
+        .heaven-bead.lesson-selected { background-color: var(--orange); }
+        .heaven-bead.active { transform: translateY(25px); }
+        .earth-beads .bead.active { transform: translateY(-25px); }
+        #info-modal {
+            display: none; position: fixed; z-index: 101; left: 0; top: 0;
+            width: 100%; height: 100%; background-color: rgba(0, 17, 17, 0.8);
+            justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background-color: var(--base02); border: 1px solid var(--orange); border-radius: 8px;
+            padding: 25px; width: 80%; max-width: 600px; max-height: 75vh;
+            display: flex; flex-direction: column;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .modal-title { font-family: 'Orbitron', sans-serif; font-size: 1.5rem; color: var(--yellow); }
+        .close-button { font-size: 2rem; color: var(--base1); cursor: pointer; background: none; border: none; }
+        .modal-body {
+            font-family: 'Inter', sans-serif; color: var(--base1); line-height: 1.6;
+            overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--orange) var(--base02);
+        }
+        .modal-body::-webkit-scrollbar { width: 8px; }
+        .modal-body::-webkit-scrollbar-track { background: var(--base02); }
+        .modal-body::-webkit-scrollbar-thumb { background-color: var(--orange); border-radius: 4px; }
+        @media (orientation: portrait) {
+            #orientation-lock { display: flex; }
+            #app-container { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div id="orientation-lock"><div>Please rotate your device to landscape mode.</div></div>
+    <div id="app-container">
+        <div id="top-bar">
+            <div id="controls">
+                <button id="clear-button" class="control-button">C</button>
+                <button id="info-button" class="control-button">I</button>
+                <button id="lesson-button" class="control-button">L</button>
+            </div>
+            <div id="display-value">0</div>
+        </div>
+        <div id="soroban"></div>
+    </div>
+    <div id="info-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title" class="modal-title"></h2>
+                <button id="close-modal-button" class="close-button">&times;</button>
+            </div>
+            <div id="modal-body" class="modal-body"></div>
+        </div>
+    </div>
+    <script type="module">
+       import { initHaptic, triggerHaptic } from "./haptic.js"; document.addEventListener("DOMContentLoaded", () => {
+					
+            initHaptic();
+
+            const soroban = document.getElementById("soroban");
+            const displayValue = document.getElementById("display-value");
+            const clearButton = document.getElementById("clear-button");
+            const infoButton = document.getElementById("info-button");
+            const lessonButton = document.getElementById("lesson-button");
+            const modal = document.getElementById('info-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalBody = document.getElementById('modal-body');
+            const closeModalButton = document.getElementById('close-modal-button');
+
+            const RODS = 12;
+            let sorobanState = Array(RODS).fill(0);
+
+            const generateRepresentationProblem = () => {
+                const num = Math.floor(Math.random() * 999) + 10; // 2 or 3 digit numbers
+                return { text: `Set: ${num}`, answer: String(num) };
+            };
+
+            const generateSimpleAdditionProblem = () => {
+                let num1, num2;
+                do {
+                    num1 = Math.floor(Math.random() * 444) + 111; // 3-digit numbers
+                    num2 = Math.floor(Math.random() * 444) + 111;
+                } while ([...String(num1)].some((digit, i) => parseInt(digit) + parseInt(String(num2)[i]) >= 10));
+                return { text: `${num1} + ${num2}`, answer: String(num1 + num2) };
+            };
+            
+            const LESSONS = [
+                {
+                    title: "1. Number Representation",
+                    description: "Learn to set numbers on the soroban...",
+                    generateProblem: generateRepresentationProblem,
+                },
+                {
+                    title: "2. Simple Addition",
+                    description: "Perform simple addition without carrying...",
+                    generateProblem: generateSimpleAdditionProblem,
+                },
+            ];
+
+            let currentLessonId = null;
+            let isLessonActive = false;
+            let currentProblem = null;
+            let isCurrentProblemSolved = false;
+            let hasInteractedInLesson = false;
+
+            function createSoroban() {
+                soroban.innerHTML = '';
+                for (let i = 0; i < RODS; i++) {
+                    const rod = document.createElement("div"); rod.classList.add("rod");
+                    const heavenBeadsContainer = document.createElement("div"); heavenBeadsContainer.classList.add("heaven-beads");
+                    const heavenBead = createBead("heaven-bead", i, 0, 5);
+                    heavenBead.addEventListener("click", () => toggleHeavenBead(heavenBead));
+                    heavenBeadsContainer.appendChild(heavenBead);
+                    const bar = document.createElement('div'); bar.classList.add('reckoning-bar');
+                    const earthBeadsContainer = document.createElement("div"); earthBeadsContainer.classList.add("earth-beads");
+                    for (let j = 0; j < 4; j++) { 
+                        const earthBead = createBead("earth-bead", i, j, 1);
+                        earthBead.addEventListener("click", () => toggleEarthBeads(earthBead));
+                        earthBeadsContainer.appendChild(earthBead);
+                    }
+                    rod.appendChild(heavenBeadsContainer); rod.appendChild(bar); rod.appendChild(earthBeadsContainer);
+                    soroban.appendChild(rod);
+                }
+            }
+
+            function createBead(className, rodIndex, beadIndex, value) {
+                const bead = document.createElement("div");
+                bead.classList.add("bead", className);
+                bead.dataset.rod = rodIndex; bead.dataset.bead = beadIndex; bead.dataset.value = value;
+                return bead;
+            }
+
+            function handleInteraction() {
+                if (isLessonActive && !hasInteractedInLesson) {
+                    hasInteractedInLesson = true;
+                }
+                updateSorobanValue();
+            }
+
+            function toggleHeavenBead(bead) {
+                triggerHaptic();
+                const rodIndex = parseInt(bead.dataset.rod);
+
+                if (isLessonActive) {
+                    // Inside a lesson, clicking is ONLY for counting. Lesson selection is locked.
+                    bead.classList.toggle("active");
+                } else {
+                    // Outside a lesson, clicking manages selection AND counting.
+                    const lessonId = (RODS - 1) - rodIndex;
+                    const wasSelected = bead.classList.contains('lesson-selected');
+
+                    // Clicking a bead always toggles its active state for counting in free-play.
+                    bead.classList.toggle('active');
+
+                    // Now, handle the SELECTION logic separately. Only one can be selected.
+                    if (!wasSelected) {
+                        // If we are selecting a NEW lesson, deselect all others.
+                        document.querySelectorAll('.heaven-bead').forEach(hb => {
+                            if (hb !== bead) hb.classList.remove('lesson-selected');
+                        });
+                        bead.classList.add('lesson-selected');
+                        currentLessonId = lessonId;
+                    } else {
+                        // If we are deselecting the current lesson bead.
+                        bead.classList.remove('lesson-selected');
+                        currentLessonId = null;
+                    }
+                }
+                handleInteraction();
+            }
+
+            function toggleEarthBeads(clickedBead) {
+                triggerHaptic();
+                const beadGroup = Array.from(clickedBead.parentElement.children); 
+                const clickedDOMIndex = beadGroup.indexOf(clickedBead);
+                if (clickedBead.classList.contains("active")) {
+                     beadGroup.forEach((b, i) => { if (i >= clickedDOMIndex) b.classList.remove("active"); });
+                } else {
+                    beadGroup.forEach((b, i) => { if (i <= clickedDOMIndex) b.classList.add("active"); });
+                }
+                handleInteraction();
+            }
+            
+            function clearSoroban(exitLesson = true) {
+                triggerHaptic();
+                document.querySelectorAll('.bead').forEach(b => {
+                    b.classList.remove('active');
+                    if(exitLesson) b.classList.remove('lesson-selected');
+                });
+                if (exitLesson) {
+                    isLessonActive = false; currentLessonId = null; currentProblem = null;
+                    displayValue.textContent = '0'; displayValue.classList.remove('correct');
+                }
+                updateSorobanValue();
+            }
+
+            function updateSorobanValue() {
+                sorobanState.fill(0);
+                document.querySelectorAll(".bead.active").forEach(b => {
+                    sorobanState[b.dataset.rod] += parseInt(b.dataset.value);
+                });
+                const valStr = sorobanState.join('').replace(/^0+/, '') || '0';
+                
+                if (isLessonActive) {
+                    if (hasInteractedInLesson) {
+                        displayValue.textContent = BigInt(valStr).toLocaleString();
+                    }
+                    checkAnswer(valStr);
+                } else {
+                    displayValue.textContent = BigInt(valStr).toLocaleString();
+                }
+            }
+
+            function checkAnswer(currentValue) {
+                if (!currentProblem || isCurrentProblemSolved) return;
+                if (currentValue === currentProblem.answer) {
+                    displayValue.classList.add('correct');
+                    isCurrentProblemSolved = true;
+                    setTimeout(loadProblem, 1200);
+                }
+            }
+
+            function startLesson() {
+                if (currentLessonId === null || currentLessonId >= LESSONS.length) {
+                    alert('Please select a valid lesson first (from the right).');
+                    return;
+                }
+                triggerHaptic();
+                isLessonActive = true;
+                document.querySelectorAll('.heaven-bead').forEach(b => b.classList.remove('lesson-selected'));
+                loadProblem();
+            }
+
+            function loadProblem() {
+                const lesson = LESSONS[currentLessonId];
+                if (!lesson) { isLessonActive = false; return; }
+                
+                isCurrentProblemSolved = false;
+                hasInteractedInLesson = false;
+                displayValue.classList.remove('correct');
+                currentProblem = lesson.generateProblem();
+                displayValue.textContent = currentProblem.text;
+                clearSoroban(false);
+            }
+
+            function showInfoModal() {
+                const lessonToShowId = currentLessonId; // Capture the currently selected lesson ID.
+
+                if (lessonToShowId === null || lessonToShowId >= LESSONS.length) {
+                    alert('Please select a lesson first by clicking a top bead (starting from the right).');
+                    return;
+                }
+
+                // If a lesson is currently active, pressing "I" will exit that lesson.
+                if (isLessonActive) {
+                    clearSoroban(true);
+                }
+
+                // Now, show the info for the captured lesson ID.
+                currentLessonId = lessonToShowId;
+                const lesson = LESSONS[currentLessonId];
+
+                // Ensure the correct bead is visually selected, as clearSoroban might have removed it.
+                const lessonRodIndex = (RODS - 1) - currentLessonId;
+                const beadToShow = document.querySelector(`.bead[data-rod='${lessonRodIndex}'].heaven-bead`);
+                if (beadToShow) {
+                    document.querySelectorAll('.heaven-bead').forEach(hb => hb.classList.remove('lesson-selected'));
+                    beadToShow.classList.add('lesson-selected');
+                }
+
+                modalTitle.textContent = lesson.title;
+                modalBody.innerHTML = lesson.description.replace(/\n/g, '<br>');
+                modal.style.display = 'flex';
+            }
+
+            // --- Event Listeners ---
+            clearButton.addEventListener('click', () => clearSoroban(true));
+            infoButton.addEventListener('click', showInfoModal);
+            closeModalButton.addEventListener('click', () => modal.style.display = 'none');
+            window.addEventListener('click', (e) => { if (e.target == modal) modal.style.display = 'none'; });
+
+            lessonButton.addEventListener('click', () => {
+                triggerHaptic();
+                if (!isLessonActive) {
+                    startLesson();
+                }
+            });
+
+            createSoroban();
+        });
+    </script>
+</body>
+</html>
+
