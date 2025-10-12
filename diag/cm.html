@@ -449,8 +449,7 @@ Additional text can be added here to demonstrate the scrolling functionality whe
                     const file = new File([content], 'diagram.txt', { type: 'text/plain' });
                     await navigator.share({
                         files: [file],
-                        title: 'Save Diagram',
-                    });
+                      });
                 } catch (err) {
                     // The user may have cancelled the share. Ignore 'AbortError'.
                     if (err.name !== 'AbortError') {
