@@ -314,8 +314,9 @@ Additional text can be added here to demonstrate the scrolling functionality whe
                 const lineCount = lines.length;
                 const lineHeight = 18;
                 
-                d.width = d.expanded ? 360 : (longestLine.length * 9 + 40);
-                d.height = d.expanded ? 160 : 60 + (lineCount - 1) * lineHeight;
+                // This is a really magic number for width
+                d.width = d.expanded ? 30 : (longestLine.length * 7.4 + 10);
+                d.height = d.expanded ? 160 : 45 + (lineCount - 1) * lineHeight;
             });
 
             nodeSelection.select("text.label")
