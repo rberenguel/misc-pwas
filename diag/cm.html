@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yet another concept map editor</title>
+    <!-- Assuming codemirror files are in these relative paths from your repo -->
+    <link rel="stylesheet" href="styles/codemirror.css">
+
+    <script type="importmap">
+    {
+        "imports": {
+            "CodeMirrorBundle": "./bundles/codemirror-bundle.js"
+        }
+    }
+    </script>
+
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            background-color: #111122;
+        }
+        .container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+        .editor-pane {
+            width: 45%;
+            height: 100%;
+        }
+        .diagram-pane {
+            width: 55%;
+            height: 100%;
+        }
+        /* Style CodeMirror 6 to fill its container */
+        .cm-editor {
+            height: 100%;
+        }
+        svg {
+            width: 100%;
+            height: 100%;
+        }
+        .node { cursor: grab; }
+        .node.grabbing { cursor: grabbing; }
+        .node.prose-node { cursor: pointer; }
+        .node.expanded-node { cursor: default; } /* Change cursor for expanded nodes */
+        .node rect {
+            stroke-width: 2px;
+            stroke: #2aa198; /* Solarized Cyan */
+            fill: #1a1a2e;
+            rx: 6;
+            ry: 6;
+        }
+        .node text.label {
+            font-size: 14px;
+            font-weight: 600;
+            fill: #93a1a1;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            pointer-events: none;
+        }
+        .link {
+            fill: none;
+            stroke: #cb4b16; /* Solarized Orange */
+            stroke-width: 2px;
+        }
+        .link-label {
+            font-size: 12px;
+            fill: #b58900; /* Solarized Yellow */
+            text-anchor: middle;
+            dominant-baseline: middle;
+            stroke: #111122;
+            stroke-width: 4px;
+            paint-order: stroke;
+            pointer-events: none;
+        }
+        .node.prose-node > rect {
+            stroke: #268bd2; /* Solarized Blue for highlight */
+        }
+        .prose-content {
+            font-size: 13px;
+            color: #93a1a1;
+            line-height: 1.5;
+            background-color: #1f1f33;
+            padding: 10px;
+            border-radius: 4px;
+            height: 100%;
+            box-sizing: border-box;
+            overflow-y: auto; /* Enable scrolling */
+        }
+        .prose-content p { margin: 0; }
+
+        /* Custom scrollbar for better visibility */
+        .prose-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        .prose-content::-webkit-scrollbar-track {
+            background: #1a1a2e;
+        }
+        .prose-content::-webkit-scrollbar-thumb {
+            background-color: #268bd2;
+            border-radius: 4px;
+            border: 2px solid #1a1a2e;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="editor-pane" class="editor-pane"></div>
+        <div class="diagram-pane">
+             <svg id="diagram-container">
+                <defs>
+                    <marker id="arrowhead" viewBox="0 -5 10 10" refX="10" refY="0" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M0,-5L10,0L0,5" fill="#cb4b16"></path>
+                    </marker>
+                </defs>
+                <g id="zoom-group">
+                    <g id="links"></g>
+                    <g id="nodes"></g>
+                </g>
+            </svg>
+        </div>
+    </div>
+    
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    
+    <script type="module">
+        import {
+            EditorState, EditorView, keymap, defaultKeymap,
+            history, historyKeymap, markdown, oneDark,
+            languages, markdownLanguage, GFM
+        } from "CodeMirrorBundle";
+
+        const compactDiagramData = `
+Topics
+CG            Consumer Groups
+Consumers
+Internal
+User
+Partitions
+Records
+Offset
+Ordered
+KV          Key-Value Pairs
+Tombstone
+SK          Same Key
+SP          Same Partition
+Compaction
+Time
+Expiration
+RET         Record expiration time
+
+Topics    ->  Internal    can be
+Topics    ->  User        can be
+CG        ->  Consumers   have
+User      ->  CG          consumed by
+Topics    ->  Partitions  have
+Partitions  -> Records      contain
+Partitions  -> Consumers    read from
+Consumers   -> Topics       can read from several
+Records     -> Ordered      are partially
+Records     -> KV           are
+KV          -> Tombstone    value=null
+KV          -> SK           can have
+SK          -> SP           go to
+Compaction  -> SK           keeps latest with
+Time        -> Compaction   required by
+Time        -> Expiration   required by
+Expiration  -> RET
+Records     -> Time         have
+Records     -> SK           can have
+Ordered     -> Time         by
+Consumers   -> Offset       track
+Offset      -> Internal     is stored in
+Offset      -> Ordered      requires
+SP          -> Ordered      is completely
+
+# Consumers
+The relationship between <strong>Partitions</strong> and <strong>Consumers</strong> is the core of Kafka's scaling strategy.
+While a single consumer <em>can</em> read from multiple partitions, the system guarantees
+that any given partition is only ever read by a <strong>single consumer within its Consumer Group</strong>.
+This is a crucial design choice to prevent two consumers from processing the same message,
+enabling safe, parallel consumption. The major trade-off for this parallelism is that
+message ordering is only guaranteed <em>within</em> a partition, not across the entire topic. 
+Additional text can be added here to demonstrate the scrolling functionality when the content overflows the container.
+---
+        `;
+
+        function parseCompactFormat(text) {
+            const nodesMap = {};
+            let parsingProseForNode = null;
+            function ensureNode(id) {
+                if (!nodesMap[id]) { nodesMap[id] = { id, parentRelations: [] }; }
+            }
+            const lines = text.trim().split('\n');
+            for (const line of lines) {
+                const trimmedLine = line.trim();
+                if (trimmedLine === '' || trimmedLine.startsWith('{') || trimmedLine.startsWith('}')) continue;
+                if (trimmedLine.startsWith('---') && parsingProseForNode) { parsingProseForNode = null; continue; }
+                if (trimmedLine.startsWith('#')) {
+                    const nodeId = trimmedLine.split('#').pop().trim().split(/\s+/)[0];
+                    ensureNode(nodeId);
+                    parsingProseForNode = nodeId;
+                    nodesMap[nodeId].prose = ''; continue;
+                }
+                if (parsingProseForNode) { nodesMap[parsingProseForNode].prose += `<p>${trimmedLine}</p>`; continue; }
+                if (trimmedLine.includes('->')) {
+                    const [sourcePart, targetPart] = trimmedLine.split('->').map(s => s.trim());
+                    const sourceId = sourcePart;
+                    const targetWords = targetPart.split(/\s+/);
+                    const targetId = targetWords.shift();
+                    const verb = targetWords.join(' ').split(';')[0].trim();
+                    ensureNode(sourceId);
+                    ensureNode(targetId);
+                    nodesMap[targetId].parentRelations.push({ id: sourceId, verb }); continue;
+                }
+                const parts = trimmedLine.split(/\s+/);
+                const nodeId = parts.shift();
+                const title = parts.join(' ');
+                ensureNode(nodeId);
+                if (title) { nodesMap[nodeId].title = title; }
+            }
+            return Object.values(nodesMap);
+        }
+
+        // --- Diagram Setup ---
+        const svg = d3.select("#diagram-container");
+        const svgElement = document.querySelector(".diagram-pane");
+        const width = svgElement.clientWidth;
+        const height = svgElement.clientHeight;
+        const zoomGroup = svg.select("#zoom-group");
+        const linksGroup = zoomGroup.select("#links");
+        const nodesGroup = zoomGroup.select("#nodes");
+        let nodes = [];
+        let links = [];
+
+        const simulation = d3.forceSimulation()
+            .force("link", d3.forceLink().id(d => d.id).distance(300))
+            .force("charge", d3.forceManyBody().strength(-1200))
+            .force("collide", d3.forceCollide())
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .velocityDecay(0.2) // Increase friction to settle faster
+            .alphaDecay(0.02)   // Increase cooling rate to settle faster
+            .on("tick", ticked);
+
+        function updateDiagram(newData) {
+            if (newData) {
+                const oldNodeMap = new Map(nodes.map(d => [d.id, d]));
+                nodes = newData.map((d, i) => {
+                    const oldNode = oldNodeMap.get(d.id);
+                    const newNode = { ...d };
+                    if (oldNode) {
+                        newNode.x = oldNode.x;
+                        newNode.y = oldNode.y;
+                        newNode.fx = oldNode.fx;
+                        newNode.fy = oldNode.fy;
+                        newNode.expanded = oldNode.expanded;
+                    } else {
+                        const angle = (i / newData.length) * 2 * Math.PI;
+                        newNode.x = width / 2 + Math.cos(angle) * 200;
+                        newNode.y = height / 2 + Math.sin(angle) * 200;
+                        newNode.expanded = false;
+                    }
+                    return newNode;
+                });
+                links = [];
+                newData.forEach(d => {
+                    if (d.parentRelations) { d.parentRelations.forEach(p => { links.push({ source: p.id, target: d.id, verb: p.verb }); }); }
+                });
+            }
+
+            const nodeSelection = nodesGroup.selectAll("g.node").data(nodes, d => d.id)
+                .join(enter => {
+                    const g = enter.append("g")
+                        .on('click', (event, d) => {
+                            if (event.defaultPrevented || !d.prose) return;
+                            d.expanded = !d.expanded;
+                            if (d.expanded) {
+                                d.fx = null;
+                                d.fy = null;
+                            }
+                            updateDiagram();
+                        });
+                    g.append("rect");
+                    g.append("text").attr("class", "label").attr("y", 0);
+                    return g;
+                });
+
+            nodeSelection.each(function(d) {
+                if (d.expanded) {
+                    d3.select(this).on('.drag', null);
+                } else {
+                    d3.select(this).call(drag(simulation));
+                }
+            });
+
+            nodeSelection
+                .attr("class", d => `node ${d.prose ? 'prose-node' : ''} ${d.expanded ? 'expanded-node' : ''}`);
+            
+            nodeSelection.select("text.label").text(d => d.title || d.id);
+            linksGroup.selectAll("path.link").data(links, d => `${d.source.id}-${d.target.id}`).join("path").attr("class", "link").attr("marker-end", "url(#arrowhead)");
+            linksGroup.selectAll("text.link-label").data(links, d => `${d.source.id}-${d.target.id}`).join("text").attr("class", "link-label").text(d => d.verb);
+            
+            nodeSelection.each(function(d) {
+                const baseWidth = (d.title || d.id).length * 9 + 40;
+                d.width = d.expanded ? 360 : baseWidth;
+                d.height = d.expanded ? 160 : 60;
+            });
+            
+            nodeSelection.select("rect").transition().duration(400)
+                .attr("width", d => d.width).attr("height", d => d.height)
+                .attr("x", d => -d.width / 2).attr("y", d => -d.height / 2);
+
+            nodeSelection.select("text.label").transition().duration(400).attr("y", d => d.expanded ? (-d.height / 2 + 20) : 0);
+            nodeSelection.selectAll("foreignObject").remove();
+            const proseNodes = nodeSelection.filter(d => d.expanded);
+            proseNodes.append("foreignObject")
+                .attr("width", d => d.width - 20).attr("height", d => d.height - 50)
+                .attr("x", d => -d.width / 2 + 10).attr("y", d => -d.height / 2 + 40)
+                .style("opacity", 0)
+                .call(fo => fo.transition().duration(400).style("opacity", 1))
+                .append("xhtml:div").attr("class", "prose-content").html(d => d.prose);
+            
+            simulation.nodes(nodes);
+            simulation.force("link").links(links);
+            simulation.force("collide").radius(d => d.width / 2 + 20);
+            simulation.alpha(0.3).restart();
+        }
+        
+        function getBorderPoint(sourceNode, targetNode) {
+             if (!sourceNode || !targetNode) return { x: 0, y: 0 };
+            const sx = sourceNode.x, sy = sourceNode.y, tx = targetNode.x, ty = targetNode.y;
+            const dx = tx - sx, dy = ty - sy;
+            if (dx === 0 && dy === 0) return { x: sx, y: sy };
+            const w = targetNode.width / 2, h = targetNode.height / 2;
+            const tan_phi = h / w, tan_theta = Math.abs(dy / dx);
+            let b_x, b_y;
+            if (tan_theta < tan_phi) {
+                const sign = dx > 0 ? 1 : -1;
+                b_x = tx - sign * w; b_y = ty - sign * w * dy / dx;
+            } else {
+                const sign = dy > 0 ? 1 : -1;
+                b_x = tx - sign * h * dx / dy; b_y = ty - sign * h;
+            }
+            return { x: b_x, y: b_y };
+        }
+
+        function ticked() {
+            linksGroup.selectAll("path.link").attr("d", d => {
+                const sourcePoint = getBorderPoint(d.target, d.source);
+                const targetPoint = getBorderPoint(d.source, d.target);
+                return `M ${sourcePoint.x},${sourcePoint.y} L ${targetPoint.x},${targetPoint.y}`;
+            });
+            linksGroup.selectAll("text.link-label")
+                .attr("x", d => (d.source.x + d.target.x) / 2)
+                .attr("y", d => (d.source.y + d.target.y) / 2);
+            nodesGroup.selectAll("g.node").attr("transform", d => `translate(${d.x}, ${d.y})`);
+        }
+
+        function drag(simulation) {
+            function dragstarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x; d.fy = d.y;
+                d3.select(this).classed("grabbing", true);
+            }
+            function dragged(event, d) {
+                d.fx = event.x; d.fy = event.y;
+            }
+            function dragended(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d3.select(this).classed("grabbing", false);
+            }
+            return d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended);
+        }
+
+        const zoom = d3.zoom()
+            .scaleExtent([0.01, 3])
+            .on("zoom", ({ transform }) => zoomGroup.attr("transform", transform))
+            .filter((event) => {
+                // Prevent zoom event on scrollable prose content
+                return !event.target.closest('.prose-content');
+            });
+        
+        svg.call(zoom);
+        svg.call(zoom.scaleTo, 0.5)
+        // --- Editor Setup (CodeMirror 6) ---
+        const editorPane = document.getElementById('editor-pane');
+        const editorState = EditorState.create({
+            doc: compactDiagramData.trim(),
+            extensions: [
+                history(),
+                keymap.of([...defaultKeymap, ...historyKeymap]),
+                markdown({
+                    base: markdownLanguage,
+                    codeLanguages: languages,
+                    extensions: [GFM],
+                }),
+                oneDark, // Theme
+                EditorView.updateListener.of((update) => {
+                    if (update.docChanged) {
+                        const newText = update.state.doc.toString();
+                        try {
+                            const newData = parseCompactFormat(newText);
+                            updateDiagram(newData);
+                        } catch (e) {
+                            console.error("Error parsing diagram text:", e);
+                        }
+                    }
+                })
+            ]
+        });
+        new EditorView({ state: editorState, parent: editorPane });
+
+        // --- Initial Render ---
+        updateDiagram(parseCompactFormat(compactDiagramData));
+
+    </script>
+</body>
+</html>
+
