@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yet another concept map editor</title>
-    <!-- Assuming codemirror files are in these relative paths from your repo -->
+    <title>Explorable Kafka Diagram</title>
     <link rel="stylesheet" href="styles/codemirror.css">
 
     <script type="importmap">
@@ -138,6 +137,9 @@
         } from "CodeMirrorBundle";
 
         const compactDiagramData = `
+# Welcome to the Live Editor!
+# Try Cmd/Ctrl+S to Save and Cmd/Ctrl+O to Open
+---
 Topics
 CG            Consumer Groups
 Consumers
@@ -147,7 +149,7 @@ Partitions
 Records
 Offset
 Ordered
-KV          Key-Value Pairs
+KV          Key-Value\\nPairs
 Tombstone
 SK          Same Key
 SP          Same Partition
@@ -239,14 +241,13 @@ Additional text can be added here to demonstrate the scrolling functionality whe
         const nodesGroup = zoomGroup.select("#nodes");
         let nodes = [];
         let links = [];
+        let editorView;
 
         const simulation = d3.forceSimulation()
-            .force("link", d3.forceLink().id(d => d.id).distance(300))
+            .force("link", d3.forceLink().id(d => d.id).distance(250))
             .force("charge", d3.forceManyBody().strength(-1200))
             .force("collide", d3.forceCollide())
             .force("center", d3.forceCenter(width / 2, height / 2))
-            .velocityDecay(0.2) // Increase friction to settle faster
-            .alphaDecay(0.02)   // Increase cooling rate to settle faster
             .on("tick", ticked);
 
         function updateDiagram(newData) {
@@ -288,7 +289,7 @@ Additional text can be added here to demonstrate the scrolling functionality whe
                             updateDiagram();
                         });
                     g.append("rect");
-                    g.append("text").attr("class", "label").attr("y", 0);
+                    g.append("text").attr("class", "label");
                     return g;
                 });
 
@@ -303,16 +304,37 @@ Additional text can be added here to demonstrate the scrolling functionality whe
             nodeSelection
                 .attr("class", d => `node ${d.prose ? 'prose-node' : ''} ${d.expanded ? 'expanded-node' : ''}`);
             
-            nodeSelection.select("text.label").text(d => d.title || d.id);
             linksGroup.selectAll("path.link").data(links, d => `${d.source.id}-${d.target.id}`).join("path").attr("class", "link").attr("marker-end", "url(#arrowhead)");
             linksGroup.selectAll("text.link-label").data(links, d => `${d.source.id}-${d.target.id}`).join("text").attr("class", "link-label").text(d => d.verb);
             
             nodeSelection.each(function(d) {
-                const baseWidth = (d.title || d.id).length * 9 + 40;
-                d.width = d.expanded ? 360 : baseWidth;
-                d.height = d.expanded ? 160 : 60;
+                const label = d.title || d.id;
+                const lines = label.replace(/\\n/g, '\n').split('\n');
+                const longestLine = lines.reduce((a, b) => a.length > b.length ? a : b, '');
+                const lineCount = lines.length;
+                const lineHeight = 18;
+                
+                d.width = d.expanded ? 360 : (longestLine.length * 9 + 40);
+                d.height = d.expanded ? 160 : 60 + (lineCount - 1) * lineHeight;
             });
-            
+
+            nodeSelection.select("text.label")
+                .each(function(d) {
+                    const text = d3.select(this);
+                    text.selectAll("tspan").remove();
+                    const label = (d.title || d.id).replace(/\\n/g, '\n');
+                    const lines = label.split('\n');
+                    const lineHeight = 1.2; // ems
+                    const initial_dy = -((lines.length - 1) * lineHeight) / 2;
+
+                    lines.forEach((line, i) => {
+                        text.append("tspan")
+                            .attr("x", 0)
+                            .attr("dy", i === 0 ? `${initial_dy}em` : `${lineHeight}em`)
+                            .text(line);
+                    });
+                });
+
             nodeSelection.select("rect").transition().duration(400)
                 .attr("width", d => d.width).attr("height", d => d.height)
                 .attr("x", d => -d.width / 2).attr("y", d => -d.height / 2);
@@ -380,15 +402,13 @@ Additional text can be added here to demonstrate the scrolling functionality whe
         }
 
         const zoom = d3.zoom()
-            .scaleExtent([0.01, 3])
+            .scaleExtent([0.2, 3])
             .on("zoom", ({ transform }) => zoomGroup.attr("transform", transform))
-            .filter((event) => {
-                // Prevent zoom event on scrollable prose content
-                return !event.target.closest('.prose-content');
-            });
+            .filter((event) => !event.target.closest('.prose-content'));
         
         svg.call(zoom);
-        svg.call(zoom.scaleTo, 0.5)
+        svg.call(zoom.scaleTo, 0.8);
+        
         // --- Editor Setup (CodeMirror 6) ---
         const editorPane = document.getElementById('editor-pane');
         const editorState = EditorState.create({
@@ -396,26 +416,54 @@ Additional text can be added here to demonstrate the scrolling functionality whe
             extensions: [
                 history(),
                 keymap.of([...defaultKeymap, ...historyKeymap]),
-                markdown({
-                    base: markdownLanguage,
-                    codeLanguages: languages,
-                    extensions: [GFM],
-                }),
-                oneDark, // Theme
+                markdown({ base: markdownLanguage, codeLanguages: languages, extensions: [GFM] }),
+                oneDark,
                 EditorView.updateListener.of((update) => {
                     if (update.docChanged) {
                         const newText = update.state.doc.toString();
                         try {
                             const newData = parseCompactFormat(newText);
                             updateDiagram(newData);
-                        } catch (e) {
-                            console.error("Error parsing diagram text:", e);
-                        }
+                        } catch (e) { console.error("Error parsing diagram text:", e); }
                     }
                 })
             ]
         });
-        new EditorView({ state: editorState, parent: editorPane });
+        editorView = new EditorView({ state: editorState, parent: editorPane });
+
+        // --- Keyboard Shortcuts for File I/O ---
+        window.addEventListener('keydown', async (event) => {
+            if ((event.metaKey || event.ctrlKey) && event.key === 's') {
+                event.preventDefault();
+                try {
+                    const text = editorView.state.doc.toString();
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: 'diagram.txt',
+                        types: [{ description: 'Text Files', accept: { 'text/plain': ['.txt', '.md'] } }],
+                    });
+                    const writable = await handle.createWritable();
+                    await writable.write(text);
+                    await writable.close();
+                } catch (err) {
+                    if (err.name !== 'AbortError') console.error("Failed to save file:", err);
+                }
+            }
+            if ((event.metaKey || event.ctrlKey) && event.key === 'o') {
+                event.preventDefault();
+                try {
+                    const [handle] = await window.showOpenFilePicker({
+                        types: [{ description: 'Text Files', accept: { 'text/plain': ['.txt', '.md'] } }],
+                    });
+                    const file = await handle.getFile();
+                    const content = await file.text();
+                    editorView.dispatch({
+                        changes: { from: 0, to: editorView.state.doc.length, insert: content }
+                    });
+                } catch (err) {
+                    if (err.name !== 'AbortError') console.error("Failed to open file:", err);
+                }
+            }
+        });
 
         // --- Initial Render ---
         updateDiagram(parseCompactFormat(compactDiagramData));
@@ -423,4 +471,3 @@ Additional text can be added here to demonstrate the scrolling functionality whe
     </script>
 </body>
 </html>
-
