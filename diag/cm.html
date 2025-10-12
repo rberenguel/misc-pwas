@@ -441,16 +441,31 @@ Additional text can be added here to demonstrate the scrolling functionality whe
         editorView = new EditorView({ state: editorState, parent: editorPane });
 
         // --- Cross-browser File I/O ---
-        function saveFile(content) {
-            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'diagram.txt';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+        async function saveFile(content) {
+            // The Web Share API is the correct, modern way to save on mobile devices like iOS.
+            // It opens the native share sheet.
+            if (navigator.share) {
+                try {
+                    const file = new File([content], 'diagram.txt', { type: 'text/plain' });
+                    await navigator.share({
+                        files: [file],
+                        title: 'Save Diagram',
+                    });
+                } catch (err) {
+                    // The user may have cancelled the share. Ignore 'AbortError'.
+                    if (err.name !== 'AbortError') {
+                        console.error("Share API failed:", err);
+                    }
+                }
+            } else {
+                // Fallback for desktop browsers.
+                const a = document.createElement('a');
+                a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(content);
+                a.download = 'diagram.txt';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
         }
 
         function openFile() {
