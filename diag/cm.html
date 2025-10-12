@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Explorable Kafka Diagram</title>
+    <title>Yet Another Concept Map Editor</title>
+    <!-- Assuming codemirror files are in these relative paths from your repo -->
     <link rel="stylesheet" href="styles/codemirror.css">
 
     <script type="importmap">
@@ -53,8 +54,7 @@
             stroke-width: 2px;
             stroke: #2aa198; /* Solarized Cyan */
             fill: #1a1a2e;
-            rx: 6;
-            ry: 6;
+            
         }
         .node text.label {
             font-size: 14px;
@@ -94,6 +94,7 @@
             overflow-y: auto; /* Enable scrolling */
         }
         .prose-content p { margin: 0; }
+        .prose-content a { color: #c60; }
 
         /* Custom scrollbar for better visibility */
         .prose-content::-webkit-scrollbar {
@@ -137,9 +138,14 @@
         } from "CodeMirrorBundle";
 
         const compactDiagramData = `
-# Welcome to the Live Editor!
-# Try Cmd/Ctrl+S to Save and Cmd/Ctrl+O to Open
+Welcome Welcome to the Live Editor!
+
+# Welcome
+
+Try Cmd/Ctrl+S to Save and Cmd/Ctrl+O to Open
+
 ---
+
 Topics
 CG            Consumer Groups
 Consumers
@@ -244,10 +250,12 @@ Additional text can be added here to demonstrate the scrolling functionality whe
         let editorView;
 
         const simulation = d3.forceSimulation()
-            .force("link", d3.forceLink().id(d => d.id).distance(250))
-            .force("charge", d3.forceManyBody().strength(-1200))
+            .force("link", d3.forceLink().id(d => d.id).distance(300))
+            .force("charge", d3.forceManyBody().strength(-1100))
             .force("collide", d3.forceCollide())
             .force("center", d3.forceCenter(width / 2, height / 2))
+            .velocityDecay(0.2) // Increase friction to settle faster
+            .alphaDecay(0.02)   // Increase cooling rate to settle faster
             .on("tick", ticked);
 
         function updateDiagram(newData) {
@@ -288,7 +296,8 @@ Additional text can be added here to demonstrate the scrolling functionality whe
                             }
                             updateDiagram();
                         });
-                    g.append("rect");
+                    g.append("rect")
+                    .attr("rx", 6).attr("ry", 6);
                     g.append("text").attr("class", "label");
                     return g;
                 });
@@ -314,9 +323,8 @@ Additional text can be added here to demonstrate the scrolling functionality whe
                 const lineCount = lines.length;
                 const lineHeight = 18;
                 
-                // This is a really magic number for width
-                d.width = d.expanded ? 30 : (longestLine.length * 7.4 + 10);
-                d.height = d.expanded ? 160 : 45 + (lineCount - 1) * lineHeight;
+                d.width = d.expanded ? 360 : (longestLine.length * 9 + 40);
+                d.height = d.expanded ? 160 : 60 + (lineCount - 1) * lineHeight;
             });
 
             nodeSelection.select("text.label")
@@ -432,37 +440,47 @@ Additional text can be added here to demonstrate the scrolling functionality whe
         });
         editorView = new EditorView({ state: editorState, parent: editorPane });
 
-        // --- Keyboard Shortcuts for File I/O ---
-        window.addEventListener('keydown', async (event) => {
-            if ((event.metaKey || event.ctrlKey) && event.key === 's') {
-                event.preventDefault();
-                try {
-                    const text = editorView.state.doc.toString();
-                    const handle = await window.showSaveFilePicker({
-                        suggestedName: 'diagram.txt',
-                        types: [{ description: 'Text Files', accept: { 'text/plain': ['.txt', '.md'] } }],
-                    });
-                    const writable = await handle.createWritable();
-                    await writable.write(text);
-                    await writable.close();
-                } catch (err) {
-                    if (err.name !== 'AbortError') console.error("Failed to save file:", err);
-                }
-            }
-            if ((event.metaKey || event.ctrlKey) && event.key === 'o') {
-                event.preventDefault();
-                try {
-                    const [handle] = await window.showOpenFilePicker({
-                        types: [{ description: 'Text Files', accept: { 'text/plain': ['.txt', '.md'] } }],
-                    });
-                    const file = await handle.getFile();
-                    const content = await file.text();
+        // --- Cross-browser File I/O ---
+        function saveFile(content) {
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'diagram.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function openFile() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.txt,.md,text/plain';
+            input.onchange = e => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = readerEvent => {
+                    const content = readerEvent.target.result;
                     editorView.dispatch({
                         changes: { from: 0, to: editorView.state.doc.length, insert: content }
                     });
-                } catch (err) {
-                    if (err.name !== 'AbortError') console.error("Failed to open file:", err);
-                }
+                };
+                reader.readAsText(file);
+            }
+            input.click();
+        }
+
+        window.addEventListener('keydown', (event) => {
+            if ((event.metaKey || event.ctrlKey) && event.key === 's') {
+                event.preventDefault();
+                const text = editorView.state.doc.toString();
+                saveFile(text);
+            }
+            if ((event.metaKey || event.ctrlKey) && event.key === 'o') {
+                event.preventDefault();
+                openFile();
             }
         });
 
@@ -472,3 +490,4 @@ Additional text can be added here to demonstrate the scrolling functionality whe
     </script>
 </body>
 </html>
+
