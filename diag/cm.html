@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yet Another Concept Map Editor</title>
-    <!-- Assuming codemirror files are in these relative paths from your repo -->
+    <title>Concept Map (Dagre + D3 Force)</title>
     <link rel="stylesheet" href="styles/codemirror.css">
 
     <script type="importmap">
@@ -17,96 +16,49 @@
 
     <style>
         body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
+            margin: 0; padding: 0; width: 100%; height: 100%;
             overflow: hidden;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             background-color: #111122;
         }
-        .container {
-            display: flex;
-            width: 100%;
-            height: 100%;
-        }
-        .editor-pane {
-            width: 45%;
-            height: 100%;
-        }
-        .diagram-pane {
-            width: 55%;
-            height: 100%;
-        }
-        /* Style CodeMirror 6 to fill its container */
-        .cm-editor {
-            height: 100%;
-        }
-        svg {
-            width: 100%;
-            height: 100%;
-        }
+        .container { display: flex; width: 100%; height: 100%; }
+        .editor-pane { width: 45%; height: 100%; }
+        .diagram-pane { width: 55%; height: 100%; }
+        .cm-editor { height: 100%; }
+        svg { width: 100%; height: 100%; }
         .node { cursor: grab; }
         .node.grabbing { cursor: grabbing; }
         .node.prose-node { cursor: pointer; }
-        .node.expanded-node { cursor: default; } /* Change cursor for expanded nodes */
+        .node.expanded-node { cursor: default; }
         .node rect {
             stroke-width: 2px;
             stroke: #2aa198; /* Solarized Cyan */
             fill: #1a1a2e;
-            
         }
         .node text.label {
-            font-size: 14px;
-            font-weight: 600;
-            fill: #93a1a1;
-            text-anchor: middle;
-            dominant-baseline: middle;
-            pointer-events: none;
+            font-size: 14px; font-weight: 600; fill: #93a1a1;
+            text-anchor: middle; dominant-baseline: middle; pointer-events: none;
         }
         .link {
-            fill: none;
-            stroke: #cb4b16; /* Solarized Orange */
-            stroke-width: 2px;
+            fill: none; stroke: #cb4b16; /* Solarized Orange */ stroke-width: 2px;
         }
         .link-label {
-            font-size: 12px;
-            fill: #b58900; /* Solarized Yellow */
-            text-anchor: middle;
-            dominant-baseline: middle;
-            stroke: #111122;
-            stroke-width: 4px;
-            paint-order: stroke;
-            pointer-events: none;
+            font-size: 12px; fill: #b58900; /* Solarized Yellow */
+            text-anchor: middle; dominant-baseline: middle; stroke: #111122;
+            stroke-width: 4px; paint-order: stroke; pointer-events: none;
         }
-        .node.prose-node > rect {
-            stroke: #268bd2; /* Solarized Blue for highlight */
-        }
+        .node.prose-node > rect { stroke: #268bd2; /* Solarized Blue for highlight */ }
         .prose-content {
-            font-size: 13px;
-            color: #93a1a1;
-            line-height: 1.5;
-            background-color: #1f1f33;
-            padding: 10px;
-            border-radius: 4px;
-            height: 100%;
-            box-sizing: border-box;
-            overflow-y: auto; /* Enable scrolling */
+            font-size: 13px; color: #93a1a1; line-height: 1.5;
+            background-color: #1f1f33; padding: 10px; border-radius: 4px;
+            height: 100%; box-sizing: border-box; overflow-y: auto;
         }
         .prose-content p { margin: 0; }
         .prose-content a { color: #c60; }
-
-        /* Custom scrollbar for better visibility */
-        .prose-content::-webkit-scrollbar {
-            width: 8px;
-        }
-        .prose-content::-webkit-scrollbar-track {
-            background: #1a1a2e;
-        }
+        .prose-content::-webkit-scrollbar { width: 8px; }
+        .prose-content::-webkit-scrollbar-track { background: #1a1a2e; }
         .prose-content::-webkit-scrollbar-thumb {
-            background-color: #268bd2;
-            border-radius: 4px;
-            border: 2px solid #1a1a2e;
+            background-color: #268bd2; border-radius: 4px; border: 2px solid #1a1a2e;
         }
     </style>
 </head>
@@ -129,6 +81,7 @@
     </div>
     
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
     
     <script type="module">
         import {
@@ -201,10 +154,13 @@ Additional text can be added here to demonstrate the scrolling functionality whe
         `;
 
         function parseCompactFormat(text) {
-            const nodesMap = {};
+            const nodesMap = new Map();
             let parsingProseForNode = null;
             function ensureNode(id) {
-                if (!nodesMap[id]) { nodesMap[id] = { id, parentRelations: [] }; }
+                if (!nodesMap.has(id)) { 
+                    nodesMap.set(id, { id, parentRelations: [], prose: '' });
+                }
+                return nodesMap.get(id);
             }
             const lines = text.trim().split('\n');
             for (const line of lines) {
@@ -213,11 +169,10 @@ Additional text can be added here to demonstrate the scrolling functionality whe
                 if (trimmedLine.startsWith('---') && parsingProseForNode) { parsingProseForNode = null; continue; }
                 if (trimmedLine.startsWith('#')) {
                     const nodeId = trimmedLine.split('#').pop().trim().split(/\s+/)[0];
-                    ensureNode(nodeId);
                     parsingProseForNode = nodeId;
-                    nodesMap[nodeId].prose = ''; continue;
+                    ensureNode(nodeId).prose = ''; continue;
                 }
-                if (parsingProseForNode) { nodesMap[parsingProseForNode].prose += `<p>${trimmedLine}</p>`; continue; }
+                if (parsingProseForNode) { ensureNode(parsingProseForNode).prose += `<p>${trimmedLine}</p>`; continue; }
                 if (trimmedLine.includes('->')) {
                     const [sourcePart, targetPart] = trimmedLine.split('->').map(s => s.trim());
                     const sourceId = sourcePart;
@@ -225,19 +180,16 @@ Additional text can be added here to demonstrate the scrolling functionality whe
                     const targetId = targetWords.shift();
                     const verb = targetWords.join(' ').split(';')[0].trim();
                     ensureNode(sourceId);
-                    ensureNode(targetId);
-                    nodesMap[targetId].parentRelations.push({ id: sourceId, verb }); continue;
+                    ensureNode(targetId).parentRelations.push({ id: sourceId, verb }); continue;
                 }
                 const parts = trimmedLine.split(/\s+/);
                 const nodeId = parts.shift();
                 const title = parts.join(' ');
-                ensureNode(nodeId);
-                if (title) { nodesMap[nodeId].title = title; }
+                if (title) { ensureNode(nodeId).title = title; }
             }
-            return Object.values(nodesMap);
+            return Array.from(nodesMap.values());
         }
 
-        // --- Diagram Setup ---
         const svg = d3.select("#diagram-container");
         const svgElement = document.querySelector(".diagram-pane");
         const width = svgElement.clientWidth;
@@ -250,118 +202,113 @@ Additional text can be added here to demonstrate the scrolling functionality whe
         let editorView;
 
         const simulation = d3.forceSimulation()
-            .force("link", d3.forceLink().id(d => d.id).distance(300))
-            .force("charge", d3.forceManyBody().strength(-1100))
+            .force("link", d3.forceLink().id(d => d.id).distance(200).strength(0.5))
+            .force("charge", d3.forceManyBody().strength(-1000))
             .force("collide", d3.forceCollide())
             .force("center", d3.forceCenter(width / 2, height / 2))
-            .velocityDecay(0.2) // Increase friction to settle faster
-            .alphaDecay(0.02)   // Increase cooling rate to settle faster
+            .velocityDecay(0.5) // Settle faster
+            .alphaDecay(0.05)   // Cool faster
             .on("tick", ticked);
 
         function updateDiagram(newData) {
-            if (newData) {
-                const oldNodeMap = new Map(nodes.map(d => [d.id, d]));
-                nodes = newData.map((d, i) => {
-                    const oldNode = oldNodeMap.get(d.id);
-                    const newNode = { ...d };
-                    if (oldNode) {
-                        newNode.x = oldNode.x;
-                        newNode.y = oldNode.y;
-                        newNode.fx = oldNode.fx;
-                        newNode.fy = oldNode.fy;
-                        newNode.expanded = oldNode.expanded;
-                    } else {
-                        const angle = (i / newData.length) * 2 * Math.PI;
-                        newNode.x = width / 2 + Math.cos(angle) * 200;
-                        newNode.y = height / 2 + Math.sin(angle) * 200;
-                        newNode.expanded = false;
-                    }
-                    return newNode;
-                });
-                links = [];
-                newData.forEach(d => {
-                    if (d.parentRelations) { d.parentRelations.forEach(p => { links.push({ source: p.id, target: d.id, verb: p.verb }); }); }
-                });
-            }
+            const oldNodeMap = new Map(nodes.map(d => [d.id, d]));
+            nodes = newData.map(d => Object.assign(oldNodeMap.get(d.id) || {}, d));
+            
+            links = [];
+            newData.forEach(d => {
+                if (d.parentRelations) { d.parentRelations.forEach(p => { links.push({ source: p.id, target: d.id, verb: p.verb }); }); }
+            });
 
+            // --- 1. Use Dagre to calculate initial positions ---
+            const g = new dagre.graphlib.Graph();
+            g.setGraph({ rankdir: 'TB', marginx: 20, marginy: 20 });
+            g.setDefaultEdgeLabel(() => ({}));
+            nodes.forEach(node => g.setNode(node.id, { label: node.id, width: 150, height: 50 }));
+            links.forEach(link => g.setEdge(link.source.id || link.source, link.target.id || link.target));
+            dagre.layout(g);
+            
+            // Apply Dagre's layout to our nodes
+            nodes.forEach(node => {
+                const nodeInfo = g.node(node.id);
+                if (nodeInfo) {
+                    // Only set initial position for new nodes
+                    if (!node.x) {
+                        node.x = nodeInfo.x + width / 2 - g.graph().width / 2;
+                        node.y = nodeInfo.y + height / 2 - g.graph().height / 2;
+                    }
+                }
+            });
+
+            // --- 2. Run the D3 Force Simulation (as before) ---
             const nodeSelection = nodesGroup.selectAll("g.node").data(nodes, d => d.id)
                 .join(enter => {
                     const g = enter.append("g")
                         .on('click', (event, d) => {
                             if (event.defaultPrevented || !d.prose) return;
                             d.expanded = !d.expanded;
-                            if (d.expanded) {
-                                d.fx = null;
-                                d.fy = null;
-                            }
-                            updateDiagram();
+                            if (d.expanded) { d.fx = null; d.fy = null; }
+                            // Re-run the update logic without re-calculating Dagre layout
+                            updateDiagramAppearance();
                         });
-                    g.append("rect")
-                    .attr("rx", 6).attr("ry", 6);
+                    g.append("rect").attr("rx", 6).attr("ry", 6);
                     g.append("text").attr("class", "label");
                     return g;
                 });
 
             nodeSelection.each(function(d) {
-                if (d.expanded) {
-                    d3.select(this).on('.drag', null);
-                } else {
-                    d3.select(this).call(drag(simulation));
-                }
+                if (d.expanded) { d3.select(this).on('.drag', null); }
+                else { d3.select(this).call(drag(simulation)); }
             });
 
-            nodeSelection
-                .attr("class", d => `node ${d.prose ? 'prose-node' : ''} ${d.expanded ? 'expanded-node' : ''}`);
-            
+            nodeSelection.attr("class", d => `node ${d.prose ? 'prose-node' : ''} ${d.expanded ? 'expanded-node' : ''}`);
             linksGroup.selectAll("path.link").data(links, d => `${d.source.id}-${d.target.id}`).join("path").attr("class", "link").attr("marker-end", "url(#arrowhead)");
             linksGroup.selectAll("text.link-label").data(links, d => `${d.source.id}-${d.target.id}`).join("text").attr("class", "link-label").text(d => d.verb);
             
-            nodeSelection.each(function(d) {
-                const label = d.title || d.id;
-                const lines = label.replace(/\\n/g, '\n').split('\n');
+            updateDiagramAppearance();
+            
+            simulation.nodes(nodes);
+            simulation.force("link").links(links);
+            simulation.force("collide").radius(d => d.width / 2 + 20);
+            simulation.alpha(0.8).restart();
+        }
+        
+        // This new function handles only visual updates, not physics
+        function updateDiagramAppearance() {
+             const nodeSelection = nodesGroup.selectAll("g.node");
+             nodeSelection.each(function(d) {
+                const label = (d.title || d.id).replace(/\\n/g, '\n');
+                const lines = label.split('\n');
                 const longestLine = lines.reduce((a, b) => a.length > b.length ? a : b, '');
-                const lineCount = lines.length;
-                const lineHeight = 18;
-                
                 d.width = d.expanded ? 360 : (longestLine.length * 9 + 40);
-                d.height = d.expanded ? 160 : 60 + (lineCount - 1) * lineHeight;
+                d.height = d.expanded ? 160 : 50 + (lines.length - 1) * 18;
             });
-
-            nodeSelection.select("text.label")
-                .each(function(d) {
-                    const text = d3.select(this);
-                    text.selectAll("tspan").remove();
-                    const label = (d.title || d.id).replace(/\\n/g, '\n');
-                    const lines = label.split('\n');
-                    const lineHeight = 1.2; // ems
-                    const initial_dy = -((lines.length - 1) * lineHeight) / 2;
-
-                    lines.forEach((line, i) => {
-                        text.append("tspan")
-                            .attr("x", 0)
-                            .attr("dy", i === 0 ? `${initial_dy}em` : `${lineHeight}em`)
-                            .text(line);
-                    });
-                });
 
             nodeSelection.select("rect").transition().duration(400)
                 .attr("width", d => d.width).attr("height", d => d.height)
                 .attr("x", d => -d.width / 2).attr("y", d => -d.height / 2);
 
-            nodeSelection.select("text.label").transition().duration(400).attr("y", d => d.expanded ? (-d.height / 2 + 20) : 0);
+            nodeSelection.select("text.label")
+                .attr("y", d => d.expanded ? (-d.height / 2 + 20) : 0)
+                .each(function(d) {
+                    const text = d3.select(this);
+                    text.selectAll("tspan").remove();
+                    const label = (d.title || d.id).replace(/\\n/g, '\n');
+                    const lines = label.split('\n');
+                    const lineHeight = 1.2;
+                    const initial_dy = -((lines.length - 1) * lineHeight) / 2;
+                    lines.forEach((line, i) => {
+                        text.append("tspan").attr("x", 0)
+                            .attr("dy", i === 0 ? `${initial_dy}em` : `${lineHeight}em`).text(line);
+                    });
+                });
+
             nodeSelection.selectAll("foreignObject").remove();
-            const proseNodes = nodeSelection.filter(d => d.expanded);
-            proseNodes.append("foreignObject")
+            nodeSelection.filter(d => d.expanded).append("foreignObject")
                 .attr("width", d => d.width - 20).attr("height", d => d.height - 50)
                 .attr("x", d => -d.width / 2 + 10).attr("y", d => -d.height / 2 + 40)
                 .style("opacity", 0)
                 .call(fo => fo.transition().duration(400).style("opacity", 1))
                 .append("xhtml:div").attr("class", "prose-content").html(d => d.prose);
-            
-            simulation.nodes(nodes);
-            simulation.force("link").links(links);
-            simulation.force("collide").radius(d => d.width / 2 + 20);
-            simulation.alpha(0.3).restart();
         }
         
         function getBorderPoint(sourceNode, targetNode) {
@@ -371,15 +318,13 @@ Additional text can be added here to demonstrate the scrolling functionality whe
             if (dx === 0 && dy === 0) return { x: sx, y: sy };
             const w = targetNode.width / 2, h = targetNode.height / 2;
             const tan_phi = h / w, tan_theta = Math.abs(dy / dx);
-            let b_x, b_y;
             if (tan_theta < tan_phi) {
                 const sign = dx > 0 ? 1 : -1;
-                b_x = tx - sign * w; b_y = ty - sign * w * dy / dx;
+                return { x: tx - sign * w, y: ty - sign * w * dy / dx };
             } else {
                 const sign = dy > 0 ? 1 : -1;
-                b_x = tx - sign * h * dx / dy; b_y = ty - sign * h;
+                return { x: tx - sign * h * dx / dy, y: ty - sign * h };
             }
-            return { x: b_x, y: b_y };
         }
 
         function ticked() {
@@ -400,9 +345,7 @@ Additional text can be added here to demonstrate the scrolling functionality whe
                 d.fx = d.x; d.fy = d.y;
                 d3.select(this).classed("grabbing", true);
             }
-            function dragged(event, d) {
-                d.fx = event.x; d.fy = event.y;
-            }
+            function dragged(event, d) { d.fx = event.x; d.fy = event.y; }
             function dragended(event, d) {
                 if (!event.active) simulation.alphaTarget(0);
                 d3.select(this).classed("grabbing", false);
@@ -410,63 +353,46 @@ Additional text can be added here to demonstrate the scrolling functionality whe
             return d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended);
         }
 
-        const zoom = d3.zoom()
-            .scaleExtent([0.2, 3])
-            .on("zoom", ({ transform }) => zoomGroup.attr("transform", transform))
+        const zoom = d3.zoom().scaleExtent([0.2, 3]).on("zoom", ({ transform }) => zoomGroup.attr("transform", transform))
             .filter((event) => !event.target.closest('.prose-content'));
+        svg.call(zoom).call(zoom.scaleTo, 0.8);
         
-        svg.call(zoom);
-        svg.call(zoom.scaleTo, 0.8);
-        
-        // --- Editor Setup (CodeMirror 6) ---
+        // --- Editor Setup ---
         const editorPane = document.getElementById('editor-pane');
-        const editorState = EditorState.create({
-            doc: compactDiagramData.trim(),
-            extensions: [
-                history(),
-                keymap.of([...defaultKeymap, ...historyKeymap]),
-                markdown({ base: markdownLanguage, codeLanguages: languages, extensions: [GFM] }),
-                oneDark,
-                EditorView.updateListener.of((update) => {
-                    if (update.docChanged) {
-                        const newText = update.state.doc.toString();
-                        try {
-                            const newData = parseCompactFormat(newText);
-                            updateDiagram(newData);
-                        } catch (e) { console.error("Error parsing diagram text:", e); }
-                    }
-                })
-            ]
+        editorView = new EditorView({
+            state: EditorState.create({
+                doc: compactDiagramData.trim(),
+                extensions: [
+                    history(), keymap.of([...defaultKeymap, ...historyKeymap]),
+                    markdown({ base: markdownLanguage, codeLanguages: languages, extensions: [GFM] }),
+                    oneDark,
+                    EditorView.updateListener.of((update) => {
+                        if (update.docChanged) {
+                            try {
+                                const newData = parseCompactFormat(update.state.doc.toString());
+                                updateDiagram(newData);
+                            } catch (e) { console.error("Error parsing diagram text:", e); }
+                        }
+                    })
+                ]
+            }),
+            parent: editorPane
         });
-        editorView = new EditorView({ state: editorState, parent: editorPane });
 
-        // --- Cross-browser File I/O ---
+        // --- File I/O ---
         async function saveFile(content) {
-            // The Web Share API is the correct, modern way to save on mobile devices like iOS.
-            // It opens the native share sheet.
             if (navigator.share) {
                 try {
                     const file = new File([content], 'diagram.txt', { type: 'text/plain' });
-                    await navigator.share({
-                        files: [file],
-                      });
-                } catch (err) {
-                    // The user may have cancelled the share. Ignore 'AbortError'.
-                    if (err.name !== 'AbortError') {
-                        console.error("Share API failed:", err);
-                    }
-                }
+                    await navigator.share({ files: [file] });
+                } catch (err) { if (err.name !== 'AbortError') console.error("Share API failed:", err); }
             } else {
-                // Fallback for desktop browsers.
                 const a = document.createElement('a');
                 a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(content);
                 a.download = 'diagram.txt';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
             }
         }
-
         function openFile() {
             const input = document.createElement('input');
             input.type = 'file';
@@ -475,33 +401,18 @@ Additional text can be added here to demonstrate the scrolling functionality whe
                 const file = e.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = readerEvent => {
-                    const content = readerEvent.target.result;
-                    editorView.dispatch({
-                        changes: { from: 0, to: editorView.state.doc.length, insert: content }
-                    });
-                };
+                reader.onload = re => editorView.dispatch({ changes: { from: 0, to: editorView.state.doc.length, insert: re.target.result }});
                 reader.readAsText(file);
             }
             input.click();
         }
-
-        window.addEventListener('keydown', (event) => {
-            if ((event.metaKey || event.ctrlKey) && event.key === 's') {
-                event.preventDefault();
-                const text = editorView.state.doc.toString();
-                saveFile(text);
-            }
-            if ((event.metaKey || event.ctrlKey) && event.key === 'o') {
-                event.preventDefault();
-                openFile();
-            }
+        window.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); saveFile(editorView.state.doc.toString()); }
+            if ((e.metaKey || e.ctrlKey) && e.key === 'o') { e.preventDefault(); openFile(); }
         });
 
         // --- Initial Render ---
         updateDiagram(parseCompactFormat(compactDiagramData));
-
     </script>
 </body>
 </html>
-
