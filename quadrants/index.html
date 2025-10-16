@@ -33,15 +33,15 @@
             margin: 0;
             padding: 1rem;
             box-sizing: border-box;
-            height: 100vh;
-            width: 100vw;
+            height: calc(100vh - 6em);
+            width: 98vw;
             overflow: hidden;
             display: flex;
             flex-direction: column;
         }
 
 		.icon {
-			margin-right: 0.5em;
+			margin-right: 0.2em;
 		}
 		
         .controls {
@@ -131,11 +131,21 @@
             background-color: var(--base02);
         }
 
-        .row-headers .header-input {
-            writing-mode: vertical-rl;
-            transform: rotate(180deg);
-        }
+.row-headers .header-input {
+    /* Rotation */
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
 
+    /* Flexbox for icon alignment */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5em;
+}
+
+.row-headers .header-input .iconoir {
+    margin-right: 0;
+}
         .content-area {
             display: flex;
             flex-grow: 1;
@@ -499,15 +509,15 @@
         
         function addRow() {
             if (state.rows.length === 0 && state.columns.length === 0) {
-                 state.columns.push(':pin-alt: Importance');
+                 state.columns.push(':layout-right: Col 1');
             }
-            state.rows.push(`Row ${state.rows.length + 1}`);
+            state.rows.push(`:layout-left: Row ${state.rows.length + 1}`);
             render();
         }
 
         function addColumn() {
             if (state.rows.length === 0 && state.columns.length === 0) {
-                 state.rows.push('Row 1');
+                 state.rows.push(':layout-left: Row 1');
             }
             state.columns.push(`:layout-right: Col ${state.columns.length + 1}`);
             render();
