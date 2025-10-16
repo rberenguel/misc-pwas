@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quadrants</title>
+	<link rel="stylesheet" href="./fonts/iconoir/iconoir.css">
+   <link rel="stylesheet" href="./fonts/monoid.css">
+    <style>
+        :root {
+            --base03: #002b36;
+            --base02: #073642;
+            --base01: #586e75;
+            --base00: #657b83;
+            --base0: #839496;
+            --base1: #93a1a1;
+            --base2: #eee8d5;
+            --base3: #fdf6e3;
+            --yellow: #b58900;
+            --orange: #cb4b16;
+            --red: #dc322f;
+            --magenta: #d33682;
+            --violet: #6c71c4;
+            --blue: #268bd2;
+            --cyan: #2aa198;
+            --green: #859900;
+        }
+
+        body {
+            font-family: 'monoidregular', 'Roboto', 'Inter', sans-serif;
+            background-color: var(--base03);
+            color: var(--base0);
+            margin: 0;
+            padding: 1rem;
+            box-sizing: border-box;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+		.icon {
+			margin-right: 0.5em;
+		}
+		
+        .controls {
+            padding-bottom: 1rem;
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background-color: var(--base02);
+            color: var(--base1);
+            border: 1px solid var(--base01);
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background-color 0.2s;
+        }
+
+        .btn:hover {
+            background-color: var(--base01);
+            color: var(--base3);
+        }
+
+        #main-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .quadrant-grid {
+            display: grid;
+            flex-grow: 1;
+            position: relative;
+        }
+
+        .quadrant {
+            border: 2px dotted var(--cyan);
+            border-radius: 0.5rem;
+            position: relative;
+            min-height: 100px;
+        }
+        
+        .quadrant-grid .quadrant {
+            border: 1px solid var(--yellow);
+            border-radius: 1px;
+        }
+        
+        .column-headers, .row-headers {
+            display: grid;
+        }
+
+        .column-headers {
+            grid-auto-flow: column;
+        }
+
+        .row-headers {
+            grid-auto-flow: row;
+        }
+
+        .header-cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem;
+        }
+        
+        .header-input {
+            color: var(--orange);
+            font-size: 1.25rem;
+            padding: 0.25rem 0.5rem;
+            outline: none;
+            background-color: transparent;
+            border: none;
+            text-align: center;
+            border-radius: 0.25rem;
+        }
+
+        .header-input:empty {
+            background-color: rgba(181, 137, 0, 0.1); /* sepia-like */
+            filter: sepia(0.3);
+        }
+        
+        .header-input:focus {
+            background-color: var(--base02);
+        }
+
+        .row-headers .header-input {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+        }
+
+        .content-area {
+            display: flex;
+            flex-grow: 1;
+            position: relative;
+        }
+
+        .grid-and-rows {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+        }
+
+        .add-btn {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background-color: transparent;
+            color: var(--cyan);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+        
+        .add-btn:hover {
+            transform: scale(1.1);
+        }
+
+        #add-col-btn {
+            top: -12px;
+            right: -12px;
+            border-top: 2px solid var(--cyan);
+            border-right: 2px solid var(--cyan);
+        }
+
+        #add-row-btn {
+            bottom: -12px;
+            right: -12px;
+            border-bottom: 2px solid var(--cyan);
+            border-right: 2px solid var(--cyan);
+        }
+        
+        .item {
+            position: absolute;
+            background-color: transparent;
+            color: var(--cyan);
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            border: 1px solid transparent;
+            cursor: move;
+            touch-action: none;
+            user-select: none;
+            min-width: 50px;
+            z-index: 20;
+        }
+
+        .item a, .item a:visited {
+            color: var(--blue);
+            text-decoration: none;
+            display: block;
+        }
+        
+        .item a:hover {
+            text-decoration: underline;
+        }
+
+        .item .edit-area {
+            cursor: text;
+            outline: none;
+        }
+        
+        .item.selected {
+             box-shadow: 0 0 10px var(--cyan);
+        }
+        
+        .item.marked {
+            background-color: var(--base02);
+            border: 1px solid var(--orange);
+			color: var(--orange);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <button id="save-btn" class="btn">Save</button>
+        <button id="load-btn" class="btn">Load</button>
+        <button id="clear-btn" class="btn">Clear All</button>
+    </div>
+    
+    <div id="main-container">
+        <!-- JS will populate this -->
+    </div>
+    
+    <input type="file" id="file-input" accept=".md,.txt" style="display: none;">
+
+    <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+    <script>
+        const mainContainer = document.getElementById('main-container');
+        const saveBtn = document.getElementById('save-btn');
+        const loadBtn = document.getElementById('load-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const fileInput = document.getElementById('file-input');
+        
+        let state = {
+            rows: [],
+            columns: [],
+            items: []
+        };
+        
+        let selectedItemId = null;
+        let justBlurred = false;
+
+        document.addEventListener('focusout', (e) => {
+            if (e.target.hasAttribute('contenteditable')) {
+                justBlurred = true;
+                // Reset the flag shortly after the click event has bubbled up
+                setTimeout(() => { justBlurred = false; }, 100);
+            }
+        });
+
+        function render() {
+            mainContainer.innerHTML = ''; // Clear previous render
+
+            const hasGrid = state.rows.length > 0 || state.columns.length > 0;
+            const fragment = document.createDocumentFragment();
+
+            if (!hasGrid) {
+                // "No importances mode"
+                const singleQuadrant = document.createElement('div');
+                singleQuadrant.className = 'quadrant';
+                singleQuadrant.style.flexGrow = '1';
+                singleQuadrant.style.position = 'relative';
+
+                const addColBtn = createAddButton('add-col-btn', addColumn);
+                const addRowBtn = createAddButton('add-row-btn', addRow);
+                singleQuadrant.appendChild(addColBtn);
+                singleQuadrant.appendChild(addRowBtn);
+                
+                singleQuadrant.addEventListener('click', handleContainerClick);
+                
+                fragment.appendChild(singleQuadrant);
+            } else {
+                // Grid mode
+                const wrapper = document.createElement('div');
+                wrapper.style.display = 'flex';
+                wrapper.style.flexDirection = 'column';
+                wrapper.style.flexGrow = '1';
+                wrapper.style.position = 'relative';
+                
+                const columnHeaders = document.createElement('div');
+                columnHeaders.className = 'column-headers';
+                columnHeaders.style.gridTemplateColumns = `50px repeat(${state.columns.length}, 1fr)`;
+
+                // Placeholder for row header corner
+                columnHeaders.appendChild(document.createElement('div'));
+                
+                state.columns.forEach((title, index) => {
+                    columnHeaders.appendChild(createHeaderCell('column', title, index));
+                });
+
+                const contentArea = document.createElement('div');
+                contentArea.className = 'content-area';
+                contentArea.style.flexGrow = '1';
+                
+                const rowHeaders = document.createElement('div');
+                rowHeaders.className = 'row-headers';
+                rowHeaders.style.gridTemplateRows = `repeat(${state.rows.length}, 1fr)`;
+                rowHeaders.style.width = '50px';
+
+                state.rows.forEach((title, index) => {
+                    rowHeaders.appendChild(createHeaderCell('row', title, index));
+                });
+                
+                const quadrantGrid = document.createElement('div');
+                quadrantGrid.className = 'quadrant-grid';
+                quadrantGrid.style.gridTemplateRows = `repeat(${state.rows.length}, 1fr)`;
+                quadrantGrid.style.gridTemplateColumns = `repeat(${state.columns.length}, 1fr)`;
+                quadrantGrid.addEventListener('click', handleContainerClick);
+
+                for (let r = 0; r < state.rows.length; r++) {
+                    for (let c = 0; c < state.columns.length; c++) {
+                        const quadrant = document.createElement('div');
+                        quadrant.className = 'quadrant';
+                        quadrantGrid.appendChild(quadrant);
+                    }
+                }
+                
+                contentArea.appendChild(rowHeaders);
+                contentArea.appendChild(quadrantGrid);
+                
+                const addColBtn = createAddButton('add-col-btn', addColumn);
+                const addRowBtn = createAddButton('add-row-btn', addRow);
+                contentArea.appendChild(addColBtn);
+                contentArea.appendChild(addRowBtn);
+                
+                wrapper.appendChild(columnHeaders);
+                wrapper.appendChild(contentArea);
+                
+                fragment.appendChild(wrapper);
+            }
+            
+            mainContainer.appendChild(fragment);
+
+            // Render items on top of everything
+            state.items.forEach(item => {
+                const itemEl = document.createElement('div');
+                itemEl.className = 'item';
+                itemEl.dataset.id = item.id;
+                itemEl.style.left = `${item.x}%`;
+                itemEl.style.top = `${item.y}%`;
+                
+                if (item.marked) {
+                    itemEl.classList.add('marked');
+                }
+
+                // Create the content with potential icons
+                const content = createIconifiedContent(item.text);
+                
+                // If there's a URL, wrap the content in a link
+                if (item.url) {
+                    const link = document.createElement('a');
+                    link.href = item.url;
+                    link.target = '_blank';
+                    link.appendChild(content);
+                    itemEl.appendChild(link);
+                } else {
+                    itemEl.appendChild(content);
+                }
+                
+                // Clicking on padding or non-link text starts editing
+                itemEl.addEventListener('click', (e) => {
+                    if (e.target.tagName !== 'A') {
+                        startEditingItem(itemEl, item);
+                    }
+                });
+                
+                itemEl.addEventListener('mouseenter', () => selectItem(item.id));
+                itemEl.addEventListener('mouseleave', () => selectItem(null));
+
+                mainContainer.querySelector('.quadrant, .quadrant-grid').appendChild(itemEl);
+            });
+            
+            initInteract();
+        }
+
+		function createIconifiedContent(rawText) {
+            const fragment = document.createDocumentFragment();
+            const match = rawText.match(/^:([a-zA-Z0-9_-]+):(.*)/);
+            let textToProcess;
+
+            if (match) {
+                const iconName = match[1];
+                textToProcess = match[2].trim();
+
+                const iconSpan = document.createElement('span');
+                iconSpan.className = `icon iconoir iconoir-${iconName}`;
+                fragment.appendChild(iconSpan);
+
+                // Add a space after the icon if there's text that follows
+                if (textToProcess) {
+                    fragment.appendChild(document.createTextNode(' '));
+                }
+            } else {
+                textToProcess = rawText;
+            }
+
+            // Process the text for newlines
+            const lines = textToProcess.split('\\n');
+            lines.forEach((line, index) => {
+                fragment.appendChild(document.createTextNode(line));
+                if (index < lines.length - 1) { // Add a <br> tag if it's not the last line
+                    fragment.appendChild(document.createElement('br'));
+                }
+            });
+
+            return fragment;
+        }
+        
+        function createHeaderCell(type, title, index) {
+            const cell = document.createElement('div');
+            cell.className = 'header-cell';
+            const input = document.createElement('div');
+            input.className = 'header-input';
+            input.setAttribute('contenteditable', 'true');
+            
+            // Render with icon
+            input.innerHTML = '';
+            input.appendChild(createIconifiedContent(title));
+
+            // On focus, show raw text
+            input.addEventListener('focus', (e) => {
+                e.target.textContent = (type === 'column') ? state.columns[index] : state.rows[index];
+            });
+
+            // On blur, save new raw text
+            input.addEventListener('blur', (e) => {
+                const newTitle = e.target.textContent;
+                if (type === 'column') {
+                    state.columns[index] = newTitle;
+                } else {
+                    state.rows[index] = newTitle;
+                }
+                // Re-render the cell content to show icon again
+                e.target.innerHTML = '';
+                e.target.appendChild(createIconifiedContent(newTitle));
+            });
+
+            cell.appendChild(input);
+            return cell;
+        }
+        
+        function createAddButton(id, onClick) {
+            const btn = document.createElement('div');
+            btn.id = id;
+            btn.className = 'add-btn';
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                onClick();
+            });
+            return btn;
+        }
+        
+        function handleContainerClick(e) {
+            if (justBlurred) {
+                return;
+            }
+            // Only add item if click is directly on container, not on an existing item or control
+            if (!e.target.closest('.item, .add-btn, [contenteditable]')) {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = ((e.clientX - rect.left) / rect.width) * 100;
+                const y = ((e.clientY - rect.top) / rect.height) * 100;
+                createItem(x, y);
+            }
+        }
+
+        function startEditingItem(itemEl, item) {
+            const editArea = document.createElement('div');
+            editArea.className = 'edit-area';
+            editArea.setAttribute('contenteditable', 'true');
+            editArea.textContent = item.text; // Show raw text for editing
+
+            const handleBlur = (e) => {
+                updateItem(item.id, { text: e.target.textContent });
+                render(); // Re-render to switch back to display mode
+            };
+
+            editArea.addEventListener('blur', handleBlur, { once: true });
+            
+            itemEl.innerHTML = '';
+            itemEl.appendChild(editArea);
+            
+            // Focus and select text
+            editArea.focus();
+            window.getSelection().selectAllChildren(editArea);
+        }
+        
+        function addRow() {
+            if (state.rows.length === 0 && state.columns.length === 0) {
+                 state.columns.push(':pin-alt: Importance');
+            }
+            state.rows.push(`Row ${state.rows.length + 1}`);
+            render();
+        }
+
+        function addColumn() {
+            if (state.rows.length === 0 && state.columns.length === 0) {
+                 state.rows.push('Row 1');
+            }
+            state.columns.push(`:layout-right: Col ${state.columns.length + 1}`);
+            render();
+        }
+        
+        function createItem(x, y) {
+            const newItem = {
+                id: `item-${Date.now()}`,
+                text: 'item',
+                x: x.toFixed(2),
+                y: y.toFixed(2),
+                url: null,
+                marked: false
+            };
+            state.items.push(newItem);
+            render();
+        }
+        
+        function updateItem(id, updates) {
+            const item = state.items.find(i => i.id === id);
+            if (item) {
+                Object.assign(item, updates);
+            }
+             // No full re-render needed for text/url, but needed for position
+            if (updates.x || updates.y) render();
+        }
+
+        function deleteItem(id) {
+            state.items = state.items.filter(i => i.id !== id);
+            render();
+        }
+        
+        function selectItem(id) {
+             selectedItemId = id;
+             document.querySelectorAll('.item').forEach(el => {
+                if (el.dataset.id === id) {
+                    el.classList.add('selected');
+                } else {
+                    el.classList.remove('selected');
+                }
+             });
+        }
+        
+        // --- InteractJS ---
+        function initInteract() {
+            interact('.item')
+                .draggable({
+                    listeners: {
+                        move(event) {
+                            const target = event.target;
+                            const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+                            const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+
+                            target.style.transform = `translate(${x}px, ${y}px)`;
+                            target.setAttribute('data-x', x);
+                            target.setAttribute('data-y', y);
+                        },
+                        end(event) {
+                            const target = event.target;
+                            const container = mainContainer.querySelector('.quadrant, .quadrant-grid');
+                            const rect = container.getBoundingClientRect();
+                            
+                            const itemRect = target.getBoundingClientRect();
+                            const itemX = itemRect.left - rect.left;
+                            const itemY = itemRect.top - rect.top;
+
+                            const percentX = (itemX / rect.width) * 100;
+                            const percentY = (itemY / rect.height) * 100;
+                            
+                            target.style.transform = '';
+                            target.setAttribute('data-x', 0);
+                            target.setAttribute('data-y', 0);
+
+                            updateItem(target.dataset.id, { 
+                                x: percentX.toFixed(2), 
+                                y: percentY.toFixed(2) 
+                            });
+                        }
+                    }
+                });
+        }
+        
+        // --- Keyboard Shortcuts ---
+        document.addEventListener('keydown', (e) => {
+            // Handle global shortcuts that can happen even when editing (like Cmd+K)
+            if (e.metaKey && e.key === 'k') {
+                e.preventDefault();
+                if (selectedItemId) {
+                    const item = state.items.find(i => i.id === selectedItemId);
+                    if (item) {
+                        const newUrl = prompt('Enter URL:', item.url || '');
+                        if (newUrl !== null) { // Handles cancel
+                           updateItem(item.id, { url: newUrl });
+                           render(); // Re-render to update class
+                        }
+                    }
+                }
+                return; // Stop further processing
+            }
+
+            // If we are editing text inside an item, don't trigger item-level deletion or marking
+            if (e.target.closest('.item .edit-area')) {
+                return;
+            }
+
+            // Handle shortcuts that only work when an item is selected but not being edited
+            if (selectedItemId) {
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                     e.preventDefault();
+                     deleteItem(selectedItemId);
+                     selectedItemId = null;
+                }
+                
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    const item = state.items.find(i => i.id === selectedItemId);
+                    if (item) {
+                        updateItem(item.id, { marked: !item.marked });
+                        render(); // Re-render to update class
+                    }
+                }
+            }
+        });
+        
+        // --- Save/Load Logic ---
+        function toMarkdown() {
+            let md = '';
+            state.columns.forEach(c => md += `# C: ${c}\n`);
+            state.rows.forEach(r => md += `# R: ${r}\n`);
+            md += '\n';
+            state.items.forEach(i => {
+                md += `## item\n`;
+                md += `- text: ${JSON.stringify(i.text)}\n`;
+                md += `- x: ${i.x}\n`;
+                md += `- y: ${i.y}\n`;
+                if (i.url) md += `- url: ${i.url}\n`;
+                if (i.marked) md += `- marked: true\n`;
+                md += '\n';
+            });
+            return md;
+        }
+        
+        function fromMarkdown(md) {
+            const newState = { rows: [], columns: [], items: [] };
+            const lines = md.split('\n');
+            let currentItem = null;
+            
+            lines.forEach(line => {
+                line = line.trim();
+                if (line.startsWith('# C:')) {
+                    newState.columns.push(line.substring(4).trim());
+                } else if (line.startsWith('# R:')) {
+                    newState.rows.push(line.substring(4).trim());
+                } else if (line.startsWith('## item')) {
+                    currentItem = { id: `item-${Date.now()}-${Math.random()}` };
+                    newState.items.push(currentItem);
+                } else if (line.startsWith('- ') && currentItem) {
+                    const parts = line.substring(2).split(/:(.*)/s);
+                    if (parts.length > 1) {
+                        const key = parts[0].trim();
+                        const value = parts[1].trim();
+                        if (key === 'marked') {
+                            currentItem.marked = value === 'true';
+                        } else if (key === 'text') {
+                            try {
+                                currentItem.text = JSON.parse(value);
+                            } catch (err) {
+                                currentItem.text = value; // Fallback for non-JSON text
+                            }
+                        } else {
+                            currentItem[key] = value;
+                        }
+                    }
+                } else {
+                    currentItem = null;
+                }
+            });
+            state = newState;
+            render();
+        }
+
+        saveBtn.addEventListener('click', async () => {const md = toMarkdown();
+            const blob = new Blob([md], { type: 'text/markdown' });
+            const file = new File([blob], 'quadrants.md', { type: 'text/markdown' });
+
+            // 1. Try File System Access API first (showSaveFilePicker)
+            if ('showSaveFilePicker' in window) {
+                try {
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: 'quadrants.md',
+                        types: [{
+                            description: 'Markdown Files',
+                            accept: { 'text/markdown': ['.md'] },
+                        }],
+                    });
+                    const writable = await handle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                    return; // Exit if successful
+                } catch (err) {
+                    console.log("Save file picker was cancelled or failed, proceeding to fallbacks:", err);
+                }
+            }
+
+            // 2. Fallback to Web Share API
+            const shareData = {
+                files: [file],
+            };
+            if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+                try {
+                    await navigator.share(shareData);
+                    return; // Exit if successful
+                } catch (err) {
+                    console.log("Share API was cancelled or failed, proceeding to final fallback:", err);
+                }
+            }
+            
+            // 3. Final fallback to a direct download link
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'quadrants.md';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+        
+        loadBtn.addEventListener('click', () => {
+             if (window.showOpenFilePicker) {
+                window.showOpenFilePicker().then(async ([fileHandle]) => {
+                    const file = await fileHandle.getFile();
+                    const contents = await file.text();
+                    fromMarkdown(contents);
+                }).catch(err => console.error('Load cancelled or failed:', err));
+            } else {
+                fileInput.click();
+            }
+        });
+        
+        fileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => fromMarkdown(e.target.result);
+                reader.readAsText(file);
+            }
+            // Reset input so the same file can be loaded again
+            event.target.value = null;
+        });
+
+        clearBtn.addEventListener('click', () => {
+            if(confirm('Are you sure you want to clear everything?')) {
+                state = { rows: [], columns: [], items: [] };
+                render();
+            }
+        });
+        
+        // Initial render
+        render();
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
