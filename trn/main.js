@@ -89,7 +89,7 @@
     world.addChild(playerSprite);
     
     // --- UI Objects ---
-    let enemyIndicator, gameOverUI, powerupIndicator, scoreText, levelText, screenFade, splashScreenElement;
+    let enemyIndicator, gameOverUI, powerupIndicator, dotCountText, levelText, screenFade, splashScreenElement;
     let dotIndicatorContainer;
     let gameOverTitle, gameOverSubtitle;
     let minimapContainer, minimapTrails, minimapPlayer, minimapEnemies, minimapPowerups, minimapDots;
@@ -166,28 +166,27 @@
             fontFamily: 'Sixtyfour', fontSize: 24, fill: 0xCCCCCC, align: 'center'
         })});
         gameOverSubtitle.anchor.set(0.5);
-        gameOverSubtitle.y = 60;
         levelText = new PIXI.Text({text: '', style: new PIXI.TextStyle({
             fontFamily: 'Sixtyfour', fontSize: 28, fontWeight: 'bold', fill: 0xCCCCCC, align: 'center'
         })});
         levelText.anchor.set(0.5);
-        levelText.y = -60;
         gameOverUI.addChild(gameOverTitle, gameOverSubtitle, levelText);
         gameOverUI.visible = false;
         app.stage.addChild(gameOverUI);
     }
     
-    function setupScoreUI() {
-        scoreText = new PIXI.Text({text: '', style: new PIXI.TextStyle({
+    function setupDotCountUI() {
+        dotCountText = new PIXI.Text({text: '', style: new PIXI.TextStyle({
             fontFamily: 'Sixtyfour', fontSize: 32, fontWeight: 'bold', fill: 0xFFFFFF,
-            align: 'right', stroke: {color: 0x000000, width: 4}
+            align: 'left', stroke: {color: 0x000000, width: 4}
         })});
-        scoreText.anchor.set(1, 0);
-        app.stage.addChild(scoreText);
+        dotCountText.anchor.set(0, 0);
+        app.stage.addChild(dotCountText);
     }
     
-    function updateScoreUI() {
-        scoreText.text = `${playerScore} / ${DOTS_PER_LEVEL}`;
+    function updateDotCountUI() {
+        const dotsRemaining = DOTS_PER_LEVEL - playerScore;
+        dotCountText.text = `${dotsRemaining}`;
     }
 
     function showGameOverUI() {
@@ -248,7 +247,7 @@
 }
     
 function updateMinimap() {
-    const scale = minimapSize / (WORLD_BOUNDS * 2);
+    const scale = MINIMAP_SIZE / (WORLD_BOUNDS * 2);
     const transformX = (worldX) => (worldX + WORLD_BOUNDS) * scale;
     const transformY = (worldY) => (worldY + WORLD_BOUNDS) * scale;
     minimapTrails.clear();
@@ -259,7 +258,6 @@ function updateMinimap() {
         minimapTrails.stroke({ width: 1.5, color: PLAYER_COLOR });
     }
     
-    // Draw active enemy trails on the minimap
     enemyTrails.forEach(trail => {
         if (trail && trail.length > 1) {
             minimapTrails.moveTo(transformX(trail[0].x), transformY(trail[0].y));
@@ -270,7 +268,6 @@ function updateMinimap() {
         }
     });
 
-    // Draw fading enemy trails on the minimap
     fadingTrails.forEach(trail => {
         if (trail && trail.length > 1) {
             minimapTrails.moveTo(transformX(trail[0].x), transformY(trail[0].y));
@@ -312,31 +309,54 @@ function updateMinimap() {
     });
 }
     function repositionUI() {
-    gameOverUI.x = app.screen.width / 2;
-    gameOverUI.y = app.screen.height / 2;
-    powerupIndicator.x = 30;
-    powerupIndicator.y = app.screen.height - 50;
-    scoreText.x = app.screen.width - UI_PADDING;
-    scoreText.y = UI_PADDING;
-    if (screenFade) {
-        screenFade.width = app.screen.width;
-        screenFade.height = app.screen.height;
+    const screenWidth = app.screen.width;
+    const screenHeight = app.screen.height;
+    const smallerDimension = Math.min(screenWidth, screenHeight);
+
+    if (gameOverUI) {
+        gameOverTitle.style.fontSize = Math.max(32, screenWidth * 0.1);
+        gameOverSubtitle.style.fontSize = Math.max(16, screenWidth * 0.04);
+        levelText.style.fontSize = Math.max(20, screenWidth * 0.05);
+        
+        // Dynamically position text to avoid overlap
+        levelText.y = -gameOverTitle.height * 0.8;
+        gameOverSubtitle.y = gameOverTitle.height * 0.8;
+        
+        gameOverUI.x = screenWidth / 2;
+        gameOverUI.y = screenHeight / 2;
     }
+    
     if (readyText) {
-        readyText.x = app.screen.width / 2;
-        readyText.y = app.screen.height / 2;
+        readyText.style.fontSize = Math.max(32, screenWidth * 0.08);
+        readyText.x = screenWidth / 2;
+        readyText.y = screenHeight / 2;
     }
+
+    powerupIndicator.x = 30;
+    powerupIndicator.y = screenHeight - 50;
+    
+    if (dotCountText) {
+        dotCountText.style.fontSize = 20//Math.min(16, smallerDimension * 0.07);
+        dotCountText.x = UI_PADDING;
+        dotCountText.y = UI_PADDING;
+    }
+    
+    if (screenFade) {
+        screenFade.width = screenWidth;
+        screenFade.height = screenHeight;
+    }
+    
     if (minimapContainer) {
-        minimapSize = Math.min(app.screen.width, app.screen.height) / 4;
+        MINIMAP_SIZE = smallerDimension / 4;
         const bg = minimapContainer.children[0];
         bg.clear();
-        bg.beginFill(0x010101);
+        bg.beginFill(0x010101, 0.7);
         bg.lineStyle(1, 0x30304a);
-        bg.drawRect(0, 0, minimapSize, minimapSize);
+        bg.drawRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
         bg.endFill();
 
-        minimapContainer.x = app.screen.width - minimapSize - MINIMAP_PADDING;
-        minimapContainer.y = app.screen.height - minimapSize - MINIMAP_PADDING;
+        minimapContainer.x = screenWidth - MINIMAP_SIZE - MINIMAP_PADDING;
+        minimapContainer.y = MINIMAP_PADDING;
     }
 }
 
@@ -424,7 +444,7 @@ function updateMinimap() {
         trailPoints = [new PIXI.Point(player.x, player.y)];
         turning = 0;
         playerScore = 0;
-        updateScoreUI();
+        updateDotCountUI();
         
         dotContainer.removeChildren();
         dots = [];
@@ -433,7 +453,7 @@ function updateMinimap() {
         enemies.forEach(e => e.sprite.destroy());
         enemies = [];
         enemyTrails = [];
-        fadingTrails = []; // <-- BUG FIX: Clear fading trails from previous level
+        fadingTrails = [];
         minimapEnemies.removeChildren();
         trailGraphics.clear();
         enemyTrailGraphics.clear();
@@ -494,7 +514,7 @@ function updateMinimap() {
         setupBike(playerSprite, PLAYER_COLOR);
         startLevel(currentLevel);
         gameState = 'levelReady';
-    readyTimer = 60; // 60 frames = 1 second at 60fps
+    readyTimer = 60;
     readyText.visible = true;
     }
     
@@ -524,7 +544,7 @@ function updateMinimap() {
     function handlePowerupActivation() {
         if (keys['Space'] || (keys['touchLeft'] && keys['touchRight'])) {
             activatePowerup(player);
-            keys['Space'] = false; // Consume the key press
+            keys['Space'] = false;
         }
     }
 
@@ -607,7 +627,6 @@ function updateMinimap() {
     }
     
     enemyTrailGraphics.clear();
-    // Draw active enemy trails in orange
     enemyTrails.forEach(trail => {
         if (trail && trail.length >= 2) {
             enemyTrailGraphics.moveTo(trail[0].x, trail[0].y);
@@ -616,7 +635,6 @@ function updateMinimap() {
         }
     });
 
-    // Draw fading (dead) enemy trails in the new color
     fadingTrails.forEach(trail => {
         if (trail && trail.length >= 2) {
             enemyTrailGraphics.moveTo(trail[0].x, trail[0].y);
@@ -1024,15 +1042,12 @@ function updateMinimap() {
     }
 
     function checkCollisions() {
-    // Combine all enemy trails (living and fading) into one list for collision checks.
     const allEnemyTrails = [...enemyTrails, ...fadingTrails];
 
-    // --- Player Collisions ---
     const playerTrailSafe = getSafeTrail(player, trailPoints);
     if (isBikeCollidingWithTrail(player, playerTrailSafe)) { endGame(); return; }
     if (Math.abs(player.x) > WORLD_BOUNDS || Math.abs(player.y) > WORLD_BOUNDS) { endGame(); return; }
     
-    // Check player against ALL enemy trails (living and fading)
     for (const trail of allEnemyTrails) {
         if (trail && trail.length > 0 && isBikeCollidingWithTrail(player, trail)) {
             endGame();
@@ -1040,22 +1055,18 @@ function updateMinimap() {
         }
     }
 
-    // --- Enemy Collisions ---
     for (let i = enemies.length - 1; i >= 0; i--) {
         const enemy = enemies[i];
         const ownTrail = enemyTrails[i];
         const ownTrailSafe = getSafeTrail(enemy, ownTrail);
 
         let didDie = false;
-        // Check standard collisions first (own trail, walls, player trail)
         if (isBikeCollidingWithTrail(enemy, ownTrailSafe)) { didDie = true; }
         if (!didDie && (Math.abs(enemy.x) > WORLD_BOUNDS || Math.abs(enemy.y) > WORLD_BOUNDS)) { didDie = true; }
         if (!didDie && isBikeCollidingWithTrail(enemy, trailPoints)) { didDie = true; }
         
-        // Now check against all other enemy trails (living and fading)
         if (!didDie) {
             for (const otherTrail of allEnemyTrails) {
-                // An enemy can't collide with its own active trail
                 if (otherTrail === ownTrail) continue;
                 
                 if (otherTrail && otherTrail.length > 0 && isBikeCollidingWithTrail(enemy, otherTrail)) {
@@ -1101,7 +1112,7 @@ function updateMinimap() {
             const d = dots[i];
             if ((player.x - d.x)**2 + (player.y - d.y)**2 < DOT_PICKUP_RADIUS**2) {
                  playerScore++;
-                 updateScoreUI();
+                 updateDotCountUI();
                  dotContainer.removeChild(d);
                  d.destroy({children:true});
                  dots.splice(i, 1);
@@ -1126,7 +1137,7 @@ function updateMinimap() {
             gameState = 'playing';
             readyText.visible = false;
         }
-        return; // Don't run any other game logic
+        return;
     }
         
         updateParticles(delta);
@@ -1136,9 +1147,8 @@ function updateMinimap() {
         transitionTimer -= delta;
         screenFade.alpha = 1 - Math.abs(transitionTimer) / FADE_DURATION;
         if (transitionTimer <= -FADE_DURATION) {
-            // Change this block to go to 'levelReady' instead of 'playing'
             gameState = 'levelReady';
-            readyTimer = 60; // 60 frames
+            readyTimer = 60;
             readyText.visible = true;
         } else if (transitionTimer < 0 && transitionTimer + delta >=0) {
              currentLevel++;
@@ -1262,7 +1272,7 @@ function updateMinimap() {
     setupDotIndicators();
     setupGameOverUI();
     setupPowerupUI();
-    setupScoreUI();
+    setupDotCountUI();
     setupReadyUI()
     setupMinimap();
     
