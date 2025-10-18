@@ -38,11 +38,13 @@
     const BOOST_TURBO_PARTICLE_COUNT = 4;
 
     // --- AI Configuration ---
-    const TURN_RADIUS = PLAYER_SPEED / TURN_SPEED;
-    const AI_WHISKER_LENGTH = TURN_RADIUS;
     const AI_WHISKER_ANGLES = [-Math.PI / 3, -Math.PI / 6, 0, Math.PI / 6, Math.PI / 3];
     const AI_UPDATE_INTERVAL = 5;
     const AI_TRAIL_HISTORY = 400;
+
+    // --- UI Configuration ---
+    const MINIMAP_SIZE = 180;
+    const MINIMAP_PADDING = 20;
 
     // --- PIXI App Setup ---
     const app = new PIXI.Application();
@@ -70,8 +72,11 @@
     world.addChild(playerSprite);
     const enemySprite = new PIXI.Graphics();
     world.addChild(enemySprite);
+    
+    // --- UI Objects ---
     let enemyIndicator, gameOverUI, powerupIndicator;
     let gameOverTitle, gameOverSubtitle;
+    let minimapContainer, minimapTrails, minimapPlayer, minimapEnemy;
 
     // --- Game State ---
     let player, enemy;
@@ -112,20 +117,14 @@
             stroke: { color: 0x000000, width: 5 }, align: 'center'
         })});
         gameOverTitle.anchor.set(0.5);
-
         gameOverSubtitle = new PIXI.Text({text: '', style: new PIXI.TextStyle({
             fontFamily: 'Inter', fontSize: 24, fill: 0xCCCCCC, align: 'center'
         })});
         gameOverSubtitle.anchor.set(0.5);
         gameOverSubtitle.y = 60;
-
         gameOverUI.addChild(gameOverTitle);
         gameOverUI.addChild(gameOverSubtitle);
-        
-        gameOverUI.x = app.screen.width / 2;
-        gameOverUI.y = app.screen.height / 2;
         gameOverUI.visible = false;
-        
         app.stage.addChild(gameOverUI);
     }
 
@@ -133,20 +132,16 @@
         gameOverTitle.text = playerWon ? 'YOU WIN!' : 'YOU LOSE';
         gameOverTitle.style.fill = playerWon ? PLAYER_COLOR : ENEMY_COLOR;
         gameOverSubtitle.text = 'Tap to Restart';
-        
         const bounds = gameOverUI.getBounds();
         gameOverUI.hitArea = new PIXI.Rectangle(bounds.x - gameOverUI.x, bounds.y - gameOverUI.y, bounds.width, bounds.height);
         gameOverUI.eventMode = 'static';
         gameOverUI.cursor = 'pointer';
         gameOverUI.on('pointerdown', restartGame, this);
-
         gameOverUI.visible = true;
     }
     
     function setupPowerupUI() {
         powerupIndicator = new PIXI.Container();
-        powerupIndicator.x = 30;
-        powerupIndicator.y = app.screen.height - 50;
         powerupIndicator.visible = false;
         app.stage.addChild(powerupIndicator);
     }
@@ -171,6 +166,72 @@
         text.anchor.set(0.5);
         powerupIndicator.addChild(bg);
         powerupIndicator.addChild(text);
+    }
+    
+    function setupMinimap() {
+        minimapContainer = new PIXI.Container();
+        const bg = new PIXI.Graphics();
+        bg.beginFill(0x000000, 0.3);
+        bg.lineStyle(1, 0x30304a);
+        bg.drawRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
+        bg.endFill();
+        minimapContainer.addChild(bg);
+
+        minimapTrails = new PIXI.Graphics();
+        minimapContainer.addChild(minimapTrails);
+
+        minimapPlayer = new PIXI.Graphics();
+        minimapPlayer.beginFill(PLAYER_COLOR);
+        minimapPlayer.drawRect(-2, -2, 4, 4);
+        minimapPlayer.endFill();
+        minimapContainer.addChild(minimapPlayer);
+        
+        minimapEnemy = new PIXI.Graphics();
+        minimapEnemy.beginFill(ENEMY_COLOR);
+        minimapEnemy.drawRect(-2, -2, 4, 4);
+        minimapEnemy.endFill();
+        minimapContainer.addChild(minimapEnemy);
+        
+        app.stage.addChild(minimapContainer);
+    }
+    
+    function updateMinimap() {
+        const scale = MINIMAP_SIZE / (WORLD_BOUNDS * 2);
+        const transformX = (worldX) => (worldX + WORLD_BOUNDS) * scale;
+        const transformY = (worldY) => (worldY + WORLD_BOUNDS) * scale;
+        minimapTrails.clear();
+
+        if (trailPoints.length > 1) {
+            minimapTrails.moveTo(transformX(trailPoints[0].x), transformY(trailPoints[0].y));
+            for (let i = 1; i < trailPoints.length; i++) {
+                minimapTrails.lineTo(transformX(trailPoints[i].x), transformY(trailPoints[i].y));
+            }
+            minimapTrails.stroke({ width: 1.5, color: PLAYER_COLOR });
+        }
+        
+        if (enemyTrailPoints.length > 1) {
+            minimapTrails.moveTo(transformX(enemyTrailPoints[0].x), transformY(enemyTrailPoints[0].y));
+            for (let i = 1; i < enemyTrailPoints.length; i++) {
+                minimapTrails.lineTo(transformX(enemyTrailPoints[i].x), transformY(enemyTrailPoints[i].y));
+            }
+            minimapTrails.stroke({ width: 1.5, color: ENEMY_COLOR });
+        }
+
+        minimapPlayer.x = transformX(player.x);
+        minimapPlayer.y = transformY(player.y);
+        minimapEnemy.x = transformX(enemy.x);
+        minimapEnemy.y = transformY(enemy.y);
+    }
+
+    function repositionUI() {
+        gameOverUI.x = app.screen.width / 2;
+        gameOverUI.y = app.screen.height / 2;
+        powerupIndicator.x = 30;
+        powerupIndicator.y = app.screen.height - 50;
+        if (minimapContainer) {
+            minimapContainer.x = app.screen.width - MINIMAP_SIZE - MINIMAP_PADDING;
+            minimapContainer.y = app.screen.height - MINIMAP_SIZE - MINIMAP_PADDING;
+        }
     }
 
     function spawnPowerup() {
@@ -419,13 +480,20 @@
     function getAIInput() {
         if (enemy.powerup === 'T') activatePowerup(enemy);
         
+        const speedMultiplier = (enemy.speedBoost ? enemy.speedBoost.multiplier : 1) * (enemy.isGrinding ? GRIND_BOOST_MULTIPLIER : 1);
+        const currentSpeed = PLAYER_SPEED * speedMultiplier;
+        
+        const turnRadius = currentSpeed / TURN_SPEED;
+        const reactionDistance = currentSpeed * AI_UPDATE_INTERVAL;
+        const whiskerLength = turnRadius + reactionDistance;
+
         const relevantPlayerTrail = trailPoints.slice(-AI_TRAIL_HISTORY);
         const relevantEnemyTrail = enemyTrailPoints.slice(-AI_TRAIL_HISTORY, -PLAYER_COLLISION_GRACE_PERIOD);
         const allTrailsForAI = relevantPlayerTrail.concat(relevantEnemyTrail);
 
         const whiskerPoints = AI_WHISKER_ANGLES.map(angle => ({
-            x: enemy.x + Math.sin(enemy.angle + angle) * AI_WHISKER_LENGTH,
-            y: enemy.y - Math.cos(enemy.angle + angle) * AI_WHISKER_LENGTH
+            x: enemy.x + Math.sin(enemy.angle + angle) * whiskerLength,
+            y: enemy.y - Math.cos(enemy.angle + angle) * whiskerLength
         }));
         
         const blocked = whiskerPoints.map(p => isPointColliding(p, allTrailsForAI));
@@ -569,7 +637,7 @@
                 bike.speedBoost.duration -= delta;
                 if (bike.speedBoost.duration <= 0) bike.speedBoost = null;
             }
-            const trailsToCheck = index === 0 ? [enemyTrailPoints, trailPoints.slice(0, -PLAYER_COLLISION_GRACE_PERIOD)] : [trailPoints, enemyTrailPoints.slice(0, -PLAYER_COLLISION_GRACE_PERIOD)];
+            const trailsToCheck = index === 0 ? [enemyTrailPoints.slice(-AI_TRAIL_HISTORY), trailPoints.slice(-AI_TRAIL_HISTORY, -PLAYER_COLLISION_GRACE_PERIOD)] : [trailPoints.slice(-AI_TRAIL_HISTORY), enemyTrailPoints.slice(-AI_TRAIL_HISTORY, -PLAYER_COLLISION_GRACE_PERIOD)];
             checkWallGrind(bike, trailsToCheck);
             if (bike.isGrinding) emitGrindParticle(bike, bike.grindingSide);
             emitBoostParticle(bike);
@@ -609,11 +677,15 @@
         drawTrails();
         updateParticles(delta);
         updateEnemyIndicator();
+        updateMinimap();
     });
 
     drawGrid();
     setupEnemyIndicator();
     setupGameOverUI();
     setupPowerupUI();
+    setupMinimap();
+    window.addEventListener('resize', repositionUI);
+    repositionUI();
     restartGame();
 })();
