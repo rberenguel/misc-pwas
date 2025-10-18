@@ -1,125 +1,283 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-		  <link rel="manifest" href="./manifest.json" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <link rel="manifest" href="./manifest.json" />
     <title>Haptic Soroban</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Orbitron:wght@700&display=swap"
+      rel="stylesheet"
+    />
     <style>
-        :root {
-            --base03:  #001111; --base02:  #073642; --base01:  #586e75;
-            --base00:  #657b83; --base0:   #839496; --base1:   #93a1a1;
-            --yellow:  #b58900; --orange:  #cb4b16; --red:     #dc322f;
-            --magenta: #d33682; --violet:  #6c71c4; --blue:    #268bd2;
-            --cyan:    #2aa198; --green:   #859900;
+      :root {
+        --base03: #001111;
+        --base02: #073642;
+        --base01: #586e75;
+        --base00: #657b83;
+        --base0: #839496;
+        --base1: #93a1a1;
+        --yellow: #b58900;
+        --orange: #cb4b16;
+        --red: #dc322f;
+        --magenta: #d33682;
+        --violet: #6c71c4;
+        --blue: #268bd2;
+        --cyan: #2aa198;
+        --green: #859900;
+      }
+      body {
+        margin: 0;
+        font-family: "Inter", sans-serif;
+        background-color: var(--base03);
+        color: var(--base0);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        overflow: hidden;
+        touch-action: manipulation;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      #orientation-lock {
+        display: none;
+      }
+      #app-container {
+        width: 90%;
+        max-width: 860px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+      }
+      #top-bar {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 10px;
+        box-sizing: border-box;
+        min-height: 40px;
+      }
+      #controls {
+        display: flex;
+        gap: 15px;
+      }
+      .control-button {
+        background-color: transparent;
+        border: 1px solid var(--orange);
+        color: var(--orange);
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+        font-family: "Inter", sans-serif;
+        font-weight: 700;
+        border-radius: 5px;
+        cursor: pointer;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      #display-area {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        flex-grow: 1;
+        padding-right: 10px;
+      }
+      #problem-display {
+        font-family: "Inter", sans-serif;
+        font-size: 0.9rem;
+        color: var(--cyan);
+        min-height: 1.2em;
+      }
+      #display-value {
+        font-family: "Orbitron", monospace;
+        font-size: 2rem;
+        color: var(--yellow);
+        text-align: right;
+        transition: color 0.2s;
+      }
+      #display-value.correct {
+        color: var(--green);
+      }
+      #soroban {
+        display: flex;
+        background-color: var(--base02);
+        padding: 10px 5px;
+        border-radius: 8px;
+        position: relative;
+        border: 1px solid var(--base01);
+      }
+      .rod {
+        margin: 0 10px;
+        position: relative;
+        width: 40px;
+        height: 300px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .rod::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        top: 0;
+        width: 4px;
+        height: 100%;
+        background-color: var(--base01);
+        border-radius: 2px;
+        z-index: 0;
+      }
+      .heaven-beads,
+      .earth-beads {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        z-index: 2;
+      }
+      .heaven-beads {
+        margin-bottom: 15px;
+      }
+      .earth-beads {
+        margin-top: 15px;
+      }
+      .reckoning-bar {
+        width: 110%;
+        height: 2px;
+        background-color: var(--base01);
+        z-index: 1;
+      }
+      .bead {
+        width: 35px;
+        height: 35px;
+        background-color: var(--blue);
+        border-radius: 50%;
+        margin: 5px 0;
+        cursor: pointer;
+        transition:
+          transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
+          background-color 0.2s;
+        border: 2px solid var(--base02);
+        box-sizing: border-box;
+        flex-shrink: 0;
+      }
+      .bead.active {
+        background-color: var(--magenta);
+      }
+      .heaven-bead.lesson-selected {
+        background-color: var(--orange);
+      }
+      .heaven-bead.active {
+        transform: translateY(25px);
+      }
+      .earth-beads .bead.active {
+        transform: translateY(-25px);
+      }
+      #info-modal {
+        display: none;
+        position: fixed;
+        z-index: 101;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 17, 17, 0.8);
+        justify-content: center;
+        align-items: center;
+      }
+      .modal-content {
+        background-color: var(--base02);
+        border: 1px solid var(--orange);
+        border-radius: 8px;
+        padding: 25px;
+        width: 80%;
+        max-width: 600px;
+        max-height: 75vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .modal-title {
+        font-family: "Orbitron", sans-serif;
+        font-size: 1.2rem;
+        color: var(--yellow);
+      }
+      .close-button {
+        font-size: 2rem;
+        color: var(--base1);
+        cursor: pointer;
+        background: none;
+        border: none;
+      }
+      .modal-body {
+        font-family: "Inter", sans-serif;
+        color: var(--base1);
+        line-height: 1.6;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: var(--orange) var(--base02);
+      }
+      .modal-body::-webkit-scrollbar {
+        width: 8px;
+      }
+      .modal-body::-webkit-scrollbar-track {
+        background: var(--base02);
+      }
+      .modal-body::-webkit-scrollbar-thumb {
+        background-color: var(--orange);
+        border-radius: 4px;
+      }
+      @media (orientation: portrait) {
+        #orientation-lock {
+          display: flex;
         }
-        body {
-            margin: 0; font-family: 'Inter', sans-serif; background-color: var(--base03);
-            color: var(--base0); display: flex; justify-content: center; align-items: center;
-            height: 100vh; overflow: hidden; touch-action: manipulation; user-select: none;
-            -webkit-user-select: none;
+        #app-container {
+          display: none;
         }
-				#orientation-lock{ display:none;}
-        #app-container { width: 90%; max-width: 860px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
-        #top-bar { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0 10px; box-sizing: border-box; min-height: 40px; }
-        #controls { display: flex; gap: 15px; }
-        .control-button {
-            background-color: transparent; border: 1px solid var(--orange); color: var(--orange);
-            width: 40px; height: 40px; font-size: 1.0rem; font-family: 'Inter', sans-serif;
-            font-weight: 700; border-radius: 5px; cursor: pointer; display: flex;
-            justify-content: center; align-items: center;
-        }
-        #display-area {
-            display: flex; flex-direction: column; align-items: flex-end;
-            flex-grow: 1; padding-right: 10px;
-        }
-        #problem-display {
-            font-family: 'Inter', sans-serif; font-size: 0.9rem;
-            color: var(--cyan); min-height: 1.2em;
-        }
-        #display-value {
-            font-family: 'Orbitron', monospace; font-size: 2rem; color: var(--yellow);
-            text-align: right; transition: color 0.2s;
-        }
-        #display-value.correct { color: var(--green); }
-        #soroban {
-            display: flex; background-color: var(--base02); padding: 10px 5px;
-            border-radius: 8px; position: relative; border: 1px solid var(--base01);
-        }
-        .rod { margin: 0 10px; position: relative; width: 40px; height: 300px; display: flex; flex-direction: column; align-items: center; }
-        .rod::before {
-            content: ''; position: absolute; left: 50%; transform: translateX(-50%); top: 0;
-            width: 4px; height: 100%; background-color: var(--base01); border-radius: 2px; z-index: 0;
-        }
-        .heaven-beads, .earth-beads { width: 100%; display: flex; flex-direction: column; align-items: center; z-index: 2; }
-        .heaven-beads { margin-bottom: 15px; }
-        .earth-beads { margin-top: 15px; }
-        .reckoning-bar { width: 110%; height: 2px; background-color: var(--base01); z-index: 1; }
-        .bead {
-            width: 35px; height: 35px; background-color: var(--blue); border-radius: 50%;
-            margin: 5px 0; cursor: pointer; transition: transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1), background-color 0.2s;
-            border: 2px solid var(--base02); box-sizing: border-box; flex-shrink: 0;
-        }
-        .bead.active { background-color: var(--magenta); }
-        .heaven-bead.lesson-selected { background-color: var(--orange); }
-        .heaven-bead.active { transform: translateY(25px); }
-        .earth-beads .bead.active { transform: translateY(-25px); }
-        #info-modal {
-            display: none; position: fixed; z-index: 101; left: 0; top: 0;
-            width: 100%; height: 100%; background-color: rgba(0, 17, 17, 0.8);
-            justify-content: center; align-items: center;
-        }
-        .modal-content {
-            background-color: var(--base02); border: 1px solid var(--orange); border-radius: 8px;
-            padding: 25px; width: 80%; max-width: 600px; max-height: 75vh;
-            display: flex; flex-direction: column;
-        }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .modal-title { font-family: 'Orbitron', sans-serif; font-size: 1.2rem; color: var(--yellow); }
-        .close-button { font-size: 2rem; color: var(--base1); cursor: pointer; background: none; border: none; }
-        .modal-body {
-            font-family: 'Inter', sans-serif; color: var(--base1); line-height: 1.6;
-            overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--orange) var(--base02);
-        }
-        .modal-body::-webkit-scrollbar { width: 8px; }
-        .modal-body::-webkit-scrollbar-track { background: var(--base02); }
-        .modal-body::-webkit-scrollbar-thumb { background-color: var(--orange); border-radius: 4px; }
-        @media (orientation: portrait) {
-            #orientation-lock { display: flex; }
-            #app-container { display: none; }
-        }
+      }
     </style>
-</head>
-<body>
-    <div id="orientation-lock"><div>Please rotate your device to landscape mode.</div></div>
+  </head>
+  <body>
+    <div id="orientation-lock">
+      <div>Please rotate your device to landscape mode.</div>
+    </div>
     <div id="app-container">
-        <div id="top-bar">
-            <div id="controls">
-                <button id="clear-button" class="control-button">C</button>
-                <button id="info-button" class="control-button">I</button>
-                <button id="lesson-button" class="control-button">L</button>
-            </div>
-            <div id="display-area">
-                <div id="problem-display"></div>
-                <div id="display-value">0</div>
-            </div>
+      <div id="top-bar">
+        <div id="controls">
+          <button id="clear-button" class="control-button">C</button>
+          <button id="info-button" class="control-button">I</button>
+          <button id="lesson-button" class="control-button">L</button>
         </div>
-        <div id="soroban"></div>
+        <div id="display-area">
+          <div id="problem-display"></div>
+          <div id="display-value">0</div>
+        </div>
+      </div>
+      <div id="soroban"></div>
     </div>
     <div id="info-modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modal-title" class="modal-title"></h2>
-                <button id="close-modal-button" class="close-button">&times;</button>
-            </div>
-            <div id="modal-body" class="modal-body"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modal-title" class="modal-title"></h2>
+          <button id="close-modal-button" class="close-button">&times;</button>
         </div>
+        <div id="modal-body" class="modal-body"></div>
+      </div>
     </div>
-    <script type="module" src="main.js">
-       
-    </script>
-</body>
+    <script type="module" src="main.js"></script>
+  </body>
 </html>

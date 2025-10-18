@@ -1,258 +1,385 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
     <title>Klotski</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Monoid&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Monoid&display=swap"
+      rel="stylesheet"
+    />
     <style>
-        :root {
-            --base03:  #002b36; --base02:  #073642; --base01:  #586e75; --base00:  #657b83;
-            --base0:   #839496; --base1:   #93a1a1; --base2:   #eee8d5; --base3:   #fdf6e3;
-            --yellow:  #b58900; --orange:  #cb4b16; --red:     #dc322f; --magenta: #d33682;
-            --violet:  #6c71c4; --blue:    #268bd2; --cyan:    #2aa198; --green:   #859900;
-        }
-        html, body {
-            overscroll-behavior: none;
-            height: 100%;
-            width: 100%;
-            overflow: hidden;
-        }
-        body {
-            background-color: var(--base03); color: var(--base1); font-family: 'Monoid', monospace;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-            margin: 0; user-select: none; touch-action: none;
-        }
-        h1 { color: var(--base2); font-weight: normal; margin: 10px 0; }
-        #game-container { position: relative; }
-        #game-board {
-            background-color: var(--base02); border-radius: 8px; position: relative;
-            display: grid; /* For gap calculation */
-        }
-        #exit-area {
-            position: absolute; background: linear-gradient(to right, var(--yellow), var(--orange));
-        }
-        .block {
-            position: absolute; border-radius: 4px; cursor: grab;
-            transition: top 0.15s ease-in-out, left 0.15s ease-in-out;
-        }
-        .main-block { background-color: var(--red); }
-        .wide-block { background-color: var(--yellow); }
-        .tall-block { background-color: var(--blue); }
-        .small-block { background-color: var(--cyan); }
-        #ui-controls {
-            margin-top: 20px; display: flex; flex-direction: column;
-            align-items: center; gap: 15px;
-        }
-        #puzzle-nav, #game-stats { display: flex; align-items: center; gap: 20px; }
-        .nav-button, #reset-button {
-            background-color: var(--base02); color: var(--base1); border: 1px solid var(--base01);
-            padding: 8px 16px; font-family: 'Monoid', monospace; cursor: pointer; border-radius: 4px;
-        }
-        .nav-button:hover, #reset-button:hover { background-color: var(--base01); color: var(--base03); }
-        .nav-button:disabled { background-color: var(--base03); color: var(--base01); cursor: not-allowed; }
-        #win-message {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0, 43, 54, 0.9); color: var(--green);
-            display: flex; justify-content: center; align-items: center; font-size: 3em;
-            opacity: 0; pointer-events: none; transition: opacity 0.5s;
-        }
+      :root {
+        --base03: #002b36;
+        --base02: #073642;
+        --base01: #586e75;
+        --base00: #657b83;
+        --base0: #839496;
+        --base1: #93a1a1;
+        --base2: #eee8d5;
+        --base3: #fdf6e3;
+        --yellow: #b58900;
+        --orange: #cb4b16;
+        --red: #dc322f;
+        --magenta: #d33682;
+        --violet: #6c71c4;
+        --blue: #268bd2;
+        --cyan: #2aa198;
+        --green: #859900;
+      }
+      html,
+      body {
+        overscroll-behavior: none;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+      }
+      body {
+        background-color: var(--base03);
+        color: var(--base1);
+        font-family: "Monoid", monospace;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        margin: 0;
+        user-select: none;
+        touch-action: none;
+      }
+      h1 {
+        color: var(--base2);
+        font-weight: normal;
+        margin: 10px 0;
+      }
+      #game-container {
+        position: relative;
+      }
+      #game-board {
+        background-color: var(--base02);
+        border-radius: 8px;
+        position: relative;
+        display: grid; /* For gap calculation */
+      }
+      #exit-area {
+        position: absolute;
+        background: linear-gradient(to right, var(--yellow), var(--orange));
+      }
+      .block {
+        position: absolute;
+        border-radius: 4px;
+        cursor: grab;
+        transition:
+          top 0.15s ease-in-out,
+          left 0.15s ease-in-out;
+      }
+      .main-block {
+        background-color: var(--red);
+      }
+      .wide-block {
+        background-color: var(--yellow);
+      }
+      .tall-block {
+        background-color: var(--blue);
+      }
+      .small-block {
+        background-color: var(--cyan);
+      }
+      #ui-controls {
+        margin-top: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 15px;
+      }
+      #puzzle-nav,
+      #game-stats {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+      }
+      .nav-button,
+      #reset-button {
+        background-color: var(--base02);
+        color: var(--base1);
+        border: 1px solid var(--base01);
+        padding: 8px 16px;
+        font-family: "Monoid", monospace;
+        cursor: pointer;
+        border-radius: 4px;
+      }
+      .nav-button:hover,
+      #reset-button:hover {
+        background-color: var(--base01);
+        color: var(--base03);
+      }
+      .nav-button:disabled {
+        background-color: var(--base03);
+        color: var(--base01);
+        cursor: not-allowed;
+      }
+      #win-message {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 43, 54, 0.9);
+        color: var(--green);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 3em;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.5s;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <h1>Klotski</h1>
     <div id="game-container">
-        <div id="game-board"></div>
-        <div id="exit-area"></div>
-        <div id="win-message">Solved!</div>
+      <div id="game-board"></div>
+      <div id="exit-area"></div>
+      <div id="win-message">Solved!</div>
     </div>
     <div id="ui-controls">
-        <div id="puzzle-nav">
-            <button id="prev-puzzle" class="nav-button">◀</button>
-            <span id="puzzle-info"></span>
-            <button id="next-puzzle" class="nav-button">▶</button>
-        </div>
-        <div id="game-stats">
-            <span id="moves">Moves: 0</span>
-            <button id="reset-button">Reset</button>
-        </div>
+      <div id="puzzle-nav">
+        <button id="prev-puzzle" class="nav-button">◀</button>
+        <span id="puzzle-info"></span>
+        <button id="next-puzzle" class="nav-button">▶</button>
+      </div>
+      <div id="game-stats">
+        <span id="moves">Moves: 0</span>
+        <button id="reset-button">Reset</button>
+      </div>
     </div>
 
     <script>
-        const puzzles = [
-            [ // 1. Classic
-                { id: 0, x: 1, y: 0, w: 2, h: 2, class: 'main-block' }, { id: 1, x: 0, y: 0, w: 1, h: 2, class: 'tall-block' },
-                { id: 2, x: 3, y: 0, w: 1, h: 2, class: 'tall-block' }, { id: 3, x: 0, y: 2, w: 1, h: 2, class: 'tall-block' },
-                { id: 4, x: 3, y: 2, w: 1, h: 2, class: 'tall-block' }, { id: 5, x: 1, y: 2, w: 2, h: 1, class: 'wide-block' },
-                { id: 6, x: 1, y: 3, w: 1, h: 1, class: 'small-block' }, { id: 7, x: 2, y: 3, w: 1, h: 1, class: 'small-block' },
-                { id: 8, x: 0, y: 4, w: 1, h: 1, class: 'small-block' }, { id: 9, x: 3, y: 4, w: 1, h: 1, class: 'small-block' },
-            ],
-            [ // 2. Pennant Puzzle
-                { id: 0, x: 1, y: 0, w: 2, h: 2, class: 'main-block' }, { id: 1, x: 0, y: 0, w: 1, h: 2, class: 'tall-block' },
-                { id: 2, x: 3, y: 0, w: 1, h: 2, class: 'tall-block' }, { id: 3, x: 1, y: 2, w: 1, h: 2, class: 'tall-block' },
-                { id: 4, x: 2, y: 2, w: 1, h: 2, class: 'tall-block' }, { id: 5, x: 0, y: 2, w: 1, h: 1, class: 'small-block' },
-                { id: 6, x: 3, y: 2, w: 1, h: 1, class: 'small-block' }, { id: 7, x: 0, y: 3, w: 1, h: 1, class: 'small-block' },
-                { id: 8, x: 3, y: 3, w: 1, h: 1, class: 'small-block' }, { id: 9, x: 0, y: 4, w: 2, h: 1, class: 'wide-block' },
-            ],
-            [ // 3. A difficult one
-                { id: 0, x: 1, y: 0, w: 2, h: 2, class: 'main-block' }, { id: 1, x: 0, y: 0, w: 1, h: 1, class: 'small-block' },
-                { id: 2, x: 3, y: 0, w: 1, h: 1, class: 'small-block' }, { id: 3, x: 0, y: 1, w: 1, h: 2, class: 'tall-block' },
-                { id: 4, x: 3, y: 1, w: 1, h: 2, class: 'tall-block' }, { id: 5, x: 1, y: 2, w: 2, h: 1, class: 'wide-block' },
-                { id: 6, x: 0, y: 3, w: 1, h: 2, class: 'tall-block' }, { id: 7, x: 1, y: 3, w: 1, h: 1, class: 'small-block' },
-                { id: 8, x: 2, y: 3, w: 1, h: 1, class: 'small-block' }, { id: 9, x: 3, y: 3, w: 1, h: 2, class: 'tall-block' },
-            ]
-        ];
+      const puzzles = [
+        [
+          // 1. Classic
+          { id: 0, x: 1, y: 0, w: 2, h: 2, class: "main-block" },
+          { id: 1, x: 0, y: 0, w: 1, h: 2, class: "tall-block" },
+          { id: 2, x: 3, y: 0, w: 1, h: 2, class: "tall-block" },
+          { id: 3, x: 0, y: 2, w: 1, h: 2, class: "tall-block" },
+          { id: 4, x: 3, y: 2, w: 1, h: 2, class: "tall-block" },
+          { id: 5, x: 1, y: 2, w: 2, h: 1, class: "wide-block" },
+          { id: 6, x: 1, y: 3, w: 1, h: 1, class: "small-block" },
+          { id: 7, x: 2, y: 3, w: 1, h: 1, class: "small-block" },
+          { id: 8, x: 0, y: 4, w: 1, h: 1, class: "small-block" },
+          { id: 9, x: 3, y: 4, w: 1, h: 1, class: "small-block" },
+        ],
+        [
+          // 2. Pennant Puzzle
+          { id: 0, x: 1, y: 0, w: 2, h: 2, class: "main-block" },
+          { id: 1, x: 0, y: 0, w: 1, h: 2, class: "tall-block" },
+          { id: 2, x: 3, y: 0, w: 1, h: 2, class: "tall-block" },
+          { id: 3, x: 1, y: 2, w: 1, h: 2, class: "tall-block" },
+          { id: 4, x: 2, y: 2, w: 1, h: 2, class: "tall-block" },
+          { id: 5, x: 0, y: 2, w: 1, h: 1, class: "small-block" },
+          { id: 6, x: 3, y: 2, w: 1, h: 1, class: "small-block" },
+          { id: 7, x: 0, y: 3, w: 1, h: 1, class: "small-block" },
+          { id: 8, x: 3, y: 3, w: 1, h: 1, class: "small-block" },
+          { id: 9, x: 0, y: 4, w: 2, h: 1, class: "wide-block" },
+        ],
+        [
+          // 3. A difficult one
+          { id: 0, x: 1, y: 0, w: 2, h: 2, class: "main-block" },
+          { id: 1, x: 0, y: 0, w: 1, h: 1, class: "small-block" },
+          { id: 2, x: 3, y: 0, w: 1, h: 1, class: "small-block" },
+          { id: 3, x: 0, y: 1, w: 1, h: 2, class: "tall-block" },
+          { id: 4, x: 3, y: 1, w: 1, h: 2, class: "tall-block" },
+          { id: 5, x: 1, y: 2, w: 2, h: 1, class: "wide-block" },
+          { id: 6, x: 0, y: 3, w: 1, h: 2, class: "tall-block" },
+          { id: 7, x: 1, y: 3, w: 1, h: 1, class: "small-block" },
+          { id: 8, x: 2, y: 3, w: 1, h: 1, class: "small-block" },
+          { id: 9, x: 3, y: 3, w: 1, h: 2, class: "tall-block" },
+        ],
+      ];
 
-        const boardElement = document.getElementById('game-board');
-        const movesElement = document.getElementById('moves');
-        const winMessage = document.getElementById('win-message');
-        const puzzleInfo = document.getElementById('puzzle-info');
-        const prevButton = document.getElementById('prev-puzzle');
-        const nextButton = document.getElementById('next-puzzle');
-        const resetButton = document.getElementById('reset-button');
-        const exitArea = document.getElementById('exit-area');
+      const boardElement = document.getElementById("game-board");
+      const movesElement = document.getElementById("moves");
+      const winMessage = document.getElementById("win-message");
+      const puzzleInfo = document.getElementById("puzzle-info");
+      const prevButton = document.getElementById("prev-puzzle");
+      const nextButton = document.getElementById("next-puzzle");
+      const resetButton = document.getElementById("reset-button");
+      const exitArea = document.getElementById("exit-area");
 
-        let moves, blocks, activeBlock, boardState;
-        let startPos = { x: 0, y: 0 };
-        let currentPuzzleIndex = 0;
-        let isSolved = false;
-        let CELL_SIZE = 80, GAP = 6;
+      let moves, blocks, activeBlock, boardState;
+      let startPos = { x: 0, y: 0 };
+      let currentPuzzleIndex = 0;
+      let isSolved = false;
+      let CELL_SIZE = 80,
+        GAP = 6;
 
-        function updateLayout() {
-            const containerHeight = document.body.clientHeight;
-            const availableHeight = containerHeight - document.querySelector('#ui-controls').offsetHeight - document.querySelector('h1').offsetHeight - 50;
-            const boardRatio = 4 / 5;
-            const boardWidth = Math.min(window.innerWidth * 0.95, availableHeight * boardRatio);
-            
-            CELL_SIZE = boardWidth / 4;
-            GAP = CELL_SIZE * 0.075;
-            const totalCellSize = CELL_SIZE;
+      function updateLayout() {
+        const containerHeight = document.body.clientHeight;
+        const availableHeight =
+          containerHeight -
+          document.querySelector("#ui-controls").offsetHeight -
+          document.querySelector("h1").offsetHeight -
+          50;
+        const boardRatio = 4 / 5;
+        const boardWidth = Math.min(
+          window.innerWidth * 0.95,
+          availableHeight * boardRatio,
+        );
 
-            boardElement.style.width = `${4 * totalCellSize - GAP}px`;
-            boardElement.style.height = `${5 * totalCellSize - GAP}px`;
-            boardElement.style.gap = `${GAP}px`;
+        CELL_SIZE = boardWidth / 4;
+        GAP = CELL_SIZE * 0.075;
+        const totalCellSize = CELL_SIZE;
 
-            exitArea.style.left = `${totalCellSize}px`;
-            exitArea.style.width = `${2 * totalCellSize - GAP}px`;
-            exitArea.style.bottom = `-${GAP}px`;
-            exitArea.style.height = `${GAP}px`;
+        boardElement.style.width = `${4 * totalCellSize - GAP}px`;
+        boardElement.style.height = `${5 * totalCellSize - GAP}px`;
+        boardElement.style.gap = `${GAP}px`;
 
-            document.querySelectorAll('.block').forEach(el => {
-                const block = blocks.find(b => b.id === parseInt(el.dataset.id));
-                el.style.width = `${block.w * totalCellSize - GAP}px`;
-                el.style.height = `${block.h * totalCellSize - GAP}px`;
-                el.style.left = `${block.x * totalCellSize}px`;
-                el.style.top = `${block.y * totalCellSize}px`;
-            });
-        }
+        exitArea.style.left = `${totalCellSize}px`;
+        exitArea.style.width = `${2 * totalCellSize - GAP}px`;
+        exitArea.style.bottom = `-${GAP}px`;
+        exitArea.style.height = `${GAP}px`;
 
-        function updateBoardState() {
-            boardState = Array(5).fill(null).map(() => Array(4).fill(null));
-            blocks.forEach(block => {
-                for (let i = 0; i < block.h; i++) {
-                    for (let j = 0; j < block.w; j++) {
-                        boardState[block.y + i][block.x + j] = block.id;
-                    }
-                }
-            });
-        }
+        document.querySelectorAll(".block").forEach((el) => {
+          const block = blocks.find((b) => b.id === parseInt(el.dataset.id));
+          el.style.width = `${block.w * totalCellSize - GAP}px`;
+          el.style.height = `${block.h * totalCellSize - GAP}px`;
+          el.style.left = `${block.x * totalCellSize}px`;
+          el.style.top = `${block.y * totalCellSize}px`;
+        });
+      }
 
-        function canMove(block, dx, dy) {
-            if (isSolved || (dx === 0 && dy === 0)) return false;
-            const newX = block.x + dx, newY = block.y + dy;
-            if (newX < 0 || newY < 0 || newX + block.w > 4 || newY + block.h > 5) return false;
-            for (let i = 0; i < block.h; i++) {
-                for (let j = 0; j < block.w; j++) {
-                    const cellState = boardState[newY + i][newX + j];
-                    if (cellState !== null && cellState !== block.id) return false;
-                }
+      function updateBoardState() {
+        boardState = Array(5)
+          .fill(null)
+          .map(() => Array(4).fill(null));
+        blocks.forEach((block) => {
+          for (let i = 0; i < block.h; i++) {
+            for (let j = 0; j < block.w; j++) {
+              boardState[block.y + i][block.x + j] = block.id;
             }
-            return true;
+          }
+        });
+      }
+
+      function canMove(block, dx, dy) {
+        if (isSolved || (dx === 0 && dy === 0)) return false;
+        const newX = block.x + dx,
+          newY = block.y + dy;
+        if (newX < 0 || newY < 0 || newX + block.w > 4 || newY + block.h > 5)
+          return false;
+        for (let i = 0; i < block.h; i++) {
+          for (let j = 0; j < block.w; j++) {
+            const cellState = boardState[newY + i][newX + j];
+            if (cellState !== null && cellState !== block.id) return false;
+          }
         }
-        
-        function startDrag(e) {
-            e.preventDefault();
-            if (e.target.classList.contains('block') && !isSolved) {
-                const id = parseInt(e.target.dataset.id);
-                activeBlock = { data: blocks.find(b => b.id === id), element: e.target };
-                startPos = { x: e.clientX, y: e.clientY };
-                document.addEventListener('pointermove', drag);
-                document.addEventListener('pointerup', endDrag);
-                activeBlock.element.style.cursor = 'grabbing';
-                activeBlock.element.style.zIndex = 10;
-            }
+        return true;
+      }
+
+      function startDrag(e) {
+        e.preventDefault();
+        if (e.target.classList.contains("block") && !isSolved) {
+          const id = parseInt(e.target.dataset.id);
+          activeBlock = {
+            data: blocks.find((b) => b.id === id),
+            element: e.target,
+          };
+          startPos = { x: e.clientX, y: e.clientY };
+          document.addEventListener("pointermove", drag);
+          document.addEventListener("pointerup", endDrag);
+          activeBlock.element.style.cursor = "grabbing";
+          activeBlock.element.style.zIndex = 10;
         }
-        
-        function drag(e) { /* Intentionally empty for this interaction model */ }
-        
-        function endDrag(e) {
-            if (!activeBlock) return;
-            const moveThreshold = CELL_SIZE / 3;
-            const dx = e.clientX - startPos.x, dy = e.clientY - startPos.y;
-            let moveX = 0, moveY = 0;
+      }
 
-            if (Math.abs(dx) > Math.abs(dy)) {
-                if (Math.abs(dx) > moveThreshold) moveX = Math.sign(dx);
-            } else {
-                if (Math.abs(dy) > moveThreshold) moveY = Math.sign(dy);
-            }
-            
-            if (canMove(activeBlock.data, moveX, moveY)) {
-                activeBlock.data.x += moveX; activeBlock.data.y += moveY;
-                moves++; movesElement.textContent = `Moves: ${moves}`;
-            }
+      function drag(e) {
+        /* Intentionally empty for this interaction model */
+      }
 
-            activeBlock.element.style.left = `${activeBlock.data.x * (CELL_SIZE)}px`;
-            activeBlock.element.style.top = `${activeBlock.data.y * (CELL_SIZE)}px`;
-            
-            updateBoardState();
-            checkWin();
+      function endDrag(e) {
+        if (!activeBlock) return;
+        const moveThreshold = CELL_SIZE / 3;
+        const dx = e.clientX - startPos.x,
+          dy = e.clientY - startPos.y;
+        let moveX = 0,
+          moveY = 0;
 
-            activeBlock.element.style.cursor = 'grab'; activeBlock.element.style.zIndex = 1;
-            activeBlock = null;
-            document.removeEventListener('pointermove', drag);
-            document.removeEventListener('pointerup', endDrag);
-        }
-
-        function checkWin() {
-            const mainBlock = blocks.find(b => b.class === 'main-block');
-            if (mainBlock.x === 1 && mainBlock.y === 3) {
-                isSolved = true;
-                winMessage.style.opacity = '1';
-                nextButton.disabled = currentPuzzleIndex === puzzles.length - 1;
-            }
+        if (Math.abs(dx) > Math.abs(dy)) {
+          if (Math.abs(dx) > moveThreshold) moveX = Math.sign(dx);
+        } else {
+          if (Math.abs(dy) > moveThreshold) moveY = Math.sign(dy);
         }
 
-        function loadPuzzle(index) {
-            currentPuzzleIndex = index;
-            isSolved = false;
-            boardElement.innerHTML = '';
-            blocks = JSON.parse(JSON.stringify(puzzles[index]));
-            blocks.forEach(bData => {
-                const el = document.createElement('div');
-                el.className = `block ${bData.class}`;
-                el.dataset.id = bData.id;
-                el.addEventListener('pointerdown', startDrag);
-                boardElement.appendChild(el);
-            });
-            updateBoardState();
-            updateLayout();
-
-            moves = 0; movesElement.textContent = `Moves: 0`;
-            winMessage.style.opacity = '0';
-            puzzleInfo.textContent = `Puzzle ${index + 1} of ${puzzles.length}`;
-            prevButton.disabled = index === 0;
-            nextButton.disabled = true; // Enabled on win
+        if (canMove(activeBlock.data, moveX, moveY)) {
+          activeBlock.data.x += moveX;
+          activeBlock.data.y += moveY;
+          moves++;
+          movesElement.textContent = `Moves: ${moves}`;
         }
 
-        prevButton.addEventListener('click', () => { if (currentPuzzleIndex > 0) loadPuzzle(currentPuzzleIndex - 1); });
-        nextButton.addEventListener('click', () => { if (currentPuzzleIndex < puzzles.length - 1) loadPuzzle(currentPuzzleIndex + 1); });
-        resetButton.addEventListener('click', () => loadPuzzle(currentPuzzleIndex));
-        window.addEventListener('resize', updateLayout);
+        activeBlock.element.style.left = `${activeBlock.data.x * CELL_SIZE}px`;
+        activeBlock.element.style.top = `${activeBlock.data.y * CELL_SIZE}px`;
 
-        loadPuzzle(0);
+        updateBoardState();
+        checkWin();
+
+        activeBlock.element.style.cursor = "grab";
+        activeBlock.element.style.zIndex = 1;
+        activeBlock = null;
+        document.removeEventListener("pointermove", drag);
+        document.removeEventListener("pointerup", endDrag);
+      }
+
+      function checkWin() {
+        const mainBlock = blocks.find((b) => b.class === "main-block");
+        if (mainBlock.x === 1 && mainBlock.y === 3) {
+          isSolved = true;
+          winMessage.style.opacity = "1";
+          nextButton.disabled = currentPuzzleIndex === puzzles.length - 1;
+        }
+      }
+
+      function loadPuzzle(index) {
+        currentPuzzleIndex = index;
+        isSolved = false;
+        boardElement.innerHTML = "";
+        blocks = JSON.parse(JSON.stringify(puzzles[index]));
+        blocks.forEach((bData) => {
+          const el = document.createElement("div");
+          el.className = `block ${bData.class}`;
+          el.dataset.id = bData.id;
+          el.addEventListener("pointerdown", startDrag);
+          boardElement.appendChild(el);
+        });
+        updateBoardState();
+        updateLayout();
+
+        moves = 0;
+        movesElement.textContent = `Moves: 0`;
+        winMessage.style.opacity = "0";
+        puzzleInfo.textContent = `Puzzle ${index + 1} of ${puzzles.length}`;
+        prevButton.disabled = index === 0;
+        nextButton.disabled = true; // Enabled on win
+      }
+
+      prevButton.addEventListener("click", () => {
+        if (currentPuzzleIndex > 0) loadPuzzle(currentPuzzleIndex - 1);
+      });
+      nextButton.addEventListener("click", () => {
+        if (currentPuzzleIndex < puzzles.length - 1)
+          loadPuzzle(currentPuzzleIndex + 1);
+      });
+      resetButton.addEventListener("click", () =>
+        loadPuzzle(currentPuzzleIndex),
+      );
+      window.addEventListener("resize", updateLayout);
+
+      loadPuzzle(0);
     </script>
-</body>
+  </body>
 </html>
