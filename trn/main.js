@@ -7,7 +7,7 @@
     const GRID_SIZE = 50;
     const COLLISION_GRACE_DISTANCE = 30;
     const WORLD_BOUNDS = 1500;
-    const SEGMENTFADE_DELTA = 5
+    const SEGMENTFADE_DELTA = 0.01
 
     const DOTS_PER_LEVEL = 5;
     const DOT_SIZE = 10;
@@ -30,9 +30,9 @@
     const SCREEN_SHAKE_AMOUNT = 2;
     const GRIND_PARTICLE_COUNT = 3;
 
-    const POWERUP_SPAWN_INTERVAL = 10000; // ms
+    const POWERUP_SPAWN_INTERVAL = 15000; // ms
     const POWERUP_SIZE = 12;
-    const POWERUP_S_BOOST = 1.1;
+    const POWERUP_S_BOOST = 1.3;
     const POWERUP_S_DURATION = 5 * 60;
     const POWERUP_T_BOOST = 3.0;
     const POWERUP_T_DURATION = 0.5 * 60;
@@ -51,12 +51,14 @@
     const AI_WHISKER_SAFETY_MULTIPLIER = 1.2;
     const AI_WALL_AVOID_DISTANCE = 250;
     const AI_WALL_AVOID_STRENGTH = 2.0;
+    const ENEMY_RESPAWN_DELAY = 3000; // ms
 
     // --- UI Configuration ---
     const MINIMAP_SIZE = 180;
     const MINIMAP_PADDING = 20;
     const UI_PADDING = 20;
     const FADE_DURATION = 30; // frames
+    const PAUSE_AREA_HEIGHT = 80; // pixels from the top
 
     // --- PIXI App Setup ---
     const app = new PIXI.Application();
@@ -86,15 +88,16 @@
     world.addChild(playerSprite);
     
     // --- UI Objects ---
-    let enemyIndicator, gameOverUI, powerupIndicator, scoreText, levelText, screenFade;
+    let enemyIndicator, gameOverUI, powerupIndicator, scoreText, levelText, screenFade, splashScreenElement;
     let gameOverTitle, gameOverSubtitle;
     let minimapContainer, minimapTrails, minimapPlayer, minimapEnemies, minimapPowerups, minimapDots;
+    let pauseOverlay;
 
     // --- Game State ---
-    let player, enemies = [], enemySprites = [];
+    let player, enemies = [];
     let trailPoints, enemyTrails = [];
     let turning, keys = {};
-    let gameState, playerScore, currentLevel;
+    let gameState = 'splash', playerScore, currentLevel;
     let particles = [];
     let powerups = [];
     let dots = [];
@@ -102,6 +105,7 @@
     let powerupInterval;
     let vignetteElement;
     let transitionTimer = 0;
+    let activeTouches = 0;
 
     function setupBike(sprite, color) {
         const triangleHeight = TRAIL_WIDTH * 1.8;
@@ -198,7 +202,7 @@
     function setupMinimap() {
         minimapContainer = new PIXI.Container();
         const bg = new PIXI.Graphics();
-        bg.beginFill(0x000000, 0.5);
+        bg.beginFill(0x010101);
         bg.lineStyle(1, 0x30304a);
         bg.drawRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
         bg.endFill();
@@ -235,7 +239,7 @@
         
         const allEnemyTrails = [...enemyTrails, ...fadingTrails];
         allEnemyTrails.forEach(trail => {
-            if (trail.length > 1) {
+            if (trail && trail.length > 1) {
                 minimapTrails.moveTo(transformX(trail[0].x), transformY(trail[0].y));
                 for (let j = 1; j < trail.length; j++) {
                     minimapTrails.lineTo(transformX(trail[j].x), transformY(trail[j].y));
@@ -261,15 +265,16 @@
 
         minimapPlayer.x = transformX(player.x);
         minimapPlayer.y = transformY(player.y);
-
-        minimapEnemies.children.forEach((sprite, i) => {
-            const enemy = enemies[i];
-            if(enemy && enemy.isAlive) {
-                sprite.x = transformX(enemy.x);
-                sprite.y = transformY(enemy.y);
-                sprite.visible = true;
-            } else {
-                sprite.visible = false;
+        
+        minimapEnemies.children.forEach(c => c.visible = false);
+        enemies.forEach((enemy, i) => {
+             if (enemy) {
+                const sprite = minimapEnemies.children[i];
+                if (sprite) {
+                    sprite.x = transformX(enemy.x);
+                    sprite.y = transformY(enemy.y);
+                    sprite.visible = true;
+                }
             }
         });
     }
@@ -338,6 +343,34 @@
         dotContainer.addChild(dot);
     }
     
+    function spawnSingleEnemy() {
+        if (gameState !== 'playing' && gameState !== 'levelTransition') return;
+        
+        const enemySprite = new PIXI.Graphics();
+        setupBike(enemySprite, ENEMY_COLOR);
+        world.addChild(enemySprite);
+
+        const startPos = {
+            x: (Math.random() - 0.5) * WORLD_BOUNDS,
+            y: (Math.random() - 0.5) * WORLD_BOUNDS
+        };
+
+        const enemy = {
+            x: startPos.x, y: startPos.y, angle: Math.random() * Math.PI * 2,
+            turning: 0, aiUpdateCooldown: 0, isGrinding: false,
+            speedBoost: null, powerup: null, aiTurnBias: 0,
+            aiBiasCooldown: Math.random() * 120, sprite: enemySprite
+        };
+        enemies.push(enemy);
+        enemyTrails.push([new PIXI.Point(startPos.x, startPos.y)]);
+
+        const minimapSprite = new PIXI.Graphics();
+        minimapSprite.beginFill(ENEMY_COLOR);
+        minimapSprite.drawRect(-2, -2, 4, 4);
+        minimapSprite.endFill();
+        minimapEnemies.addChild(minimapSprite);
+    }
+
     function startLevel(levelNum) {
         player = { x: 0, y: 0, angle: 0, isGrinding: false, speedBoost: null, powerup: null };
         player.sprite = playerSprite;
@@ -355,17 +388,15 @@
 
         enemies.forEach(e => e.sprite.destroy());
         enemies = [];
-        enemySprites = [];
         enemyTrails = [];
         minimapEnemies.removeChildren();
         trailGraphics.clear();
         enemyTrailGraphics.clear();
 
         for (let i = 0; i < levelNum; i++) {
-            const enemySprite = new PIXI.Graphics();
+             const enemySprite = new PIXI.Graphics();
             setupBike(enemySprite, ENEMY_COLOR);
             world.addChild(enemySprite);
-            enemySprites.push(enemySprite);
 
             const startPos = {
                 x: (Math.random() - 0.5) * WORLD_BOUNDS,
@@ -376,7 +407,7 @@
                 x: startPos.x, y: startPos.y, angle: Math.random() * Math.PI * 2,
                 turning: 0, aiUpdateCooldown: 0, isGrinding: false,
                 speedBoost: null, powerup: null, aiTurnBias: 0,
-                aiBiasCooldown: Math.random() * 120, isAlive: true, sprite: enemySprite
+                aiBiasCooldown: Math.random() * 120, sprite: enemySprite
             };
             enemies.push(enemy);
             enemyTrails.push([new PIXI.Point(startPos.x, startPos.y)]);
@@ -392,9 +423,14 @@
         updatePowerupUI();
     }
     
-    function restartGame() {
+    function startGame() {
+        if (gameState !== 'splash') return;
+        
+        splashScreenElement.style.display = 'none';
+
         currentLevel = 1;
         keys = {};
+        activeTouches = 0;
         fadingTrails = [];
         vignetteElement = document.getElementById('grind-vignette');
         vignetteElement.classList.remove('grind', 'speed', 'turbo', 'active');
@@ -407,34 +443,104 @@
         powerupInterval = setInterval(spawnPowerup, POWERUP_SPAWN_INTERVAL);
         enemyIndicator.visible = true;
         gameOverUI.visible = false;
+        
+        if (pauseOverlay.style.display === 'flex') {
+            togglePause();
+        }
 
         setupBike(playerSprite, PLAYER_COLOR);
         startLevel(currentLevel);
+    }
+    
+    function restartGame() {
+        gameState = 'splash';
+        splashScreenElement.style.display = 'flex';
+        gameOverUI.visible = false;
     }
     
     function nextLevel() {
         gameState = 'levelTransition';
         transitionTimer = FADE_DURATION;
     }
+    
+    function togglePause() {
+        if (gameState === 'gameOver' || gameState === 'levelTransition' || gameState === 'splash') return;
+        
+        if (gameState === 'paused') {
+            gameState = 'playing';
+            pauseOverlay.style.display = 'none';
+        } else {
+            gameState = 'paused';
+            pauseOverlay.style.display = 'flex';
+        }
+    }
+    
+    function handlePowerupActivation() {
+        if (keys['Space'] || (keys['touchLeft'] && keys['touchRight'])) {
+            activatePowerup(player);
+            keys['Space'] = false; // Consume the key press
+        }
+    }
 
     app.stage.eventMode = 'static';
     app.stage.hitArea = app.screen;
     app.stage.on('pointerdown', (event) => {
-        if (gameState === 'playing') {
-            if (event.global.x < window.innerWidth / 3) keys['touchLeft'] = true;
-            else if (event.global.x > window.innerWidth * 2 / 3) keys['touchRight'] = true;
-            else keys['touchCenter'] = true;
-        } else if (gameState === 'gameOver') {
+        if (gameState === 'paused') {
+            togglePause();
+            return;
+        }
+        if (gameState === 'gameOver') {
             restartGame();
+            return;
+        }
+
+        if (event.global.y < PAUSE_AREA_HEIGHT && activeTouches === 0) {
+            togglePause();
+            return;
+        }
+
+        if (gameState === 'playing') {
+            activeTouches++;
+            if (event.global.x < window.innerWidth / 2) keys['touchLeft'] = true;
+            else keys['touchRight'] = true;
         }
     });
-    app.stage.on('pointerup', () => { keys['touchLeft'] = false; keys['touchRight'] = false; keys['touchCenter'] = false; });
-    app.stage.on('pointerupoutside', () => { keys['touchLeft'] = false; keys['touchRight'] = false; keys['touchCenter'] = false; });
-    window.addEventListener('keydown', (e) => { 
+
+    app.stage.on('pointerup', (event) => {
+        activeTouches = Math.max(0, activeTouches - 1);
+        if (event.global.x < window.innerWidth / 2) keys['touchLeft'] = false;
+        else keys['touchRight'] = false;
+        if (activeTouches === 0) {
+            keys['touchLeft'] = false;
+            keys['touchRight'] = false;
+        }
+    });
+    
+    app.stage.on('pointerupoutside', (event) => {
+        activeTouches = Math.max(0, activeTouches - 1);
+         if (activeTouches === 0) {
+            keys['touchLeft'] = false;
+            keys['touchRight'] = false;
+        }
+    });
+
+    window.addEventListener('keydown', (e) => {
+        if (gameState === 'splash' && e.code === 'Space') {
+            e.preventDefault();
+            startGame();
+            return;
+        }
+        if (e.code === 'Escape') {
+            e.preventDefault();
+            togglePause();
+            return;
+        }
         keys[e.code] = true;
         if (gameState === 'gameOver' && e.code === 'Space') restartGame();
     });
     window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+    
+    document.addEventListener('contextmenu', e => e.preventDefault());
 
     function drawGrid() {
         grid.clear();
@@ -457,10 +563,11 @@
         enemyTrailGraphics.clear();
         const allEnemyTrails = [...enemyTrails, ...fadingTrails];
         allEnemyTrails.forEach(trail => {
-            if (trail.length < 2) return;
-            enemyTrailGraphics.moveTo(trail[0].x, trail[0].y);
-            for (let j = 1; j < trail.length; j++) enemyTrailGraphics.lineTo(trail[j].x, trail[j].y);
-            enemyTrailGraphics.stroke({width: TRAIL_WIDTH, color: ENEMY_TRAIL_COLOR, cap: 'round', join: 'round'});
+            if (trail && trail.length >= 2) {
+                enemyTrailGraphics.moveTo(trail[0].x, trail[0].y);
+                for (let j = 1; j < trail.length; j++) enemyTrailGraphics.lineTo(trail[j].x, trail[j].y);
+                enemyTrailGraphics.stroke({width: TRAIL_WIDTH, color: ENEMY_TRAIL_COLOR, cap: 'round', join: 'round'});
+            }
         });
     }
     
@@ -561,6 +668,7 @@
     }
     
     function getSafeTrail(bike, trail) {
+        if (!trail) return [];
         for (let i = trail.length - 1; i >= 0; i--) {
             const p = trail[i];
             const distSq = (bike.x - p.x)**2 + (bike.y - p.y)**2;
@@ -576,6 +684,7 @@
         const bikeDirX = Math.sin(bike.angle);
         const bikeDirY = -Math.cos(bike.angle);
         for (const trail of allTrails) {
+             if (!trail) continue;
             for (let i = trail.length - 2; i >= 0; i--) {
                 const p1 = trail[i];
                 const p2 = trail[i+1];
@@ -602,7 +711,7 @@
     }
     
     function activatePowerup(bike) {
-        if (!bike.powerup) return;
+        if (!bike || !bike.powerup) return;
         if (bike.powerup === 'S') {
             bike.speedBoost = { multiplier: POWERUP_S_BOOST, duration: POWERUP_S_DURATION };
         } else if (bike.powerup === 'T') {
@@ -629,7 +738,7 @@
     }
 
     function isBikeCollidingWithTrail(bike, trail) {
-        if (trail.length < 2) return false;
+        if (!trail || trail.length < 2) return false;
         for (let i = 0; i < trail.length - 1; i++) {
             const distSq = pointToSegmentDistanceSq(bike, trail[i], trail[i+1]);
             if (distSq < (TRAIL_WIDTH / 2)**2) {
@@ -644,7 +753,7 @@
             return true;
         }
         for (const trail of allTrails) {
-             if (trail.length < 2) continue;
+             if (!trail || trail.length < 2) continue;
              for (let i = 0; i < trail.length - 1; i++) {
                 const distSq = pointToSegmentDistanceSq(point, trail[i], trail[i+1]);
                 if (distSq < TRAIL_WIDTH**2) {
@@ -668,12 +777,12 @@
         const myIndex = enemies.indexOf(enemy);
         const safeEnemyTrail = getSafeTrail(enemy, enemyTrail);
     
-        const allTrailsForAI = [trailPoints];
+        const allTrailsForAI = [getSafeTrail(player, trailPoints)];
         enemyTrails.forEach((trail, i) => {
             if (i === myIndex) {
                 allTrailsForAI.push(safeEnemyTrail);
-            } else if (enemies[i]?.isAlive) {
-                allTrailsForAI.push(trail);
+            } else if (enemies[i]) {
+                allTrailsForAI.push(getSafeTrail(enemies[i], trail));
             }
         });
     
@@ -724,7 +833,7 @@
 
     function updateEnemyIndicator() {
         const offscreenEnemies = enemies.filter(enemy => {
-            if (!enemy.isAlive) return false;
+            if (!enemy) return false;
             const screenPos = world.toGlobal(enemy);
             return screenPos.x < 0 || screenPos.x > app.screen.width || screenPos.y < 0 || screenPos.y > app.screen.height;
         });
@@ -800,13 +909,25 @@
         if (powerupInterval) clearInterval(powerupInterval);
     }
     
-    function handleEnemyDeath(enemy, index) {
+    function handleEnemyDeath(enemy) {
+        const index = enemies.indexOf(enemy);
+        if (index === -1) return;
+        
         createExplosion(enemy.x, enemy.y, ENEMY_COLOR);
-        enemy.isAlive = false;
+        
         if (enemyTrails[index] && enemyTrails[index].length > 1) {
             fadingTrails.push(enemyTrails[index]);
         }
-        enemyTrails[index] = [];
+        
+        world.removeChild(enemy.sprite);
+        enemy.sprite.destroy();
+        
+        enemies.splice(index, 1);
+        enemyTrails.splice(index, 1);
+
+        minimapEnemies.removeChildAt(index).destroy();
+        
+        setTimeout(spawnSingleEnemy, ENEMY_RESPAWN_DELAY);
     }
 
     function checkCollisions() {
@@ -815,30 +936,37 @@
         if (isBikeCollidingWithTrail(player, playerTrailSafe)) { endGame(); return; }
         if (Math.abs(player.x) > WORLD_BOUNDS || Math.abs(player.y) > WORLD_BOUNDS) { endGame(); return; }
         for (const trail of enemyTrails) {
-            if (trail.length > 0 && isBikeCollidingWithTrail(player, trail)) {
+            if (trail && trail.length > 0 && isBikeCollidingWithTrail(player, trail)) {
                 endGame();
                 return;
             }
         }
 
         // --- Enemy Collisions ---
-        enemies.forEach((enemy, i) => {
-            if (!enemy.isAlive) return;
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            const enemy = enemies[i];
+            
             const enemyTrail = enemyTrails[i];
             const enemyTrailSafe = getSafeTrail(enemy, enemyTrail);
 
-            if (isBikeCollidingWithTrail(enemy, trailPoints)) { handleEnemyDeath(enemy, i); return; }
-            if (isBikeCollidingWithTrail(enemy, enemyTrailSafe)) { handleEnemyDeath(enemy, i); return; }
-            if (Math.abs(enemy.x) > WORLD_BOUNDS || Math.abs(enemy.y) > WORLD_BOUNDS) { handleEnemyDeath(enemy, i); return; }
+            let didDie = false;
+            if (isBikeCollidingWithTrail(enemy, trailPoints)) { didDie = true; }
+            if (!didDie && isBikeCollidingWithTrail(enemy, enemyTrailSafe)) { didDie = true; }
+            if (!didDie && (Math.abs(enemy.x) > WORLD_BOUNDS || Math.abs(enemy.y) > WORLD_BOUNDS)) { didDie = true; }
             
-            for (let j = 0; j < enemyTrails.length; j++) {
-                if (i === j) continue;
-                if (enemyTrails[j].length > 0 && isBikeCollidingWithTrail(enemy, enemyTrails[j])) {
-                    handleEnemyDeath(enemy, i);
-                    return;
+            if (!didDie) {
+                for (let j = 0; j < enemyTrails.length; j++) {
+                    if (i === j) continue;
+                    if (enemyTrails[j] && enemyTrails[j].length > 0 && isBikeCollidingWithTrail(enemy, enemyTrails[j])) {
+                        didDie = true;
+                        break;
+                    }
                 }
             }
-        });
+            if (didDie) {
+                handleEnemyDeath(enemy);
+            }
+        }
     }
 
     function updatePowerups() {
@@ -855,7 +983,7 @@
             }
             
             for (const enemy of enemies) {
-                if (enemy.isAlive && !enemy.powerup && (enemy.x - p.x)**2 + (enemy.y - p.y)**2 < (POWERUP_SIZE + TRAIL_WIDTH)**2) {
+                if (enemy && !enemy.powerup && (enemy.x - p.x)**2 + (enemy.y - p.y)**2 < (POWERUP_SIZE + TRAIL_WIDTH)**2) {
                     enemy.powerup = p.type;
                     powerupContainer.removeChild(p);
                     p.destroy();
@@ -886,6 +1014,10 @@
     app.ticker.add((ticker) => {
         const delta = ticker.deltaTime;
 
+        if (gameState === 'splash' || gameState === 'paused') {
+            return;
+        }
+
         updateParticles(delta);
         updateFadingTrails(delta);
 
@@ -905,33 +1037,33 @@
             return;
         }
 
-        const left = keys['ArrowLeft'] || keys['KeyA'] || keys['touchLeft'];
-        const right = keys['ArrowRight'] || keys['KeyD'] || keys['touchRight'];
+        handlePowerupActivation();
+        
+        const left = keys['ArrowLeft'] || keys['KeyA'] || (activeTouches > 0 && keys['touchLeft']);
+        const right = keys['ArrowRight'] || keys['KeyD'] || (activeTouches > 0 && keys['touchRight']);
         turning = (right ? 1 : 0) - (left ? 1 : 0);
-        if (keys['Space'] || keys['touchCenter']) {
-            activatePowerup(player);
-            keys['touchCenter'] = false;
-            keys['Space'] = false;
-        }
 
-        const bikes = [player, ...enemies.filter(e => e.isAlive)];
+        const bikes = [player, ...enemies];
 
         bikes.forEach((bike) => {
+            if (!bike) return;
+
             if (bike.speedBoost) {
                 bike.speedBoost.duration -= delta;
                 if (bike.speedBoost.duration <= 0) bike.speedBoost = null;
             }
+            
             const myTrail = bike === player ? trailPoints : enemyTrails[enemies.indexOf(bike)];
             const safeMyTrail = getSafeTrail(bike, myTrail);
             
             const otherTrails = [];
             if (bike === player) {
-                enemyTrails.forEach(trail => { if (trail.length > 0) otherTrails.push(trail) });
+                enemyTrails.forEach(trail => { if (trail && trail.length > 0) otherTrails.push(trail) });
             } else {
                 otherTrails.push(trailPoints);
                 const bikeIndex = enemies.indexOf(bike);
                 enemyTrails.forEach((trail, i) => {
-                    if (i !== bikeIndex && trail.length > 0) otherTrails.push(trail);
+                    if (i !== bikeIndex && trail && trail.length > 0) otherTrails.push(trail);
                 });
             }
             checkWallGrind(bike, [safeMyTrail, ...otherTrails]);
@@ -966,10 +1098,11 @@
                 trailPoints.shift();
             }
         }
+
         enemies.forEach((enemy, i) => {
-            if (enemy.isAlive) {
+            if (enemy) {
                 const trail = enemyTrails[i];
-                if (trail.length === 0 || ((enemy.x - trail.at(-1).x)**2 + (enemy.y - trail.at(-1).y)**2) > (TRAIL_WIDTH/2)**2) {
+                if (trail && (trail.length === 0 || ((enemy.x - trail.at(-1).x)**2 + (enemy.y - trail.at(-1).y)**2) > (TRAIL_WIDTH/2)**2)) {
                     trail.push(new PIXI.Point(enemy.x, enemy.y));
                     if (trail.length > AI_TRAIL_HISTORY) {
                         trail.shift();
@@ -987,14 +1120,12 @@
         playerSprite.position.set(player.x, player.y);
         playerSprite.rotation = player.angle;
         playerSprite.tint = player.isGrinding ? 0xFFFF00 : 0xFFFFFF;
+        
         enemies.forEach(enemy => {
-            if (enemy.isAlive) {
+            if (enemy) {
                 enemy.sprite.position.set(enemy.x, enemy.y);
                 enemy.sprite.rotation = enemy.angle;
                 enemy.sprite.tint = enemy.isGrinding ? 0xFFFF00 : 0xFFFFFF;
-                enemy.sprite.visible = true;
-            } else {
-                enemy.sprite.visible = false;
             }
         });
         
@@ -1007,7 +1138,10 @@
         updateEnemyIndicator();
         updateMinimap();
     });
-
+    
+    // --- Initial Setup ---
+    pauseOverlay = document.getElementById('pause-overlay');
+    splashScreenElement = document.getElementById('splash-screen');
     drawGrid();
     setupEnemyIndicator();
     setupGameOverUI();
@@ -1024,5 +1158,9 @@
 
     window.addEventListener('resize', repositionUI);
     repositionUI();
-    restartGame();
+    
+    splashScreenElement.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        startGame();
+    });
 })();
