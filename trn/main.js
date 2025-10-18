@@ -16,6 +16,7 @@
 
     const PLAYER_COLOR = 0x00FFFF; // Cyan
     const TRAIL_COLOR = 0x00FFFF;
+    const FADING_TRAIL_COLOR = 0x586e75; // A muted gray-blue from Solarized palette
 
     const ENEMY_COLOR = 0xFF8000; // Orange
     const ENEMY_TRAIL_COLOR = 0xFF8000;
@@ -54,7 +55,7 @@
     const ENEMY_RESPAWN_DELAY = 3000; // ms
 
     // --- UI Configuration ---
-    const MINIMAP_SIZE = 180;
+    let MINIMAP_SIZE = 180;
     const MINIMAP_PADDING = 20;
     const UI_PADDING = 20;
     const FADE_DURATION = 30; // frames
@@ -106,7 +107,18 @@
     let vignetteElement;
     let transitionTimer = 0;
     let activeTouches = 0;
+    let readyTimer
 
+    function setupReadyUI() {
+    readyText = new PIXI.Text({text: 'GET READY!', style: new PIXI.TextStyle({
+        fontFamily: 'Sixtyfour', fontSize: 48, fontWeight: 'bold', fill: 0xFFFFFF,
+        stroke: { color: 0x000000, width: 5 }, align: 'center'
+    })});
+    readyText.anchor.set(0.5);
+    readyText.visible = false;
+    app.stage.addChild(readyText);
+}
+    
     function setupBike(sprite, color) {
         const triangleHeight = TRAIL_WIDTH * 1.8;
         const triangleHalfBase = TRAIL_WIDTH / 2;
@@ -200,101 +212,119 @@
     }
     
     function setupMinimap() {
-        minimapContainer = new PIXI.Container();
-        const bg = new PIXI.Graphics();
-        bg.beginFill(0x010101);
-        bg.lineStyle(1, 0x30304a);
-        bg.drawRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
-        bg.endFill();
-        minimapContainer.addChild(bg);
-        
-        minimapDots = new PIXI.Graphics();
-        minimapContainer.addChild(minimapDots);
-        minimapPowerups = new PIXI.Graphics();
-        minimapContainer.addChild(minimapPowerups);
-        minimapTrails = new PIXI.Graphics();
-        minimapContainer.addChild(minimapTrails);
-        minimapPlayer = new PIXI.Graphics();
-        minimapPlayer.beginFill(PLAYER_COLOR);
-        minimapPlayer.drawRect(-2, -2, 4, 4);
-        minimapPlayer.endFill();
-        minimapContainer.addChild(minimapPlayer);
-        minimapEnemies = new PIXI.Container();
-        minimapContainer.addChild(minimapEnemies);
-        
-        app.stage.addChild(minimapContainer);
+    minimapContainer = new PIXI.Container();
+    const bg = new PIXI.Graphics();
+    minimapContainer.addChild(bg);
+
+    minimapDots = new PIXI.Graphics();
+    minimapContainer.addChild(minimapDots);
+    minimapPowerups = new PIXI.Graphics();
+    minimapContainer.addChild(minimapPowerups);
+    minimapTrails = new PIXI.Graphics();
+    minimapContainer.addChild(minimapTrails);
+    minimapPlayer = new PIXI.Graphics();
+    minimapPlayer.beginFill(PLAYER_COLOR);
+    minimapPlayer.drawRect(-2, -2, 4, 4);
+    minimapPlayer.endFill();
+    minimapContainer.addChild(minimapPlayer);
+    minimapEnemies = new PIXI.Container();
+    minimapContainer.addChild(minimapEnemies);
+
+    app.stage.addChild(minimapContainer);
+}
+    
+function updateMinimap() {
+    const scale = minimapSize / (WORLD_BOUNDS * 2);
+    const transformX = (worldX) => (worldX + WORLD_BOUNDS) * scale;
+    const transformY = (worldY) => (worldY + WORLD_BOUNDS) * scale;
+    minimapTrails.clear();
+
+    if (trailPoints.length > 1) {
+        minimapTrails.moveTo(transformX(trailPoints[0].x), transformY(trailPoints[0].y));
+        for (let i = 1; i < trailPoints.length; i++) minimapTrails.lineTo(transformX(trailPoints[i].x), transformY(trailPoints[i].y));
+        minimapTrails.stroke({ width: 1.5, color: PLAYER_COLOR });
     }
     
-    function updateMinimap() {
-        const scale = MINIMAP_SIZE / (WORLD_BOUNDS * 2);
-        const transformX = (worldX) => (worldX + WORLD_BOUNDS) * scale;
-        const transformY = (worldY) => (worldY + WORLD_BOUNDS) * scale;
-        minimapTrails.clear();
-
-        if (trailPoints.length > 1) {
-            minimapTrails.moveTo(transformX(trailPoints[0].x), transformY(trailPoints[0].y));
-            for (let i = 1; i < trailPoints.length; i++) minimapTrails.lineTo(transformX(trailPoints[i].x), transformY(trailPoints[i].y));
-            minimapTrails.stroke({ width: 1.5, color: PLAYER_COLOR });
-        }
-        
-        const allEnemyTrails = [...enemyTrails, ...fadingTrails];
-        allEnemyTrails.forEach(trail => {
-            if (trail && trail.length > 1) {
-                minimapTrails.moveTo(transformX(trail[0].x), transformY(trail[0].y));
-                for (let j = 1; j < trail.length; j++) {
-                    minimapTrails.lineTo(transformX(trail[j].x), transformY(trail[j].y));
-                }
-                minimapTrails.stroke({ width: 1.5, color: ENEMY_COLOR });
+    // Draw active enemy trails on the minimap
+    enemyTrails.forEach(trail => {
+        if (trail && trail.length > 1) {
+            minimapTrails.moveTo(transformX(trail[0].x), transformY(trail[0].y));
+            for (let j = 1; j < trail.length; j++) {
+                minimapTrails.lineTo(transformX(trail[j].x), transformY(trail[j].y));
             }
-        });
-
-        minimapPowerups.clear();
-        for (const p of powerups) {
-            const color = p.type === 'S' ? POWERUP_S_COLOR : POWERUP_T_COLOR;
-            minimapPowerups.beginFill(color);
-            minimapPowerups.drawCircle(transformX(p.x), transformY(p.y), 2.5);
-            minimapPowerups.endFill();
+            minimapTrails.stroke({ width: 1.5, color: ENEMY_COLOR });
         }
-        
-        minimapDots.clear();
-        for (const d of dots) {
-            minimapDots.beginFill(DOT_COLOR);
-            minimapDots.drawCircle(transformX(d.x), transformY(d.y), 2.0);
-            minimapDots.endFill();
-        }
+    });
 
-        minimapPlayer.x = transformX(player.x);
-        minimapPlayer.y = transformY(player.y);
-        
-        minimapEnemies.children.forEach(c => c.visible = false);
-        enemies.forEach((enemy, i) => {
-             if (enemy) {
-                const sprite = minimapEnemies.children[i];
-                if (sprite) {
-                    sprite.x = transformX(enemy.x);
-                    sprite.y = transformY(enemy.y);
-                    sprite.visible = true;
-                }
+    // Draw fading enemy trails on the minimap
+    fadingTrails.forEach(trail => {
+        if (trail && trail.length > 1) {
+            minimapTrails.moveTo(transformX(trail[0].x), transformY(trail[0].y));
+            for (let j = 1; j < trail.length; j++) {
+                minimapTrails.lineTo(transformX(trail[j].x), transformY(trail[j].y));
             }
-        });
+            minimapTrails.stroke({ width: 1.5, color: FADING_TRAIL_COLOR });
+        }
+    });
+
+    minimapPowerups.clear();
+    for (const p of powerups) {
+        const color = p.type === 'S' ? POWERUP_S_COLOR : POWERUP_T_COLOR;
+        minimapPowerups.beginFill(color);
+        minimapPowerups.drawCircle(transformX(p.x), transformY(p.y), 2.5);
+        minimapPowerups.endFill();
+    }
+    
+    minimapDots.clear();
+    for (const d of dots) {
+        minimapDots.beginFill(DOT_COLOR);
+        minimapDots.drawCircle(transformX(d.x), transformY(d.y), 2.0);
+        minimapDots.endFill();
     }
 
+    minimapPlayer.x = transformX(player.x);
+    minimapPlayer.y = transformY(player.y);
+    
+    minimapEnemies.children.forEach(c => c.visible = false);
+    enemies.forEach((enemy, i) => {
+         if (enemy) {
+            const sprite = minimapEnemies.children[i];
+            if (sprite) {
+                sprite.x = transformX(enemy.x);
+                sprite.y = transformY(enemy.y);
+                sprite.visible = true;
+            }
+        }
+    });
+}
     function repositionUI() {
-        gameOverUI.x = app.screen.width / 2;
-        gameOverUI.y = app.screen.height / 2;
-        powerupIndicator.x = 30;
-        powerupIndicator.y = app.screen.height - 50;
-        scoreText.x = app.screen.width - UI_PADDING;
-        scoreText.y = UI_PADDING;
-        if (screenFade) {
-            screenFade.width = app.screen.width;
-            screenFade.height = app.screen.height;
-        }
-        if (minimapContainer) {
-            minimapContainer.x = app.screen.width - MINIMAP_SIZE - MINIMAP_PADDING;
-            minimapContainer.y = app.screen.height - MINIMAP_SIZE - MINIMAP_PADDING;
-        }
+    gameOverUI.x = app.screen.width / 2;
+    gameOverUI.y = app.screen.height / 2;
+    powerupIndicator.x = 30;
+    powerupIndicator.y = app.screen.height - 50;
+    scoreText.x = app.screen.width - UI_PADDING;
+    scoreText.y = UI_PADDING;
+    if (screenFade) {
+        screenFade.width = app.screen.width;
+        screenFade.height = app.screen.height;
     }
+    if (readyText) {
+        readyText.x = app.screen.width / 2;
+        readyText.y = app.screen.height / 2;
+    }
+    if (minimapContainer) {
+        minimapSize = Math.min(app.screen.width, app.screen.height) / 4;
+        const bg = minimapContainer.children[0];
+        bg.clear();
+        bg.beginFill(0x010101);
+        bg.lineStyle(1, 0x30304a);
+        bg.drawRect(0, 0, minimapSize, minimapSize);
+        bg.endFill();
+
+        minimapContainer.x = app.screen.width - minimapSize - MINIMAP_PADDING;
+        minimapContainer.y = app.screen.height - minimapSize - MINIMAP_PADDING;
+    }
+}
 
     function spawnPowerup() {
         const type = Math.random() < 0.5 ? 'S' : 'T';
@@ -419,7 +449,7 @@
             minimapEnemies.addChild(minimapSprite);
         }
 
-        if(levelNum === 1) gameState = 'playing';
+        //if(levelNum === 1) gameState = 'playing';
         updatePowerupUI();
     }
     
@@ -450,6 +480,9 @@
 
         setupBike(playerSprite, PLAYER_COLOR);
         startLevel(currentLevel);
+        gameState = 'levelReady';
+    readyTimer = 60; // 60 frames = 1 second at 60fps
+    readyText.visible = true;
     }
     
     function restartGame() {
@@ -553,23 +586,32 @@
     }
 
     function drawTrails() {
-        trailGraphics.clear();
-        if (trailPoints.length > 1) {
-            trailGraphics.moveTo(trailPoints[0].x, trailPoints[0].y);
-            for (let i = 1; i < trailPoints.length; i++) trailGraphics.lineTo(trailPoints[i].x, trailPoints[i].y);
-            trailGraphics.stroke({width: TRAIL_WIDTH, color: TRAIL_COLOR, cap: 'round', join: 'round'});
-        }
-        
-        enemyTrailGraphics.clear();
-        const allEnemyTrails = [...enemyTrails, ...fadingTrails];
-        allEnemyTrails.forEach(trail => {
-            if (trail && trail.length >= 2) {
-                enemyTrailGraphics.moveTo(trail[0].x, trail[0].y);
-                for (let j = 1; j < trail.length; j++) enemyTrailGraphics.lineTo(trail[j].x, trail[j].y);
-                enemyTrailGraphics.stroke({width: TRAIL_WIDTH, color: ENEMY_TRAIL_COLOR, cap: 'round', join: 'round'});
-            }
-        });
+    trailGraphics.clear();
+    if (trailPoints.length > 1) {
+        trailGraphics.moveTo(trailPoints[0].x, trailPoints[0].y);
+        for (let i = 1; i < trailPoints.length; i++) trailGraphics.lineTo(trailPoints[i].x, trailPoints[i].y);
+        trailGraphics.stroke({width: TRAIL_WIDTH, color: TRAIL_COLOR, cap: 'round', join: 'round'});
     }
+    
+    enemyTrailGraphics.clear();
+    // Draw active enemy trails in orange
+    enemyTrails.forEach(trail => {
+        if (trail && trail.length >= 2) {
+            enemyTrailGraphics.moveTo(trail[0].x, trail[0].y);
+            for (let j = 1; j < trail.length; j++) enemyTrailGraphics.lineTo(trail[j].x, trail[j].y);
+            enemyTrailGraphics.stroke({width: TRAIL_WIDTH, color: ENEMY_TRAIL_COLOR, cap: 'round', join: 'round'});
+        }
+    });
+
+    // Draw fading (dead) enemy trails in the new color
+    fadingTrails.forEach(trail => {
+        if (trail && trail.length >= 2) {
+            enemyTrailGraphics.moveTo(trail[0].x, trail[0].y);
+            for (let j = 1; j < trail.length; j++) enemyTrailGraphics.lineTo(trail[j].x, trail[j].y);
+            enemyTrailGraphics.stroke({width: TRAIL_WIDTH, color: FADING_TRAIL_COLOR, cap: 'round', join: 'round'});
+        }
+    });
+}
     
     function createExplosion(x, y, color) {
         for (let i = 0; i < EXPLOSION_PARTICLE_COUNT; i++) {
@@ -931,43 +973,52 @@
     }
 
     function checkCollisions() {
-        // --- Player Collisions ---
-        const playerTrailSafe = getSafeTrail(player, trailPoints);
-        if (isBikeCollidingWithTrail(player, playerTrailSafe)) { endGame(); return; }
-        if (Math.abs(player.x) > WORLD_BOUNDS || Math.abs(player.y) > WORLD_BOUNDS) { endGame(); return; }
-        for (const trail of enemyTrails) {
-            if (trail && trail.length > 0 && isBikeCollidingWithTrail(player, trail)) {
-                endGame();
-                return;
-            }
-        }
+    // Combine all enemy trails (living and fading) into one list for collision checks.
+    const allEnemyTrails = [...enemyTrails, ...fadingTrails];
 
-        // --- Enemy Collisions ---
-        for (let i = enemies.length - 1; i >= 0; i--) {
-            const enemy = enemies[i];
-            
-            const enemyTrail = enemyTrails[i];
-            const enemyTrailSafe = getSafeTrail(enemy, enemyTrail);
-
-            let didDie = false;
-            if (isBikeCollidingWithTrail(enemy, trailPoints)) { didDie = true; }
-            if (!didDie && isBikeCollidingWithTrail(enemy, enemyTrailSafe)) { didDie = true; }
-            if (!didDie && (Math.abs(enemy.x) > WORLD_BOUNDS || Math.abs(enemy.y) > WORLD_BOUNDS)) { didDie = true; }
-            
-            if (!didDie) {
-                for (let j = 0; j < enemyTrails.length; j++) {
-                    if (i === j) continue;
-                    if (enemyTrails[j] && enemyTrails[j].length > 0 && isBikeCollidingWithTrail(enemy, enemyTrails[j])) {
-                        didDie = true;
-                        break;
-                    }
-                }
-            }
-            if (didDie) {
-                handleEnemyDeath(enemy);
-            }
+    // --- Player Collisions ---
+    const playerTrailSafe = getSafeTrail(player, trailPoints);
+    if (isBikeCollidingWithTrail(player, playerTrailSafe)) { endGame(); return; }
+    if (Math.abs(player.x) > WORLD_BOUNDS || Math.abs(player.y) > WORLD_BOUNDS) { endGame(); return; }
+    
+    // Check player against ALL enemy trails (living and fading)
+    for (const trail of allEnemyTrails) {
+        if (trail && trail.length > 0 && isBikeCollidingWithTrail(player, trail)) {
+            endGame();
+            return;
         }
     }
+
+    // --- Enemy Collisions ---
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const enemy = enemies[i];
+        const ownTrail = enemyTrails[i];
+        const ownTrailSafe = getSafeTrail(enemy, ownTrail);
+
+        let didDie = false;
+        // Check standard collisions first (own trail, walls, player trail)
+        if (isBikeCollidingWithTrail(enemy, ownTrailSafe)) { didDie = true; }
+        if (!didDie && (Math.abs(enemy.x) > WORLD_BOUNDS || Math.abs(enemy.y) > WORLD_BOUNDS)) { didDie = true; }
+        if (!didDie && isBikeCollidingWithTrail(enemy, trailPoints)) { didDie = true; }
+        
+        // Now check against all other enemy trails (living and fading)
+        if (!didDie) {
+            for (const otherTrail of allEnemyTrails) {
+                // An enemy can't collide with its own active trail
+                if (otherTrail === ownTrail) continue;
+                
+                if (otherTrail && otherTrail.length > 0 && isBikeCollidingWithTrail(enemy, otherTrail)) {
+                    didDie = true;
+                    break;
+                }
+            }
+        }
+
+        if (didDie) {
+            handleEnemyDeath(enemy);
+        }
+    }
+}
 
     function updatePowerups() {
         for (let i = powerups.length - 1; i >= 0; i--) {
@@ -1018,20 +1069,32 @@
             return;
         }
 
+        if (gameState === 'levelReady') {
+        readyTimer -= delta;
+        if (readyTimer <= 0) {
+            gameState = 'playing';
+            readyText.visible = false;
+        }
+        return; // Don't run any other game logic
+    }
+        
         updateParticles(delta);
         updateFadingTrails(delta);
 
         if (gameState === 'levelTransition') {
-            transitionTimer -= delta;
-            screenFade.alpha = 1 - Math.abs(transitionTimer) / FADE_DURATION;
-            if (transitionTimer <= -FADE_DURATION) {
-                gameState = 'playing';
-            } else if (transitionTimer < 0 && transitionTimer + delta >=0) {
-                 currentLevel++;
-                 startLevel(currentLevel);
-            }
-            return;
+        transitionTimer -= delta;
+        screenFade.alpha = 1 - Math.abs(transitionTimer) / FADE_DURATION;
+        if (transitionTimer <= -FADE_DURATION) {
+            // Change this block to go to 'levelReady' instead of 'playing'
+            gameState = 'levelReady';
+            readyTimer = 60; // 60 frames
+            readyText.visible = true;
+        } else if (transitionTimer < 0 && transitionTimer + delta >=0) {
+             currentLevel++;
+             startLevel(currentLevel);
         }
+        return;
+    }
 
         if (gameState !== 'playing') {
             return;
@@ -1147,10 +1210,11 @@
     setupGameOverUI();
     setupPowerupUI();
     setupScoreUI();
+    setupReadyUI()
     setupMinimap();
     
     screenFade = new PIXI.Graphics();
-    screenFade.beginFill(0x000000);
+    screenFade.beginFill(0x010101);
     screenFade.drawRect(0, 0, app.screen.width, app.screen.height);
     screenFade.endFill();
     screenFade.alpha = 0;
