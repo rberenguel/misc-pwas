@@ -90,6 +90,7 @@
     
     // --- UI Objects ---
     let enemyIndicator, gameOverUI, powerupIndicator, scoreText, levelText, screenFade, splashScreenElement;
+    let dotIndicatorContainer;
     let gameOverTitle, gameOverSubtitle;
     let minimapContainer, minimapTrails, minimapPlayer, minimapEnemies, minimapPowerups, minimapDots;
     let pauseOverlay;
@@ -139,6 +140,19 @@
         enemyIndicator.drawCircle(0, 0, 10);
         enemyIndicator.endFill();
         app.stage.addChild(enemyIndicator);
+    }
+    
+    function setupDotIndicators() {
+        dotIndicatorContainer = new PIXI.Container();
+        app.stage.addChild(dotIndicatorContainer);
+        for (let i = 0; i < DOTS_PER_LEVEL; i++) {
+            const indicator = new PIXI.Graphics();
+            indicator.beginFill(DOT_COLOR);
+            indicator.drawCircle(0, 0, 5);
+            indicator.endFill();
+            indicator.visible = false;
+            dotIndicatorContainer.addChild(indicator);
+        }
     }
     
     function setupGameOverUI() {
@@ -419,6 +433,7 @@ function updateMinimap() {
         enemies.forEach(e => e.sprite.destroy());
         enemies = [];
         enemyTrails = [];
+        fadingTrails = []; // <-- BUG FIX: Clear fading trails from previous level
         minimapEnemies.removeChildren();
         trailGraphics.clear();
         enemyTrailGraphics.clear();
@@ -448,8 +463,6 @@ function updateMinimap() {
             minimapSprite.endFill();
             minimapEnemies.addChild(minimapSprite);
         }
-
-        //if(levelNum === 1) gameState = 'playing';
         updatePowerupUI();
     }
     
@@ -903,7 +916,7 @@ function updateMinimap() {
             const screenDx = dx * Math.cos(angle) - dy * Math.sin(angle);
             const screenDy = dx * Math.sin(angle) + dy * Math.cos(angle);
             const indicatorAngle = Math.atan2(screenDy, screenDx);
-            const padding = 25;
+            const padding = 15;
             const screenCenterX = app.screen.width / 2;
             const screenCenterY = app.screen.height / 2;
             const halfW = screenCenterX - padding;
@@ -915,6 +928,44 @@ function updateMinimap() {
             } else {
                 enemyIndicator.x = screenCenterX + (halfH / tanAngle) * Math.sign(screenDy);
                 enemyIndicator.y = screenCenterY + halfH * Math.sign(screenDy);
+            }
+        }
+    }
+    
+    function updateDotIndicators() {
+        dotIndicatorContainer.children.forEach(c => c.visible = false);
+        let indicatorIndex = 0;
+    
+        const padding = 5;
+        const screenCenterX = app.screen.width / 2;
+        const screenCenterY = app.screen.height / 2;
+        const halfW = screenCenterX - padding;
+        const halfH = screenCenterY - padding;
+
+        for (const dot of dots) {
+            const screenPos = world.toGlobal(dot);
+            const isOffscreen = screenPos.x < 0 || screenPos.x > app.screen.width || screenPos.y < 0 || screenPos.y > app.screen.height;
+
+            if (isOffscreen && indicatorIndex < dotIndicatorContainer.children.length) {
+                const indicator = dotIndicatorContainer.children[indicatorIndex];
+                indicator.visible = true;
+
+                const dx = dot.x - player.x;
+                const dy = dot.y - player.y;
+                const playerAngle = -player.angle;
+                const screenDx = dx * Math.cos(playerAngle) - dy * Math.sin(playerAngle);
+                const screenDy = dx * Math.sin(playerAngle) + dy * Math.cos(playerAngle);
+                const indicatorAngle = Math.atan2(screenDy, screenDx);
+
+                const tanAngle = Math.tan(indicatorAngle);
+                if (Math.abs(halfH / tanAngle) > halfW) {
+                    indicator.x = screenCenterX + halfW * Math.sign(screenDx);
+                    indicator.y = screenCenterY + halfW * tanAngle * Math.sign(screenDx);
+                } else {
+                    indicator.x = screenCenterX + (halfH / tanAngle) * Math.sign(screenDy);
+                    indicator.y = screenCenterY + halfH * Math.sign(screenDy);
+                }
+                indicatorIndex++;
             }
         }
     }
@@ -1199,6 +1250,7 @@ function updateMinimap() {
         
         drawTrails();
         updateEnemyIndicator();
+        updateDotIndicators();
         updateMinimap();
     });
     
@@ -1207,6 +1259,7 @@ function updateMinimap() {
     splashScreenElement = document.getElementById('splash-screen');
     drawGrid();
     setupEnemyIndicator();
+    setupDotIndicators();
     setupGameOverUI();
     setupPowerupUI();
     setupScoreUI();
