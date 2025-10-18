@@ -39,8 +39,9 @@
 
     // --- AI Configuration ---
     const AI_WHISKER_ANGLES = [-Math.PI / 3, -Math.PI / 6, 0, Math.PI / 6, Math.PI / 3];
-    const AI_UPDATE_INTERVAL = 5;
-    const AI_TRAIL_HISTORY = 400;
+    const AI_UPDATE_INTERVAL = 2;
+    const AI_TRAIL_HISTORY = 500;
+    const AI_WHISKER_SAFETY_MULTIPLIER = 1.2; // Increase whisker length by 20% for a safety margin
 
     // --- UI Configuration ---
     const MINIMAP_SIZE = 180;
@@ -458,21 +459,46 @@
         bike.powerup = null;
         if (bike === player) updatePowerupUI();
     }
+    
+    function pointToSegmentDistanceSq(point, segP1, segP2) {
+        const segX = segP2.x - segP1.x;
+        const segY = segP2.y - segP1.y;
+        const pointToP1X = segP1.x - point.x;
+        const pointToP1Y = segP1.y - point.y;
+    
+        const segLenSq = segX * segX + segY * segY;
+        if (segLenSq === 0) return (point.x - segP1.x)**2 + (point.y - segP1.y)**2;
+    
+        const t = Math.max(0, Math.min(1, (-pointToP1X * segX - pointToP1Y * segY) / segLenSq));
+        const closestX = segP1.x + t * segX;
+        const closestY = segP1.y + t * segY;
+    
+        return (point.x - closestX)**2 + (point.y - closestY)**2;
+    }
 
-    function isClose(obj, point) {
-         const dx = obj.x - point.x;
-         const dy = obj.y - point.y;
-         return (dx * dx + dy * dy) < (TRAIL_WIDTH / 1.5) ** 2;
+    function isBikeCollidingWithTrail(bike, trail) {
+        if (trail.length < 2) return false;
+        for (let i = 0; i < trail.length - 1; i++) {
+            const distSq = pointToSegmentDistanceSq(bike, trail[i], trail[i+1]);
+            if (distSq < (TRAIL_WIDTH / 2)**2) {
+                return true;
+            }
+        }
+        return false;
     }
 
     function isPointColliding(point, allTrails) {
         if (Math.abs(point.x) > WORLD_BOUNDS || Math.abs(point.y) > WORLD_BOUNDS) {
             return true;
         }
-        for(const trailPoint of allTrails) {
-            const dx = point.x - trailPoint.x;
-            const dy = point.y - trailPoint.y;
-            if ((dx * dx + dy * dy) < (TRAIL_WIDTH) ** 2) return true;
+        for (const trail of allTrails) {
+             if (trail.length < 2) continue;
+             for (let i = 0; i < trail.length - 1; i++) {
+                const distSq = pointToSegmentDistanceSq(point, trail[i], trail[i+1]);
+                if (distSq < TRAIL_WIDTH**2) {
+                    return true;
+                }
+            }
         }
         return false;
     }
@@ -485,11 +511,11 @@
         
         const turnRadius = currentSpeed / TURN_SPEED;
         const reactionDistance = currentSpeed * AI_UPDATE_INTERVAL;
-        const whiskerLength = turnRadius + reactionDistance;
+        const whiskerLength = (turnRadius + reactionDistance) * AI_WHISKER_SAFETY_MULTIPLIER;
 
         const relevantPlayerTrail = trailPoints.slice(-AI_TRAIL_HISTORY);
         const relevantEnemyTrail = enemyTrailPoints.slice(-AI_TRAIL_HISTORY, -PLAYER_COLLISION_GRACE_PERIOD);
-        const allTrailsForAI = relevantPlayerTrail.concat(relevantEnemyTrail);
+        const allTrailsForAI = [relevantPlayerTrail, relevantEnemyTrail];
 
         const whiskerPoints = AI_WHISKER_ANGLES.map(angle => ({
             x: enemy.x + Math.sin(enemy.angle + angle) * whiskerLength,
@@ -578,18 +604,22 @@
     }
 
     function checkCollisions() {
-        if (trailPoints.some(p => isClose(enemy, p))) {
-            endGame(enemy, ENEMY_COLOR, enemySprite); return;
+        const playerTrailSafe = trailPoints.slice(0, -PLAYER_COLLISION_GRACE_PERIOD);
+        const enemyTrailSafe = enemyTrailPoints.slice(0, -PLAYER_COLLISION_GRACE_PERIOD);
+
+        if (isBikeCollidingWithTrail(enemy, trailPoints)) {
+             endGame(enemy, ENEMY_COLOR, enemySprite); return;
         }
-        if (enemyTrailPoints.slice(0, -PLAYER_COLLISION_GRACE_PERIOD).some(p => isClose(player, p))) {
-            endGame(player, PLAYER_COLOR, playerSprite); return;
+        if (isBikeCollidingWithTrail(player, enemyTrailSafe)) {
+             endGame(player, PLAYER_COLOR, playerSprite); return;
         }
-        if (trailPoints.slice(0, -PLAYER_COLLISION_GRACE_PERIOD).some(p => isClose(player, p))) {
-            endGame(player, PLAYER_COLOR, playerSprite); return;
+        if (isBikeCollidingWithTrail(player, playerTrailSafe)) {
+             endGame(player, PLAYER_COLOR, playerSprite); return;
         }
-        if (enemyTrailPoints.slice(0, -PLAYER_COLLISION_GRACE_PERIOD).some(p => isClose(enemy, p))) {
-            endGame(enemy, ENEMY_COLOR, enemySprite); return;
+        if (isBikeCollidingWithTrail(enemy, enemyTrailSafe)) {
+             endGame(enemy, ENEMY_COLOR, enemySprite); return;
         }
+
         if (Math.abs(player.x) > WORLD_BOUNDS || Math.abs(player.y) > WORLD_BOUNDS) {
             endGame(player, PLAYER_COLOR, playerSprite); return;
         }
@@ -637,7 +667,10 @@
                 bike.speedBoost.duration -= delta;
                 if (bike.speedBoost.duration <= 0) bike.speedBoost = null;
             }
-            const trailsToCheck = index === 0 ? [enemyTrailPoints.slice(-AI_TRAIL_HISTORY), trailPoints.slice(-AI_TRAIL_HISTORY, -PLAYER_COLLISION_GRACE_PERIOD)] : [trailPoints.slice(-AI_TRAIL_HISTORY), enemyTrailPoints.slice(-AI_TRAIL_HISTORY, -PLAYER_COLLISION_GRACE_PERIOD)];
+            const trailsToCheck = [
+                trailPoints.slice(-AI_TRAIL_HISTORY, index === 0 ? -PLAYER_COLLISION_GRACE_PERIOD : undefined),
+                enemyTrailPoints.slice(-AI_TRAIL_HISTORY, index === 1 ? -PLAYER_COLLISION_GRACE_PERIOD : undefined)
+            ];
             checkWallGrind(bike, trailsToCheck);
             if (bike.isGrinding) emitGrindParticle(bike, bike.grindingSide);
             emitBoostParticle(bike);
