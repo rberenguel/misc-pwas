@@ -2,17 +2,20 @@
 <html>
 <head>
     <title>Flux</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            background-color: #05050a;
-            font-family: 'Sixtyfour', sans-serif;
-            color: #fff;
-            user-select: none; /* Prevent text selection */
-            touch-action: manipulation;
-        }
+body, html {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #05050a;
+    font-family: 'Sixtyfour', sans-serif;
+    color: #fff;
+    -webkit-user-select: none; /* Safari */
+    user-select: none;
+    -webkit-touch-callout: none; /* Disable iOS callout menu */
+    touch-action: manipulation;
+}
         canvas {
             display: block;
         }
