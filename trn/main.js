@@ -38,10 +38,11 @@
     const BOOST_TURBO_PARTICLE_COUNT = 4;
 
     // --- AI Configuration ---
-    const AI_WHISKER_LENGTH = 75;
-    const AI_WHISKER_ANGLE = Math.PI / 4;
+    const TURN_RADIUS = PLAYER_SPEED / TURN_SPEED;
+    const AI_WHISKER_LENGTH = TURN_RADIUS;
+    const AI_WHISKER_ANGLES = [-Math.PI / 3, -Math.PI / 6, 0, Math.PI / 6, Math.PI / 3];
     const AI_UPDATE_INTERVAL = 5;
-    const AI_BOUNDARY_DANGER_ZONE = GRID_SIZE * 4;
+    const AI_TRAIL_HISTORY = 400;
 
     // --- PIXI App Setup ---
     const app = new PIXI.Application();
@@ -70,6 +71,7 @@
     const enemySprite = new PIXI.Graphics();
     world.addChild(enemySprite);
     let enemyIndicator, gameOverUI, powerupIndicator;
+    let gameOverTitle, gameOverSubtitle;
 
     // --- Game State ---
     let player, enemy;
@@ -105,25 +107,40 @@
     
     function setupGameOverUI() {
         gameOverUI = new PIXI.Container();
-        const title = new PIXI.Text({text: 'GAME OVER', style: new PIXI.TextStyle({
+        gameOverTitle = new PIXI.Text({text: '', style: new PIXI.TextStyle({
             fontFamily: 'Inter', fontSize: 64, fontWeight: 'bold', fill: 0xFFFFFF,
-            stroke: { color: 0x000000, width: 4 }
+            stroke: { color: 0x000000, width: 5 }, align: 'center'
         })});
-        title.anchor.set(0.5);
-        const subtitle = new PIXI.Text({text: 'Press SPACE or Tap to Restart', style: new PIXI.TextStyle({
-            fontFamily: 'Inter', fontSize: 24, fill: 0xCCCCCC
+        gameOverTitle.anchor.set(0.5);
+
+        gameOverSubtitle = new PIXI.Text({text: '', style: new PIXI.TextStyle({
+            fontFamily: 'Inter', fontSize: 24, fill: 0xCCCCCC, align: 'center'
         })});
-        subtitle.anchor.set(0.5);
-        subtitle.y = 50;
-        gameOverUI.addChild(title);
-        gameOverUI.addChild(subtitle);
+        gameOverSubtitle.anchor.set(0.5);
+        gameOverSubtitle.y = 60;
+
+        gameOverUI.addChild(gameOverTitle);
+        gameOverUI.addChild(gameOverSubtitle);
+        
         gameOverUI.x = app.screen.width / 2;
         gameOverUI.y = app.screen.height / 2;
         gameOverUI.visible = false;
+        
+        app.stage.addChild(gameOverUI);
+    }
+
+    function showGameOverUI(playerWon) {
+        gameOverTitle.text = playerWon ? 'YOU WIN!' : 'YOU LOSE';
+        gameOverTitle.style.fill = playerWon ? PLAYER_COLOR : ENEMY_COLOR;
+        gameOverSubtitle.text = 'Tap to Restart';
+        
+        const bounds = gameOverUI.getBounds();
+        gameOverUI.hitArea = new PIXI.Rectangle(bounds.x - gameOverUI.x, bounds.y - gameOverUI.y, bounds.width, bounds.height);
         gameOverUI.eventMode = 'static';
         gameOverUI.cursor = 'pointer';
-        gameOverUI.on('pointerdown', restartGame);
-        app.stage.addChild(gameOverUI);
+        gameOverUI.on('pointerdown', restartGame, this);
+
+        gameOverUI.visible = true;
     }
     
     function setupPowerupUI() {
@@ -201,6 +218,9 @@
         powerupInterval = setInterval(spawnPowerup, POWERUP_SPAWN_INTERVAL);
         enemyIndicator.visible = true;
         gameOverUI.visible = false;
+        gameOverUI.eventMode = 'none';
+        gameOverUI.off('pointerdown', restartGame);
+
         updatePowerupUI();
         setupBike(playerSprite, PLAYER_COLOR);
         setupBike(enemySprite, ENEMY_COLOR);
@@ -388,30 +408,42 @@
         if (Math.abs(point.x) > WORLD_BOUNDS || Math.abs(point.y) > WORLD_BOUNDS) {
             return true;
         }
-        return allTrails.some(trailPoint => {
+        for(const trailPoint of allTrails) {
             const dx = point.x - trailPoint.x;
             const dy = point.y - trailPoint.y;
-            return (dx * dx + dy * dy) < (TRAIL_WIDTH) ** 2;
-        });
+            if ((dx * dx + dy * dy) < (TRAIL_WIDTH) ** 2) return true;
+        }
+        return false;
     }
 
     function getAIInput() {
         if (enemy.powerup === 'T') activatePowerup(enemy);
-        const allTrailsForAI = trailPoints.concat(enemyTrailPoints.slice(0, -PLAYER_COLLISION_GRACE_PERIOD));
-        if (enemy.x > WORLD_BOUNDS - AI_BOUNDARY_DANGER_ZONE && Math.sin(enemy.angle) > 0) return -1;
-        if (enemy.x < -WORLD_BOUNDS + AI_BOUNDARY_DANGER_ZONE && Math.sin(enemy.angle) < 0) return 1;
-        if (enemy.y > WORLD_BOUNDS - AI_BOUNDARY_DANGER_ZONE && -Math.cos(enemy.angle) > 0) return 1;
-        if (enemy.y < -WORLD_BOUNDS + AI_BOUNDARY_DANGER_ZONE && -Math.cos(enemy.angle) < 0) return -1;
-        const whiskerPoints = [
-            { x: enemy.x + Math.sin(enemy.angle) * AI_WHISKER_LENGTH, y: enemy.y - Math.cos(enemy.angle) * AI_WHISKER_LENGTH },
-            { x: enemy.x + Math.sin(enemy.angle - AI_WHISKER_ANGLE) * AI_WHISKER_LENGTH, y: enemy.y - Math.cos(enemy.angle - AI_WHISKER_ANGLE) * AI_WHISKER_LENGTH },
-            { x: enemy.x + Math.sin(enemy.angle + AI_WHISKER_ANGLE) * AI_WHISKER_LENGTH, y: enemy.y - Math.cos(enemy.angle + AI_WHISKER_ANGLE) * AI_WHISKER_LENGTH }
-        ];
-        const [forwardBlocked, leftBlocked, rightBlocked] = whiskerPoints.map(p => isPointColliding(p, allTrailsForAI));
-        if (forwardBlocked) return !leftBlocked ? -1 : (!rightBlocked ? 1 : -1);
-        if (leftBlocked && !rightBlocked) return 0.5;
-        if (rightBlocked && !leftBlocked) return -0.5;
-        return 0;
+        
+        const relevantPlayerTrail = trailPoints.slice(-AI_TRAIL_HISTORY);
+        const relevantEnemyTrail = enemyTrailPoints.slice(-AI_TRAIL_HISTORY, -PLAYER_COLLISION_GRACE_PERIOD);
+        const allTrailsForAI = relevantPlayerTrail.concat(relevantEnemyTrail);
+
+        const whiskerPoints = AI_WHISKER_ANGLES.map(angle => ({
+            x: enemy.x + Math.sin(enemy.angle + angle) * AI_WHISKER_LENGTH,
+            y: enemy.y - Math.cos(enemy.angle + angle) * AI_WHISKER_LENGTH
+        }));
+        
+        const blocked = whiskerPoints.map(p => isPointColliding(p, allTrailsForAI));
+        const [farLeft, nearLeft, center, nearRight, farRight] = blocked;
+
+        if (center) {
+            if (!nearLeft && !farLeft) return -1;
+            if (!nearRight && !farRight) return 1;
+            return Math.random() > 0.5 ? 1 : -1;
+        }
+        
+        let turn = 0;
+        if (nearLeft) turn += 0.5;
+        if (farLeft) turn += 0.5;
+        if (nearRight) turn -= 0.5;
+        if (farRight) turn -= 0.5;
+        
+        return Math.max(-1, Math.min(1, turn));
     }
 
     function updateEnemyIndicator() {
@@ -473,7 +505,7 @@
         createExplosion(loser.x, loser.y, loserColor);
         loserSprite.alpha = 0;
         enemyIndicator.visible = false;
-        gameOverUI.visible = true;
+        showGameOverUI(loser === enemy);
         if (powerupInterval) clearInterval(powerupInterval);
     }
 
