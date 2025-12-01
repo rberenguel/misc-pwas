@@ -1,0 +1,18 @@
+{
+  "name": "Handwriting Profiler",
+  "short_name": "Dubay",
+  "description": "Italic handwriting analysis tool for profiling text patterns and joins",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1a202c",
+  "theme_color": "#2b6cb0",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
