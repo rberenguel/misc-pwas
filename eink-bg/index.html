@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>E-Ink Image Adjuster</title>
+    <style>
+        /* Base Reset & Colors */
+        :root {
+            --bg-dark: #111;
+            --bg-panel: #111827; /* gray-900 */
+            --border-color: #1f2937; /* gray-800 */
+            --text-main: #eee;
+            --text-muted: #9ca3af; /* gray-400 */
+            --accent-blue: #3b82f6;
+            --btn-blue: #1d4ed8;
+            --btn-blue-hover: #2563eb;
+            --btn-green: #047857;
+            --btn-green-hover: #059669;
+            --btn-gray: #374151;
+            --btn-gray-hover: #4b5563;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            touch-action: none;
+            overscroll-behavior: none;
+        }
+
+        /* Layout Components */
+        .header {
+            background-color: var(--bg-panel);
+            padding: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            z-index: 10;
+        }
+
+        .title {
+            font-size: 0.875rem;
+            font-weight: bold;
+            color: #d1d5db; /* gray-300 */
+        }
+        @media (min-width: 768px) { .title { font-size: 1rem; } }
+
+        .header-controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .main {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .footer {
+            background-color: var(--bg-panel);
+            padding: 1rem;
+            border-top: 1px solid var(--border-color);
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        /* UI Elements */
+        .btn {
+            padding: 0.375rem 0.75rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            color: white;
+            transition: background-color 0.2s;
+            text-transform: uppercase;
+        }
+
+        .btn-blue { background-color: var(--btn-blue); }
+        .btn-blue:hover { background-color: var(--btn-blue-hover); }
+
+        .btn-green { background-color: var(--btn-green); }
+        .btn-green:hover { background-color: var(--btn-green-hover); }
+
+        .btn-gray { background-color: var(--btn-gray); text-transform: none; }
+        .btn-gray:hover { background-color: var(--btn-gray-hover); }
+
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.75rem;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .slider-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+        @media (min-width: 768px) {
+            .slider-grid { grid-template-columns: 1fr 1fr; }
+        }
+
+        .slider-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .label-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .select-input {
+            background-color: #1f2937;
+            border: 1px solid #374151;
+            color: #eee;
+            font-size: 0.75rem;
+            border-radius: 0.25rem;
+            padding: 0.375rem;
+            width: 100%;
+            outline: none;
+        }
+        .select-input:focus { border-color: var(--accent-blue); }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            cursor: pointer;
+            user-select: none;
+        }
+        .checkbox-label input { accent-color: var(--accent-blue); }
+
+        /* Workspace & Canvas */
+        .checkered {
+            background-image: linear-gradient(45deg, #222 25%, transparent 25%), linear-gradient(-45deg, #222 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #222 75%), linear-gradient(-45deg, transparent 75%, #222 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+
+        .viewport-mask {
+            position: relative;
+            /* shadow-[0_0_0_9999px_rgba(0,0,0,0.85)] */
+            box-shadow: 0 0 0 9999px rgba(0,0,0,0.85);
+            border: 2px solid rgba(234, 179, 8, 0.5);
+            pointer-events: none;
+            transition: all 0.3s;
+            z-index: 10;
+        }
+
+        .viewport-dims {
+            position: absolute;
+            top: 0.5rem;
+            left: 0.5rem;
+            font-size: 0.75rem;
+            color: rgba(234, 179, 8, 0.8);
+            font-family: monospace;
+        }
+
+        .canvas-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: auto;
+            cursor: move;
+        }
+
+        .hidden { display: none; }
+
+        /* Custom Range Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: var(--accent-blue); margin-top: -6px; cursor: pointer;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; background: #444; border-radius: 2px;
+        }
+        input[type=range]:focus { outline: none; }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="header">
+        <h1 class="title">E-INK ADJUSTER</h1>
+        <div class="header-controls">
+            <button onclick="document.getElementById('fileInput').click()" class="btn btn-blue">LOAD IMG</button>
+            <input type="file" id="fileInput" accept="image/*" class="hidden">
+            <button onclick="exportFormat('jpg')" class="btn btn-green">SAVE JPG</button>
+            <button onclick="exportFormat('bmp')" class="btn btn-green">SAVE BMP</button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="main checkered" id="workspace">
+        <!-- The visual viewport mask -->
+        <!-- z-index:10 ensures the frame and shadow render ON TOP of the canvas image -->
+        <div id="viewport-container" class="viewport-mask" style="width: 480px; height: 800px;">
+            <div class="viewport-dims" id="viewport-dims">480x800</div>
+        </div>
+        
+        <!-- The Canvas (Rendered behind the mask logically, but handled via JS for transforms) -->
+        <canvas id="canvas" class="canvas-layer"></canvas>
+    </main>
+
+    <!-- Controls -->
+    <footer class="footer">
+        
+        <!-- Top Row: Toggles -->
+        <div class="control-row">
+            <div class="control-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="preview-dither">
+                    <span>Live Dither</span>
+                </label>
+                <button onclick="rotateImage()" class="btn btn-gray">Img ↻</button>
+                <button onclick="toggleDevice()" class="btn btn-blue" id="device-btn" style="min-width: 120px;">XTEINK 480x800</button>
+                <button onclick="toggleOrientation()" class="btn btn-gray" title="Rotate Frame">⬒</button>
+            </div>
+            <div style="font-family: monospace; color: var(--text-muted);" id="scale-indicator">100%</div>
+        </div>
+
+        <!-- Sliders -->
+        <div class="slider-grid">
+            <div class="slider-container">
+                <div class="label-row">
+                    <span>Brightness</span>
+                    <span id="val-bright">100%</span>
+                </div>
+                <input type="range" id="brightness" min="0" max="200" value="100">
+            </div>
+            <div class="slider-container">
+                <div class="label-row">
+                    <span>Contrast</span>
+                    <span id="val-contrast">100%</span>
+                </div>
+                <input type="range" id="contrast" min="0" max="200" value="100">
+            </div>
+        </div>
+
+        <!-- Dither Select -->
+        <div class="slider-container">
+            <div class="label-row">
+                <span>Algorithm</span>
+            </div>
+            <select id="dither-algo" class="select-input">
+                <option value="floyd">Floyd-Steinberg (Smooth)</option>
+                <option value="atkinson">Atkinson (HyperCard / Mac)</option>
+                <option value="bayer">Bayer 4x4 (Ordered)</option>
+                <option value="random">Random (Noise)</option>
+                <option value="threshold">Simple Threshold (Hard)</option>
+            </select>
+        </div>
+    </footer>
+
+    <!-- Hidden canvas for processing -->
+    <canvas id="process-canvas" class="hidden"></canvas>
+
+<script>
+    // --- State ---
+    const PRESETS = [
+        { name: 'XTEINK', w: 480, h: 800 },
+        { name: 'KINDLE', w: 758, h: 1024 }
+    ];
+
+    let state = {
+        img: null,
+        x: 0,
+        y: 0,
+        scale: 1,
+        rotation: 0,
+        presetIndex: 0,
+        isPortrait: true,
+        brightness: 100,
+        contrast: 100,
+        ditherPreview: false
+    };
+
+    // --- DOM Elements ---
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const workspace = document.getElementById('workspace');
+    const viewportContainer = document.getElementById('viewport-container');
+    const fileInput = document.getElementById('fileInput');
+
+    // --- Helpers ---
+    function getTargetDims() {
+        const p = PRESETS[state.presetIndex];
+        return state.isPortrait ? { w: p.w, h: p.h } : { w: p.h, h: p.w };
+    }
+
+    // --- Initialization ---
+    function resizeWorkspace() {
+        canvas.width = workspace.clientWidth;
+        canvas.height = workspace.clientHeight;
+        updateScaleFactor(); // Adjust viewport visual size to fit screen
+        draw();
+    }
+    window.addEventListener('resize', resizeWorkspace);
+
+    function updateScaleFactor() {
+        // Calculate how much we need to scale the "visual viewport" 
+        // so the box fits in the user's browser window
+        const padding = 40;
+        const availableW = workspace.clientWidth - padding;
+        const availableH = workspace.clientHeight - padding;
+        
+        const { w, h } = getTargetDims();
+
+        const scaleW = availableW / w;
+        const scaleH = availableH / h;
+        const scale = Math.min(scaleW, scaleH, 1); // Never scale up visually > 1x essentially
+
+        viewportContainer.style.width = `${w}px`;
+        viewportContainer.style.height = `${h}px`;
+        viewportContainer.style.transform = `scale(${scale})`;
+        
+        document.getElementById('viewport-dims').innerText = `${w}x${h}`;
+        document.getElementById('device-btn').innerText = `${PRESETS[state.presetIndex].name} ${w}x${h}`;
+    }
+
+    // --- Image Loading ---
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                state.img = img;
+                state.x = 0;
+                state.y = 0;
+                state.rotation = 0;
+                
+                // Auto-fit logic
+                const { w, h } = getTargetDims();
+                
+                const ratio = Math.max(w / img.width, h / img.height);
+                state.scale = ratio;
+                
+                // Center it
+                state.x = (canvas.width - img.width * state.scale) / 2;
+                state.y = (canvas.height - img.height * state.scale) / 2;
+
+                draw();
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+
+    // --- Interaction (Pan/Zoom) ---
+    let isDragging = false;
+    let startX, startY;
+    let lastX, lastY;
+    
+    // Mouse
+    canvas.addEventListener('mousedown', e => {
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        lastX = state.x;
+        lastY = state.y;
+    });
+
+    window.addEventListener('mousemove', e => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        state.x = lastX + dx;
+        state.y = lastY + dy;
+        draw();
+    });
+
+    window.addEventListener('mouseup', () => isDragging = false);
+
+    // Wheel Zoom
+    canvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        const zoomIntensity = 0.1;
+        const delta = e.deltaY > 0 ? (1 - zoomIntensity) : (1 + zoomIntensity);
+        
+        // Zoom towards center of canvas (simplified)
+        // A robust implementation zooms towards mouse pointer, 
+        // but center is sufficient for this specific use case
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+
+        const newScale = state.scale * delta;
+        
+        // Adjust XY to zoom around center
+        state.x = cx - (cx - state.x) * delta;
+        state.y = cy - (cy - state.y) * delta;
+        state.scale = newScale;
+        
+        document.getElementById('scale-indicator').innerText = Math.round(state.scale * 100) + "%";
+        draw();
+    }, { passive: false });
+
+    // Touch (Basic Pinch/Drag)
+    let initialDist = 0;
+    let initialScale = 1;
+
+    canvas.addEventListener('touchstart', e => {
+        if (e.touches.length === 1) {
+            isDragging = true;
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+            lastX = state.x;
+            lastY = state.y;
+        } else if (e.touches.length === 2) {
+            isDragging = false;
+            initialDist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            initialScale = state.scale;
+        }
+    });
+
+    canvas.addEventListener('touchmove', e => {
+        e.preventDefault();
+        if (e.touches.length === 1 && isDragging) {
+            const dx = e.touches[0].clientX - startX;
+            const dy = e.touches[0].clientY - startY;
+            state.x = lastX + dx;
+            state.y = lastY + dy;
+            draw();
+        } else if (e.touches.length === 2) {
+            const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            const delta = dist / initialDist;
+            
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+
+            const newScale = initialScale * delta;
+            state.x = cx - (cx - lastX) * delta; // Approximate center zoom for touch
+            state.y = cy - (cy - lastY) * delta;
+            state.scale = newScale;
+            draw();
+        }
+    }, { passive: false });
+
+    // --- Controls ---
+    document.getElementById('brightness').addEventListener('input', e => {
+        state.brightness = e.target.value;
+        document.getElementById('val-bright').innerText = state.brightness + "%";
+        draw();
+    });
+    
+    document.getElementById('contrast').addEventListener('input', e => {
+        state.contrast = e.target.value;
+        document.getElementById('val-contrast').innerText = state.contrast + "%";
+        draw();
+    });
+
+    document.getElementById('preview-dither').addEventListener('change', e => {
+        state.ditherPreview = e.target.checked;
+        draw();
+    });
+
+    document.getElementById('dither-algo').addEventListener('change', () => {
+        if(state.ditherPreview) draw();
+    });
+
+    function rotateImage() {
+        state.rotation = (state.rotation + 90) % 360;
+        draw();
+    }
+
+    function toggleOrientation() {
+        state.isPortrait = !state.isPortrait;
+        updateScaleFactor();
+        draw();
+    }
+
+    function toggleDevice() {
+        state.presetIndex = (state.presetIndex + 1) % PRESETS.length;
+        updateScaleFactor();
+        draw();
+    }
+
+    // --- Core Rendering ---
+    function draw() {
+        // Clear background
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (!state.img) {
+            ctx.fillStyle = "#333";
+            ctx.font = "16px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("No Image Loaded", canvas.width/2, canvas.height/2);
+            return;
+        }
+
+        ctx.save();
+        
+        // Apply Filters
+        ctx.filter = `brightness(${state.brightness}%) contrast(${state.contrast}%) grayscale(100%)`;
+
+        // Transform
+        ctx.translate(state.x, state.y);
+        ctx.scale(state.scale, state.scale);
+        
+        // Rotation (Center of image)
+        ctx.translate(state.img.width/2, state.img.height/2);
+        ctx.rotate(state.rotation * Math.PI / 180);
+        ctx.translate(-state.img.width/2, -state.img.height/2);
+        
+        ctx.drawImage(state.img, 0, 0);
+        
+        ctx.restore();
+
+        // Dither Preview Overlay (Heavy calculation, use sparingly or optimistically)
+        if (state.ditherPreview) {
+           applyDitherPreview();
+        }
+    }
+
+    function applyDitherPreview() {
+        const w = canvas.width;
+        const h = canvas.height;
+        const imgData = ctx.getImageData(0, 0, w, h);
+        const algo = document.getElementById('dither-algo').value;
+
+        processDither(imgData, w, h, algo);
+        ctx.putImageData(imgData, 0, 0);
+    }
+
+    // --- Image Processing & Export ---
+    function processDither(imgData, width, height, algo) {
+        const d = imgData.data;
+        
+        if (algo === 'threshold') {
+            for (let i = 0; i < d.length; i += 4) {
+                const val = d[i] < 128 ? 0 : 255;
+                d[i] = d[i+1] = d[i+2] = val;
+            }
+        } 
+        else if (algo === 'random') {
+             for (let i = 0; i < d.length; i += 4) {
+                const val = d[i] > (Math.random() * 255) ? 255 : 0;
+                d[i] = d[i+1] = d[i+2] = val;
+            }
+        }
+        else if (algo === 'bayer') {
+            // 4x4 Bayer Matrix
+            const thresholdMap = [
+                [ 1,  9,  3, 11],
+                [13,  5, 15,  7],
+                [ 4, 12,  2, 10],
+                [16,  8, 14,  6]
+            ];
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const i = (y * width + x) * 4;
+                    const mapVal = thresholdMap[x % 4][y % 4] * 17; // Scale to 0-255 roughly
+                    const val = d[i] + (mapVal - 128); // Add noise
+                    const final = val < 128 ? 0 : 255;
+                    d[i] = d[i+1] = d[i+2] = final;
+                }
+            }
+        } 
+        else if (algo === 'atkinson') {
+            // Atkinson
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const idx = (y * width + x) * 4;
+                    const oldPixel = d[idx];
+                    const newPixel = oldPixel < 128 ? 0 : 255;
+                    d[idx] = d[idx+1] = d[idx+2] = newPixel;
+                    
+                    const quantError = Math.floor((oldPixel - newPixel) / 8); 
+                    
+                    if (quantError === 0) continue;
+                    
+                    const distribute = (dx, dy) => {
+                        if (x + dx >= 0 && x + dx < width && y + dy < height) {
+                            const nIdx = ((y + dy) * width + (x + dx)) * 4;
+                            d[nIdx] += quantError; 
+                        }
+                    };
+
+                    distribute(1, 0); distribute(2, 0); distribute(-1, 1);
+                    distribute(0, 1); distribute(1, 1); distribute(0, 2);
+                }
+            }
+        }
+        else if (algo === 'floyd') {
+            // Floyd-Steinberg
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const idx = (y * width + x) * 4;
+                    const oldPixel = d[idx];
+                    const newPixel = oldPixel < 128 ? 0 : 255;
+                    d[idx] = d[idx+1] = d[idx+2] = newPixel;
+                    
+                    const quantError = oldPixel - newPixel;
+
+                    // Distribute error
+                    if (x + 1 < width) 
+                        d[idx + 4] += quantError * 7 / 16;
+                    if (x - 1 >= 0 && y + 1 < height) 
+                        d[idx + width * 4 - 4] += quantError * 3 / 16;
+                    if (y + 1 < height) 
+                        d[idx + width * 4] += quantError * 5 / 16;
+                    if (x + 1 < width && y + 1 < height) 
+                        d[idx + width * 4 + 4] += quantError * 1 / 16;
+                }
+            }
+        }
+    }
+
+    function exportFormat(format) {
+        if (!state.img) return alert("Load an image first.");
+
+        const { w: targetW, h: targetH } = getTargetDims();
+
+        // 1. Create a temp canvas exactly the size of the target
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = targetW;
+        tempCanvas.height = targetH;
+        const tCtx = tempCanvas.getContext('2d');
+
+        // 2. Render Scene Logic (Inverse Transform)
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        
+        tCtx.fillStyle = "black";
+        tCtx.fillRect(0, 0, targetW, targetH);
+        tCtx.filter = `brightness(${state.brightness}%) contrast(${state.contrast}%) grayscale(100%)`;
+        tCtx.translate(targetW / 2, targetH / 2);
+        
+        const screenCenterX = workspace.clientWidth / 2;
+        const screenCenterY = workspace.clientHeight / 2;
+        
+        // Get visual scale of the viewport container
+        const viewportScale = parseFloat(viewportContainer.style.transform.replace('scale(','').replace(')','')) || 1;
+        
+        const effectiveScale = state.scale / viewportScale;
+        
+        const visualCenterX = state.x + (state.img.width * state.scale) / 2;
+        const visualCenterY = state.y + (state.img.height * state.scale) / 2;
+        
+        const deltaX = visualCenterX - screenCenterX;
+        const deltaY = visualCenterY - screenCenterY;
+        
+        const realDeltaX = deltaX / viewportScale;
+        const realDeltaY = deltaY / viewportScale;
+        
+        tCtx.translate(realDeltaX, realDeltaY);
+        tCtx.scale(effectiveScale, effectiveScale);
+        tCtx.rotate(state.rotation * Math.PI / 180);
+        tCtx.drawImage(state.img, -state.img.width/2, -state.img.height/2);
+        
+        // 3. Get Data & Dither
+        const finalData = tCtx.getImageData(0, 0, targetW, targetH);
+        processDither(finalData, targetW, targetH, document.getElementById('dither-algo').value);
+        tCtx.putImageData(finalData, 0, 0); 
+
+        // 4. Download
+        if (format === 'bmp') {
+            const bmpBlob = createBMP(finalData.data, targetW, targetH);
+            downloadBlob(bmpBlob, `eink_${targetW}x${targetH}.bmp`);
+        } else if (format === 'jpg') {
+            tempCanvas.toBlob(blob => {
+                downloadBlob(blob, `eink_${targetW}x${targetH}.jpg`);
+            }, 'image/jpeg', 0.9);
+        }
+    }
+    
+    function downloadBlob(blob, filename) {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        link.click();
+    }
+
+    // --- BMP Encoder (24-bit RGB) ---
+    function createBMP(rgbaData, width, height) {
+        const rowSize = Math.floor((24 * width + 31) / 32) * 4; 
+        const pixelArraySize = rowSize * height;
+        const fileSize = 54 + pixelArraySize; 
+        
+        const buffer = new ArrayBuffer(fileSize);
+        const view = new DataView(buffer);
+
+        // BMP Header
+        view.setUint8(0, 0x42); 
+        view.setUint8(1, 0x4D); 
+        view.setUint32(2, fileSize, true); 
+        view.setUint16(6, 0, true); 
+        view.setUint16(8, 0, true); 
+        view.setUint32(10, 54, true); 
+
+        // DIB Header
+        view.setUint32(14, 40, true); 
+        view.setInt32(18, width, true); 
+        view.setInt32(22, -height, true); 
+        view.setUint16(26, 1, true); 
+        view.setUint16(28, 24, true); 
+        view.setUint32(30, 0, true); 
+        view.setUint32(34, pixelArraySize, true); 
+        view.setInt32(38, 2835, true); 
+        view.setInt32(42, 2835, true); 
+        view.setUint32(46, 0, true); 
+        view.setUint32(50, 0, true); 
+
+        // Pixel Data
+        let p = 54;
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const i = (y * width + x) * 4;
+                const r = rgbaData[i];
+                const g = rgbaData[i+1];
+                const b = rgbaData[i+2];
+                
+                // Write BGR
+                view.setUint8(p++, b);
+                view.setUint8(p++, g);
+                view.setUint8(p++, r);
+            }
+            // Padding
+            const padding = rowSize - (width * 3);
+            for (let k = 0; k < padding; k++) {
+                view.setUint8(p++, 0);
+            }
+        }
+
+        return new Blob([buffer], { type: 'image/bmp' });
+    }
+
+    // Init
+    resizeWorkspace();
+</script>
+</body>
+</html>
