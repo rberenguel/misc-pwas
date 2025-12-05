@@ -5,20 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>E-Ink Image Adjuster</title>
     <style>
-        /* Base Reset & Colors */
+        /* Base Reset & Colors - Solarized Light */
         :root {
-            --bg-dark: #111;
-            --bg-panel: #111827; /* gray-900 */
-            --border-color: #1f2937; /* gray-800 */
-            --text-main: #eee;
-            --text-muted: #9ca3af; /* gray-400 */
-            --accent-blue: #3b82f6;
-            --btn-blue: #1d4ed8;
-            --btn-blue-hover: #2563eb;
-            --btn-green: #047857;
-            --btn-green-hover: #059669;
-            --btn-gray: #374151;
-            --btn-gray-hover: #4b5563;
+            --bg-dark: #fdf6e3; /* Solarized base3 */
+            --bg-panel: #eee8d5; /* Solarized base2 */
+            --border-color: #93a1a1; /* Solarized base1 */
+            --text-main: #657b83; /* Solarized base00 */
+            --text-muted: #93a1a1; /* Solarized base1 */
+            --accent-blue: #268bd2; /* Solarized blue */
+            --btn-blue: #268bd2;
+            --btn-blue-hover: #2aa198; /* Solarized cyan */
+            --btn-green: #859900; /* Solarized green */
+            --btn-green-hover: #b58900; /* Solarized yellow */
+            --btn-gray: #93a1a1;
+            --btn-gray-hover: #657b83;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -49,7 +49,7 @@
         .title {
             font-size: 0.875rem;
             font-weight: bold;
-            color: #d1d5db; /* gray-300 */
+            color: #586e75; /* Solarized base01 */
         }
         @media (min-width: 768px) { .title { font-size: 1rem; } }
 
@@ -135,9 +135,9 @@
         }
 
         .select-input {
-            background-color: #1f2937;
-            border: 1px solid #374151;
-            color: #eee;
+            background-color: #fdf6e3;
+            border: 1px solid #93a1a1;
+            color: #657b83;
             font-size: 0.75rem;
             border-radius: 0.25rem;
             padding: 0.375rem;
@@ -157,7 +157,7 @@
 
         /* Workspace & Canvas */
         .checkered {
-            background-image: linear-gradient(45deg, #222 25%, transparent 25%), linear-gradient(-45deg, #222 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #222 75%), linear-gradient(-45deg, transparent 75%, #222 75%);
+            background-image: linear-gradient(45deg, #eee8d5 25%, transparent 25%), linear-gradient(-45deg, #eee8d5 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #eee8d5 75%), linear-gradient(-45deg, transparent 75%, #eee8d5 75%);
             background-size: 20px 20px;
             background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
         }
@@ -165,8 +165,8 @@
         .viewport-mask {
             position: relative;
             /* shadow-[0_0_0_9999px_rgba(0,0,0,0.85)] */
-            box-shadow: 0 0 0 9999px rgba(0,0,0,0.85);
-            border: 2px solid rgba(234, 179, 8, 0.5);
+            box-shadow: 0 0 0 9999px rgba(0,0,0,0.65);
+            border: 2px solid #dc322f;
             pointer-events: none;
             transition: all 0.3s;
             z-index: 10;
@@ -177,7 +177,7 @@
             top: 0.5rem;
             left: 0.5rem;
             font-size: 0.75rem;
-            color: rgba(234, 179, 8, 0.8);
+            color: #dc322f;
             font-family: monospace;
         }
 
@@ -199,7 +199,7 @@
             -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: var(--accent-blue); margin-top: -6px; cursor: pointer;
         }
         input[type=range]::-webkit-slider-runnable-track {
-            width: 100%; height: 4px; background: #444; border-radius: 2px;
+            width: 100%; height: 4px; background: #93a1a1; border-radius: 2px;
         }
         input[type=range]:focus { outline: none; }
     </style>
@@ -208,7 +208,7 @@
 
     <!-- Header -->
     <header class="header">
-        <h1 class="title">E-INK ADJUSTER</h1>
+        <h1 class="title">Image adjuster for E-Ink Lock screen images</h1>
         <div class="header-controls">
             <button onclick="document.getElementById('fileInput').click()" class="btn btn-blue">LOAD IMG</button>
             <input type="file" id="fileInput" accept="image/*" class="hidden">
@@ -236,7 +236,7 @@
         <div class="control-row">
             <div class="control-group">
                 <label class="checkbox-label">
-                    <input type="checkbox" id="preview-dither">
+                    <input type="checkbox" id="preview-dither" checked>
                     <span>Live Dither</span>
                 </label>
                 <button onclick="rotateImage()" class="btn btn-gray">Img ↻</button>
@@ -267,12 +267,13 @@
         <!-- Dither Select -->
         <div class="slider-container">
             <div class="label-row">
-                <span>Algorithm</span>
+                <span>Dithering algorithm</span>
             </div>
             <select id="dither-algo" class="select-input">
-                <option value="floyd">Floyd-Steinberg (Smooth)</option>
-                <option value="atkinson">Atkinson (HyperCard / Mac)</option>
+                <option value="atkinson" selected>Atkinson (HyperCard / Mac)</option>
                 <option value="bayer">Bayer 4x4 (Ordered)</option>
+                <option value="bluenoise">Blue Noise (Fil)</option>
+                <option value="floyd">Floyd-Steinberg (Smooth)</option>
                 <option value="random">Random (Noise)</option>
                 <option value="threshold">Simple Threshold (Hard)</option>
             </select>
@@ -299,7 +300,7 @@
         isPortrait: true,
         brightness: 100,
         contrast: 100,
-        ditherPreview: false
+        ditherPreview: true
     };
 
     // --- DOM Elements ---
@@ -515,7 +516,7 @@
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         if (!state.img) {
-            ctx.fillStyle = "#333";
+            ctx.fillStyle = "#93a1a1";
             ctx.font = "16px sans-serif";
             ctx.textAlign = "center";
             ctx.fillText("No Image Loaded", canvas.width/2, canvas.height/2);
@@ -556,6 +557,27 @@
         ctx.putImageData(imgData, 0, 0);
     }
 
+    // --- Pseudo-Blue Noise (by Fil) ---
+    function pseudoblue() {
+        // The pseudo-blue noise function by Fil https://observablehq.com/@fil/pseudoblue
+        const xmix = (x, y) =>
+            ((x * 212281 + y * 384817) & 0x5555555) * 0.003257328990228013;
+        const ymix = (x, y) =>
+            ((x * 484829 + y * 112279) & 0x5555555) * 0.002004008016032064;
+        const s = 6;
+        let a, b;
+        return (x, y) => {
+            let v = 0;
+            for (let i = 0; i < s; ++i) {
+                b = y;
+                a = 1 & (x ^ xmix((x >>= 1), (y >>= 1)));
+                b = 1 & (b ^ ymix(x, y));
+                v = (v << 2) | (a + (b << 1) + 1) % 4;
+            }
+            return v / (1 << (s << 1));
+        };
+    }
+
     // --- Image Processing & Export ---
     function processDither(imgData, width, height, algo) {
         const d = imgData.data;
@@ -570,6 +592,18 @@
              for (let i = 0; i < d.length; i += 4) {
                 const val = d[i] > (Math.random() * 255) ? 255 : 0;
                 d[i] = d[i+1] = d[i+2] = val;
+            }
+        }
+        else if (algo === 'bluenoise') {
+            // Blue Noise (Pseudo-blue by Fil)
+            const blu = pseudoblue();
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const i = (y * width + x) * 4;
+                    const threshold = blu(x, y) * 255;
+                    const val = d[i] > threshold ? 255 : 0;
+                    d[i] = d[i+1] = d[i+2] = val;
+                }
             }
         }
         else if (algo === 'bayer') {
