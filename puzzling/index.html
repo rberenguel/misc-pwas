@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Puzzle Collection</title>
+    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="manifest" href="manifest.json" />
+    <script src="lib/idb-keyval.js"></script>
+    <style>
+      .menu-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 20px;
+        width: 100%;
+        max-width: 600px;
+      }
+      .menu-card {
+        background: var(--panel-bg);
+        padding: 30px;
+        border-radius: 12px;
+        text-align: center;
+        box-shadow: 0 4px 6px var(--card-hover);
+        text-decoration: none;
+        color: var(--text-color);
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 180px;
+        border: 1px solid var(--border-color);
+      }
+      .menu-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 12px var(--card-hover);
+        border-color: var(--primary-color);
+      }
+      .menu-card h2 {
+        font-size: 24px;
+        margin-bottom: 10px;
+        color: var(--primary-color);
+      }
+      .menu-card p {
+        font-size: 14px;
+        color: var(--text-secondary);
+        line-height: 1.5;
+      }
+      .icon {
+        font-size: 40px;
+        margin-bottom: 15px;
+      }
+      .header-controls {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+      }
+      .theme-toggle {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        padding: 8px;
+        border-radius: 50%;
+        transition: background 0.2s;
+      }
+      .theme-toggle:hover {
+        background: rgba(0, 0, 0, 0.05);
+      }
+      body.dark-mode .theme-toggle:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+      .container {
+        position: relative; /* For header controls */
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header-controls">
+        <button class="theme-toggle" id="theme-btn" title="Toggle Dark Mode">
+          🌓
+        </button>
+      </div>
+
+      <h1>Puzzle Collection</h1>
+      <div class="note" style="margin-bottom: 30px">
+        A suite of logical puzzles. Play interactively or generate books to
+        print.
+      </div>
+
+      <div class="menu-grid">
+        <a href="maze.html" class="menu-card">
+          <div class="icon">🕸️</div>
+          <h2>Maze</h2>
+          <p>
+            Navigate complex labyrinths. Find your way from the start to the
+            exit in randomly generated mazes.
+          </p>
+        </a>
+        <a href="skyscrapers.html" class="menu-card">
+          <div class="icon">🏙️</div>
+          <h2>Skyscrapers</h2>
+          <p>
+            A logic puzzle where you place buildings in a grid. Clues tell you
+            how many buildings are visible from that vantage point.
+          </p>
+        </a>
+        <a href="slider.html" class="menu-card">
+          <div class="icon">❄️</div>
+          <h2>Ice Slide</h2>
+          <p>
+            Slide on the ice to reach the target. Once you start moving, you
+            can't stop until you hit a wall or obstacle.
+          </p>
+        </a>
+      </div>
+    </div>
+
+    <script>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker
+          .register("sw.js")
+          .catch((err) => console.log(err));
+      }
+
+      // Theme Logic
+      const btn = document.getElementById("theme-btn");
+      const body = document.body;
+
+      async function initTheme() {
+        if (typeof idbKeyval !== "undefined") {
+          const isDark = await idbKeyval.get("darkMode");
+          if (isDark) {
+            body.classList.add("dark-mode");
+          }
+        }
+      }
+
+      btn.addEventListener("click", async () => {
+        const isDark = body.classList.toggle("dark-mode");
+        if (typeof idbKeyval !== "undefined") {
+          await idbKeyval.set("darkMode", isDark);
+        }
+      });
+
+      initTheme();
+    </script>
+  </body>
+</html>

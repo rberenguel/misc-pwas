@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Maze & MazeBook</title>
+    <link rel="stylesheet" href="css/styles.css" />
+    <script src="lib/idb-keyval.js"></script>
+    <script src="lib/jszip.min.js"></script>
+    <script src="js/shared/epub-generator.js"></script>
+    <script src="js/shared/app-manager.js"></script>
+    <script src="js/maze.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Maze Generator</h1>
+
+      <canvas id="canvas"></canvas>
+
+      <div class="tabs">
+        <button class="tab-btn active" data-target="play-panel">Play</button>
+        <button class="tab-btn" data-target="book-panel">Book</button>
+      </div>
+
+      <!-- Play Panel -->
+      <div id="play-panel" class="tab-content active controls-panel">
+        <button class="btn" onclick="app.play()">Regenerate</button>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Width</label>
+            <input type="number" id="p_w" value="480" />
+          </div>
+          <div class="form-group">
+            <label>Height</label>
+            <input type="number" id="p_h" value="780" />
+          </div>
+          <div class="form-group">
+            <label>Cell</label>
+            <input type="number" id="p_c" value="30" />
+          </div>
+        </div>
+        <div class="note">Tap maze to toggle solution</div>
+      </div>
+
+      <!-- Book Panel -->
+      <div id="book-panel" class="tab-content controls-panel">
+        <div class="form-group">
+          <label>Book Title</label>
+          <input type="text" id="b_title" value="Maze Collection Vol. 1" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Width</label>
+            <input type="number" id="b_w" value="600" />
+          </div>
+          <div class="form-group">
+            <label>Height</label>
+            <input type="number" id="b_h" value="780" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Cell Size</label>
+            <input type="number" id="b_c" value="20" />
+          </div>
+          <div class="form-group">
+            <label>Count</label>
+            <input type="number" id="b_n" value="50" />
+          </div>
+        </div>
+        <div class="form-row">
+          <button class="btn" id="btn-gen" onclick="app.generate('epub')">
+            Download EPUB
+          </button>
+          <button
+            class="btn btn-secondary"
+            id="btn-zip"
+            onclick="app.generate('zip')"
+          >
+            Download ZIP
+          </button>
+        </div>
+        <div id="status" class="status"></div>
+      </div>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+
+      // App Controller
+      const app = {
+        manager: null,
+        maze: null,
+        showSol: false,
+
+        init: function () {
+          this.manager = new AppManager({
+            appName: "Maze",
+            onResize: () => this.play(), // Regenerate/Redraw on tab switch? Or just redraw? For now regenerate is easier to fit dimensions
+          });
+          this.play();
+
+          // Interactive click
+          canvas.addEventListener("click", (e) => {
+            if (this.manager.mode === "play") {
+              e.preventDefault();
+              this.showSol = !this.showSol;
+              if (this.maze) this.maze.draw(ctx, this.showSol);
+            }
+          });
+        },
+
+        play: function () {
+          const w = parseInt(document.getElementById("p_w").value) || 480;
+          const h = parseInt(document.getElementById("p_h").value) || 780;
+          const c = parseInt(document.getElementById("p_c").value) || 30;
+
+          canvas.width = w;
+          canvas.height = h;
+
+          this.maze = new Maze(w, h, c);
+          this.showSol = false;
+          this.maze.draw(ctx, false);
+        },
+
+        generate: async function (type) {
+          const btnGen = document.getElementById("btn-gen");
+          const btnZip = document.getElementById("btn-zip");
+          const status = document.getElementById("status");
+          const title = document.getElementById("b_title").value;
+          const w = parseInt(document.getElementById("b_w").value);
+          const h = parseInt(document.getElementById("b_h").value);
+          const c = parseInt(document.getElementById("b_c").value);
+          const n = parseInt(document.getElementById("b_n").value);
+
+          btnGen.disabled = true;
+          btnZip.disabled = true;
+
+          const gen = new EpubGenerator();
+
+          // Use a separate canvas or resize current temporarily? Resize current is fine.
+          const oldW = canvas.width,
+            oldH = canvas.height;
+          canvas.width = w;
+          canvas.height = h;
+
+          try {
+            for (let i = 1; i <= n; i++) {
+              status.innerText = `Generating ${i}/${n}...`;
+              await new Promise((r) => setTimeout(r, 0)); // Yield
+
+              const m = new Maze(w, h, c);
+
+              // Puzzle
+              m.draw(ctx, false);
+              const pData = canvas.toDataURL("image/png").split(",")[1];
+
+              // Solution
+              // Ensure solution is drawn with high contrast for book (black/dark grey)
+              const savedStroke = ctx.strokeStyle;
+              ctx.strokeStyle = "#333";
+              m.draw(ctx, true);
+              const sData = canvas.toDataURL("image/png").split(",")[1];
+              ctx.strokeStyle = savedStroke;
+
+              gen.addPuzzlePair(pData, sData, i, "Maze");
+            }
+
+            status.innerText = "Packaging...";
+            await new Promise((r) => setTimeout(r, 100));
+
+            if (type === "epub") {
+              gen.generate(title, "mazes.epub");
+            } else {
+              gen.generateZip("mazes.zip");
+            }
+
+            status.innerText = "Done!";
+          } catch (e) {
+            console.error(e);
+            status.innerText = "Error: " + e.message;
+          } finally {
+            btnGen.disabled = false;
+            btnZip.disabled = false;
+            // Restore play view? Or leave as is?
+            // Let's restore play view params but keep the maze we just drew?
+            // Or just leave it.
+          }
+        },
+      };
+
+      window.onload = () => app.init();
+    </script>
+  </body>
+</html>
