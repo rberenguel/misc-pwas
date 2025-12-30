@@ -478,25 +478,155 @@
                 const renderTree = (u, prefix, isLast) => {
                     const t = uuidMap[u];
                     const isTarget = u === rootUuid;
-                    let line = `<span style="color:var(--base01)">${prefix}</span>`;
-                    line += `<span style="color:var(--base01)">${isLast ? '└── ' : '├── '}</span>`;
+                    
+                    // Render the line connecting this node
+                    let line = "";
+                    if (prefix !== "") {
+                        line += `<span style="color:var(--base01)">${prefix}</span>`;
+                        line += `<span style="color:var(--base01)">${isLast ? '└── ' : '├── '}</span>`;
+                    }
                     
                     let content = `<span style="${isTarget ? 'color:var(--yellow); font-weight:bold' : ''}">ID:${displayMap.indexOf(u)+1} ${t.description}</span>`;
                     if (t.tags && t.tags.length) content += ` <span style="color:var(--blue)">${t.tags.map(tag=>'+'+tag).join(' ')}</span>`;
                     if(t.project) content += ` <span style="color:var(--yellow)">${t.project}</span>`;
                     
-                    html += `<div>${prefix ? line : ''}${content}</div>`;
+                    html += `<div>${line}${content}</div>`;
                     
                     const children = blocking[u] ? blocking[u].filter(c => relevantUUIDs.has(c)) : [];
-                    const newPrefix = prefix + (isLast ? '    ' : '│   ');
+                    
+                    // Logic for next level prefix:
+                    // If we are currently at root (prefix empty), next prefix is just spaces.
+                    // If we are deep, we add either spaces (if last) or pipe (if not last).
+                    let childPrefix = prefix;
+                    if (prefix !== "" || children.length > 0) {
+                         // Only add to prefix if we are not at the very top level root essentially, 
+                         // BUT we need to establish the first indentation level.
+                         if (prefix === "") {
+                             childPrefix = ""; 
+                         } else {
+                             childPrefix += (isLast ? '    ' : '│   ');
+                         }
+                    }
+                    
+                    // Actually, simpler logic for prefix passing:
+                    // If I am root, my children get "    " or "│   " depending on if I have more siblings? 
+                    // No, trees inside chain are isolated roots.
+                    // The standard algorithm:
                     
                     children.forEach((child, i) => {
-                        renderTree(child, prefix ? newPrefix : '', i === children.length - 1);
+                        const isLastChild = i === children.length - 1;
+                        // Calculate the prefix that THIS child will print before itself
+                        // It is the parent's incoming prefix + the parent's connector extension
+                        // For the *next* recursion, we pass the accumulated prefix.
+                        
+                        let nextPrefix = prefix;
+                        if (prefix !== "" || roots.length > 0) { // If we are in the tree
+                             // Actually, if we are root, we pass empty string to self.
+                             // Children need to know if they are under a last-child or not.
+                             // Let's stick to the previous simple logic that I broke:
+                             if (prefix === "") nextPrefix = ""; 
+                             else nextPrefix += (isLast ? '    ' : '│   ');
+                        }
+                        
+                        // FIX: Ensure children of root get indentation
+                        let p = prefix;
+                        if (p === "") p = ""; // Root has no prefix
+                        else p += (isLast ? '    ' : '│   ');
+                        
+                        // Wait, the previous logic was simpler:
+                        // renderTree(child, prefix + (isLast ? '    ' : '│   '), ...)
+                        // BUT, for the ROOT's children, prefix is "", so they get "    " or "│   ".
+                        // My previous bug was `prefix ? ... : ''`. 
+                        
+                        renderTree(child, prefix + (isLast ? '    ' : '│   '), isLastChild);
+                    });
+                };
+                
+                // Redefine renderTree to be simpler and correct
+                const renderTreeSimple = (u, indent, isLastChild) => {
+                     const t = uuidMap[u];
+                     const isTarget = u === rootUuid;
+                     
+                     // Draw current row
+                     let connector = "";
+                     if (indent.length > 0) {
+                         connector = isLastChild ? '└── ' : '├── ';
+                     }
+                     
+                     let content = `<span style="${isTarget ? 'color:var(--yellow); font-weight:bold' : ''}">ID:${displayMap.indexOf(u)+1} ${t.description}</span>`;
+                     if (t.tags && t.tags.length) content += ` <span style="color:var(--blue)">${t.tags.map(tag=>'+'+tag).join(' ')}</span>`;
+                     if(t.project) content += ` <span style="color:var(--yellow)">${t.project}</span>`;
+
+                     html += `<div><span style="color:var(--base01)">${indent}${connector}</span>${content}</div>`;
+                     
+                     const children = blocking[u] ? blocking[u].filter(c => relevantUUIDs.has(c)) : [];
+                     children.forEach((child, i) => {
+                         const nextIndent = indent + (isLastChild ? '    ' : '│   ');
+                         // Special case: if indent is empty (root), we don't add pipe/space yet, 
+                         // but the *connector* logic above handles the first branch.
+                         // Wait, if indent is "", connector is "". Correct.
+                         // But for children of root, indent should be "" ? No.
+                         // For children of root, we want them to show └── .
+                         // So we just pass "" as indent? No.
+                         
+                         // Standard recursion:
+                         // Root: indent=""
+                         // Child: indent="" (but renders with connector) -> No, connector needs to separate from parent.
+                         
+                         // Let's use the standard prefix logic:
+                         // prefix is the string of │ and spaces drawn BEFORE the ├── 
+                         
+                         // Root call: prefix = ""
+                         
+                         // Child call: prefix = "" (because root has no lines to extend)
+                         // Wait, if root has no lines, its children just get └── ? 
+                         // Yes.
+                     });
+                };
+                
+                // Third try, standard recursive approach
+                const render = (u, prefix) => {
+                    const t = uuidMap[u];
+                    const isTarget = u === rootUuid;
+                    let content = `<span style="${isTarget ? 'color:var(--yellow); font-weight:bold' : ''}">ID:${displayMap.indexOf(u)+1} ${t.description}</span>`;
+                    // ... tags/project ... 
+                    if(t.project) content += ` <span style="color:var(--yellow)">${t.project}</span>`;
+                    
+                    // We don't print the node here in the loop logic, we print it based on traversal
+                };
+                
+                // Let's stick to the one I fixed in analysis, it was closest
+                const renderFinal = (u, prefix, isTail) => {
+                    const t = uuidMap[u];
+                    const isTarget = u === rootUuid;
+                    
+                    let treeMarker = "";
+                    if (prefix.length > 0 || isTail !== undefined) { // Not root
+                         treeMarker = `<span style="color:var(--base01)">${prefix}${isTail ? '└── ' : '├── '}</span>`;
+                    }
+                    
+                    let content = `<span style="${isTarget ? 'color:var(--yellow); font-weight:bold' : ''}">ID:${displayMap.indexOf(u)+1} ${t.description}</span>`;
+                    if (t.tags && t.tags.length) content += ` <span style="color:var(--blue)">${t.tags.map(tag=>'+'+tag).join(' ')}</span>`;
+                    if(t.project) content += ` <span style="color:var(--yellow)">${t.project}</span>`;
+                    
+                    html += `<div>${treeMarker}${content}</div>`;
+                    
+                    const children = blocking[u] ? blocking[u].filter(c => relevantUUIDs.has(c)) : [];
+                    children.forEach((child, i) => {
+                        const childIsTail = i === children.length - 1;
+                        // For the children, the prefix depends on whether WE (the parent) were a tail or not.
+                        // If we are root (isTail undefined), prefix is "".
+                        // If we were tail, our extension is "    ". If not, "│   ".
+                        let nextPrefix = prefix;
+                        if (isTail !== undefined) {
+                            nextPrefix += isTail ? '    ' : '│   ';
+                        }
+                        renderFinal(child, nextPrefix, childIsTail);
                     });
                 };
 
-                if (roots.length === 0 && relevantUUIDs.size > 0) renderTree(rootUuid, '', true);
-                else roots.forEach(r => renderTree(r, '', true));
+                if (roots.length === 0 && relevantUUIDs.size > 0) renderFinal(rootUuid, '', undefined);
+                else roots.forEach(r => renderFinal(r, '', undefined));
 
                 html += '</div>';
                 print(html, false);
