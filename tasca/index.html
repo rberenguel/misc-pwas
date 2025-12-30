@@ -23,28 +23,34 @@
             --cyan:    #2aa198;
             --green:   #859900;
         }
+        
+        * { box-sizing: border-box; }
+
         body {
             background-color: var(--base03);
             color: var(--base0);
             font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
             font-size: 14px;
             margin: 0;
-            height: 100vh;
+            padding: 0;
+            height: 100dvh; 
             display: flex;
             flex-direction: column;
             overflow: hidden;
         }
         
         .input-line {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 50px;
             display: flex;
             align-items: center;
             background-color: var(--base03);
             border-bottom: 1px solid var(--base02);
-            padding: 12px 10px;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            flex-shrink: 0;
+            padding: 0 10px;
+            z-index: 1000;
         }
         
         .prompt { 
@@ -53,6 +59,7 @@
             font-weight: bold; 
             font-size: 16px;
             user-select: none;
+            flex-shrink: 0;
         }
         
         .input-stack {
@@ -65,7 +72,7 @@
         
         input, .ghost {
             font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
-            font-size: 16px;
+            font-size: 16px; 
             border: none;
             outline: none;
             background: transparent;
@@ -78,7 +85,6 @@
             height: 24px;
             line-height: 24px;
             letter-spacing: normal;
-            box-sizing: border-box;
         }
 
         input {
@@ -86,7 +92,6 @@
             z-index: 2;
         }
         
-        /* Placeholder styling to match ghost/theme */
         input::placeholder {
             color: var(--base01);
             opacity: 0.5;
@@ -105,8 +110,9 @@
             overflow-y: auto;
             white-space: pre-wrap;
             padding: 10px;
-            -webkit-overflow-scrolling: touch;
+            padding-top: 60px;
             padding-bottom: 50px;
+            -webkit-overflow-scrolling: touch;
         }
 
         .table-wrapper { overflow-x: auto; margin-bottom: 15px; }
@@ -115,22 +121,28 @@
         td { padding: 8px 4px; vertical-align: top; border-bottom: 1px solid #07364240; }
         
         .row-id { color: var(--base01); font-weight: bold; width: 25px; }
-        .row-proj { color: var(--yellow); font-weight: bold; }
+        .row-proj-parent { color: var(--base01); }
+        .row-proj-leaf { color: var(--yellow); font-weight: bold; }
         .row-desc { word-break: break-word; }
         .row-urgency { color: var(--base01); text-align: right; font-size: 0.9em; width: 40px;}
         
         .msg-success { color: var(--base1); }
         .msg-error { color: var(--red); }
         .msg-info { color: var(--base01); font-style: italic; }
+        .msg-help { color: var(--base01); font-size: 0.9em; margin-bottom: 15px; border-bottom: 1px dashed var(--base02); padding-bottom: 10px; }
+        .msg-hl { color: var(--base1); font-weight: bold; }
+        .msg-arg { color: var(--blue); }
         
         .tag-pill { background: var(--base02); color: var(--blue); padding: 1px 4px; border-radius: 3px; font-size: 0.85em; display: inline-block; margin-top: 2px;}
         .dep-pill { color: var(--orange); font-weight: bold; margin-right: 4px; font-size: 0.9em; }
         .blocked-pill { color: var(--base01); font-weight: bold; margin-right: 4px; font-size: 0.9em; }
-        
         .date-pill { font-size: 0.85em; margin-right: 6px; }
         .date-far { color: var(--base01); }
         .date-soon { color: var(--yellow); font-weight: bold; }
         .date-urgent { color: var(--red); font-weight: bold; }
+        .date-wait { color: var(--base01); opacity: 0.7; }
+        .recur-icon { color: var(--violet); font-size: 0.9em; margin-right: 4px; }
+        .anno-count { color: var(--green); font-size: 0.9em; margin-left: 4px; }
     </style>
 </head>
 <body>
@@ -141,12 +153,12 @@
         <span class="prompt">❯</span>
         <div class="input-stack">
             <div id="ghost-input" class="ghost"></div>
-            <input type="text" id="cmd-input" autofocus autocomplete="off" spellcheck="false" placeholder="add Buy Milk pro:Home due:20250501...">
+            <input type="text" id="cmd-input" autofocus autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="add Buy Milk pro:Home...">
         </div>
     </div>
 
     <div id="terminal-output">
-        <div style="color: var(--base01); margin-bottom: 10px;">Tasca v0.0.13 [Restored Placeholder]</div>
+        <div style="color: var(--base01); margin-bottom: 10px;">Tasca v0.0.16 [Chain Command]</div>
     </div>
 
 <script>
@@ -178,88 +190,84 @@
         return `${y}${m}${day}`;
     };
 
+    const addDays = (ts, days) => { const d = new Date(ts); d.setDate(d.getDate() + days); return d.getTime(); };
+    const addMonths = (ts, months) => { const d = new Date(ts); d.setMonth(d.getMonth() + months); return d.getTime(); };
+
     const print = (html, clear = false) => {
         const output = document.getElementById('terminal-output');
         if(clear) output.innerHTML = '';
+        
         const div = document.createElement('div');
         div.style.marginBottom = "8px";
         div.innerHTML = html;
-        if (clear) output.innerHTML = ''; 
         output.appendChild(div);
-        div.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (clear) output.scrollTop = 0; else output.scrollTop = output.scrollHeight;
     };
 
     // --- DB ---
     const DB_NAME = 'tasca_db';
     const STORE_NAME = 'tasks';
-    let db;
+    let db = null; 
 
     const initDB = () => new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 3);
+        const request = indexedDB.open(DB_NAME, 4);
         request.onupgradeneeded = (event) => {
             const db = event.target.result;
             if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: 'uuid' });
         };
-        request.onsuccess = (e) => { db = e.target.result; resolve(db); };
+        request.onsuccess = (e) => { 
+            db = e.target.result; 
+            resolve(db); 
+        };
         request.onerror = (e) => reject(e.target.errorCode);
     });
 
     const dbOps = {
-        getAll: () => new Promise(resolve => {
+        check: () => { if (!db) throw new Error("Database loading..."); },
+        getAll: () => new Promise((resolve, reject) => {
+            if(!db) return reject("DB not ready");
             const tx = db.transaction(STORE_NAME, 'readonly');
             tx.objectStore(STORE_NAME).getAll().onsuccess = e => resolve(e.target.result);
         }),
-        add: (task) => new Promise((resolve) => {
+        add: (task) => new Promise((resolve, reject) => {
+            if(!db) return reject("DB not ready");
             const tx = db.transaction(STORE_NAME, 'readwrite');
             tx.objectStore(STORE_NAME).add(task).onsuccess = () => resolve();
         }),
-        update: (task) => new Promise(resolve => {
+        update: (task) => new Promise((resolve, reject) => {
+            if(!db) return reject("DB not ready");
             const tx = db.transaction(STORE_NAME, 'readwrite');
             tx.objectStore(STORE_NAME).put(task).onsuccess = () => resolve();
         }),
-        delete: (uuid) => new Promise(resolve => {
+        delete: (uuid) => new Promise((resolve, reject) => {
+            if(!db) return reject("DB not ready");
             const tx = db.transaction(STORE_NAME, 'readwrite');
             tx.objectStore(STORE_NAME).delete(uuid).onsuccess = () => resolve();
         }),
-        get: (uuid) => new Promise(resolve => {
+        get: (uuid) => new Promise((resolve, reject) => {
+            if(!db) return reject("DB not ready");
             const tx = db.transaction(STORE_NAME, 'readonly');
             tx.objectStore(STORE_NAME).get(uuid).onsuccess = e => resolve(e.target.result);
         })
     };
 
-    const handleExport = async () => {
-        const all = await dbOps.getAll();
-        const dataStr = JSON.stringify(all, null, 2);
-        const blob = new Blob([dataStr], {type: "application/json"});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `tasca_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.json`;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        print(`<span class="msg-success">Exported ${all.length} tasks.</span>`);
-    };
-
-    document.getElementById('import-picker').addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async (ev) => {
-            try {
-                const data = JSON.parse(ev.target.result);
-                for (const t of data) if (t.uuid) await dbOps.update(t);
-                print(`<span class="msg-success">Imported tasks.</span>`);
-                execute('list');
-            } catch (err) { print(`<span class="msg-error">Error: ${err.message}</span>`); }
-            e.target.value = '';
-        };
-        reader.readAsText(file);
-    });
-
     // --- Logic ---
     let displayMap = []; 
+    let knownProjects = new Set();
+    let knownTags = new Set();
+
     const C = { next: 15.0, due: 12.0, blocking: 8.0, blocked: -5.0, priority: { H: 6.0, M: 3.9, L: 1.8 }, age: 2.0, project: 1.0 };
 
+    const updateCache = (tasks) => {
+        knownProjects.clear(); knownTags.clear();
+        tasks.forEach(t => {
+            if(t.project) knownProjects.add(t.project);
+            if(t.tags) t.tags.forEach(tag => knownTags.add(tag));
+        });
+    };
+
     const calculateUrgency = (t, allTasks) => {
+        if (t.wait && t.wait > Date.now()) return -10.0;
         let u = 0.0;
         if (t.tags.includes('next')) u += C.next;
         if (t.priority && C.priority[t.priority]) u += C.priority[t.priority];
@@ -279,21 +287,45 @@
         return u.toFixed(1);
     };
 
+    const hasVirtualTag = (t, tag, allTasks) => {
+        const now = Date.now();
+        const tagClean = tag.replace(/^\+/, '').toUpperCase();
+        if (tagClean === 'OVERDUE') return t.due && t.due < now && t.status === 'pending';
+        if (tagClean === 'TODAY') return t.due && formatDate(t.due) === formatDate(now);
+        if (tagClean === 'WAITING') return t.wait && t.wait > now && t.status === 'pending';
+        if (tagClean === 'BLOCKED') return t.depends?.length > 0 && allTasks.filter(d => t.depends.includes(d.uuid)).some(d => d.status === 'pending');
+        return false;
+    };
+
+    const formatProject = (proj) => {
+        if (!proj) return "";
+        const parts = proj.split('.');
+        if (parts.length === 1) return `<span class="row-proj-leaf">${proj}</span>`;
+        const leaf = parts.pop();
+        return `<span class="row-proj-parent">${parts.join('.')}.</span><span class="row-proj-leaf">${leaf}</span>`;
+    };
+
     const renderTable = (tasks, allTasks) => {
         if (tasks.length === 0) return print('<span class="msg-info">No tasks found.</span>', true);
         displayMap = tasks.map(t => t.uuid);
+        updateCache(allTasks);
+
         let html = `<div class="table-wrapper"><table><thead><tr><th style="width:20px">ID</th><th>Desc</th><th style="text-align:right">Urg</th></tr></thead><tbody>`;
         tasks.forEach((t, index) => {
             let desc = t.description;
-            if(t.project) desc = `<span class="row-proj">${t.project}</span> ${desc}`;
+            if(t.project) desc = `${formatProject(t.project)} ${desc}`;
             if(t.priority) desc = `<span style="color:var(--red); font-weight:bold">!${t.priority}</span> ${desc}`;
+            if(t.recur) desc = `<span class="recur-icon">↻</span>` + desc;
             if (t.due) {
                 const daysLeft = (t.due - Date.now()) / (1000 * 60 * 60 * 24);
                 let cls = "date-far";
                 if (daysLeft < 1) cls = "date-urgent"; else if (daysLeft < 7) cls = "date-soon";
                 desc = `<span class="date-pill ${cls}">due:${formatDate(t.due)}</span>` + desc;
             }
+            if (t.wait && t.wait > Date.now()) desc = `<span class="date-pill date-wait">wait:${formatDate(t.wait)}</span>` + desc;
             const tags = t.tags.length ? t.tags.map(tag => `<span class="tag-pill">+${tag}</span>`).join('') : '';
+            if(t.annotations && t.annotations.length > 0) desc += `<span class="anno-count">[${t.annotations.length}]</span>`;
+            
             let depStr = "";
             const isBlocking = allTasks.some(o => o.status === 'pending' && o.depends?.includes(t.uuid));
             if (isBlocking) depStr += `<span class="dep-pill">[Blocking]</span>`;
@@ -305,8 +337,7 @@
         print(html, true); 
     };
 
-    // --- COMMAND HANDLING ---
-    const VALID_COMMANDS = ['add', 'log', 'list', 'ls', 'next', 'done', 'delete', 'rm', 'modify', 'mod', 'export', 'import', 'help', 'clear'];
+    const VALID_COMMANDS = ['add', 'log', 'list', 'ls', 'next', 'done', 'delete', 'rm', 'modify', 'mod', 'export', 'import', 'help', 'clear', 'annotate', 'info', 'chain'];
     
     const resolveCommand = (str) => {
         const matches = VALID_COMMANDS.filter(c => c.startsWith(str));
@@ -314,6 +345,8 @@
     };
 
     const execute = async (str) => {
+        if (db === null) { print('<span class="msg-error">Database loading... please wait.</span>'); return; }
+
         try {
             const parts = str.trim().split(/\s+/);
             if(!parts.length || parts[0] === '') return;
@@ -327,22 +360,32 @@
             let args = parts.slice(1);
             let targetId = rawCmd.match(/^\d+$/) ? parseInt(rawCmd) : null;
 
-            if (cmd === 'export') await handleExport();
+            if (cmd === 'export') {
+                const all = await dbOps.getAll();
+                const dataStr = JSON.stringify(all, null, 2);
+                const blob = new Blob([dataStr], {type: "application/json"});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = `tasca_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.json`;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                print(`<span class="msg-success">Exported ${all.length} tasks.</span>`);
+            }
             else if (cmd === 'import') document.getElementById('import-picker').click();
             else if (cmd === 'clear') document.getElementById('terminal-output').innerHTML = '';
 
             else if (['add', 'log'].includes(cmd)) {
-                let desc = [], proj = "", priority = "", tags = [], depends = [], due = null;
+                let desc = [], proj = "", priority = "", tags = [], depends = [], due = null, wait = null, recur = null;
                 for (let token of args) {
                     if (token.startsWith('pro:') || token.startsWith('project:')) proj = token.split(':')[1];
                     else if (token.startsWith('pri:') || token.startsWith('priority:')) priority = token.split(':')[1].toUpperCase();
                     else if (token.startsWith('dep:')) token.split(':')[1].split(',').forEach(id => { if(displayMap[id-1]) depends.push(displayMap[id-1]); });
                     else if (token.startsWith('due:')) due = parseDate(token.split(':')[1]);
+                    else if (token.startsWith('wait:')) wait = parseDate(token.split(':')[1]);
+                    else if (token.startsWith('recur:')) recur = token.split(':')[1];
                     else if (token.startsWith('+')) tags.push(token.substring(1));
                     else desc.push(token);
                 }
                 if (desc.length === 0) return print('<span class="msg-error">No description.</span>');
-                await dbOps.add({ uuid: generateUUID(), description: desc.join(' '), project: proj, priority, tags, depends, due, status: 'pending', entry: Date.now() });
+                await dbOps.add({ uuid: generateUUID(), description: desc.join(' '), project: proj, priority, tags, depends, due, wait, recur, annotations:[], status: 'pending', entry: Date.now() });
                 execute('list');
             }
 
@@ -350,33 +393,158 @@
                 const all = await dbOps.getAll();
                 let pending = all.filter(t => t.status === 'pending');
                 let search = [], fProj = null, fTags = [];
+                let showWaiting = false;
+
                 for (let token of args) {
                     if (token.startsWith('pro:') || token.startsWith('project:')) fProj = token.split(':')[1];
-                    else if (token.startsWith('+')) fTags.push(token.substring(1));
+                    else if (token.startsWith('+')) {
+                        const tag = token.substring(1);
+                        if (tag.toUpperCase() === 'WAITING' || tag.toUpperCase() === 'ALL') showWaiting = true;
+                        fTags.push(token);
+                    }
                     else search.push(token.toLowerCase());
                 }
+
+                if (!showWaiting) pending = pending.filter(t => !t.wait || t.wait <= Date.now());
                 if (fProj) pending = pending.filter(t => t.project === fProj);
-                if (fTags.length) pending = pending.filter(t => fTags.every(tg => t.tags.includes(tg)));
-                if (search.length) pending = pending.filter(t => {
-                    const d = t.description.toLowerCase();
-                    return search.every(s => d.includes(s));
-                });
+                if (fTags.length) {
+                    pending = pending.filter(t => fTags.every(ft => {
+                        const tag = ft.substring(1);
+                        if (t.tags.includes(tag)) return true;
+                        if (hasVirtualTag(t, ft, all)) return true;
+                        return false;
+                    }));
+                }
+                if (search.length) pending = pending.filter(t => search.every(s => t.description.toLowerCase().includes(s)));
                 pending.forEach(t => t.urgency = calculateUrgency(t, all));
                 pending.sort((a,b) => parseFloat(b.urgency) - parseFloat(a.urgency));
                 renderTable(pending, all);
             }
 
+            else if (cmd === 'chain') {
+                const id = parseInt(args[0]);
+                if (!id || !displayMap[id-1]) return print('<span class="msg-error">Invalid ID.</span>');
+                const rootUuid = displayMap[id-1];
+                const all = await dbOps.getAll();
+                const pending = all.filter(t => t.status === 'pending');
+
+                const blocking = {}; 
+                const uuidMap = {};
+                pending.forEach(t => {
+                    uuidMap[t.uuid] = t;
+                    if (t.depends) {
+                        t.depends.forEach(dep => {
+                            if (!blocking[dep]) blocking[dep] = [];
+                            blocking[dep].push(t.uuid);
+                        });
+                    }
+                });
+
+                const ancestors = new Set();
+                const getAncestors = (curr) => {
+                    const t = uuidMap[curr];
+                    if(!t || !t.depends) return;
+                    t.depends.forEach(d => {
+                        if(uuidMap[d] && !ancestors.has(d)) {
+                            ancestors.add(d);
+                            getAncestors(d);
+                        }
+                    });
+                };
+                getAncestors(rootUuid);
+
+                const descendants = new Set();
+                const getDescendants = (curr) => {
+                    if(blocking[curr]) {
+                        blocking[curr].forEach(b => {
+                            if(uuidMap[b] && !descendants.has(b)) {
+                                descendants.add(b);
+                                getDescendants(b);
+                            }
+                        });
+                    }
+                };
+                getDescendants(rootUuid);
+                
+                const relevantUUIDs = new Set([...ancestors, rootUuid, ...descendants]);
+                const roots = [];
+                relevantUUIDs.forEach(u => {
+                    const t = uuidMap[u];
+                    const hasParentInSet = t.depends && t.depends.some(d => relevantUUIDs.has(d));
+                    if (!hasParentInSet) roots.push(u);
+                });
+
+                let html = '<div style="line-height: 1.5; font-family: monospace;">';
+                const renderTree = (u, prefix, isLast) => {
+                    const t = uuidMap[u];
+                    const isTarget = u === rootUuid;
+                    let line = `<span style="color:var(--base01)">${prefix}</span>`;
+                    line += `<span style="color:var(--base01)">${isLast ? '└── ' : '├── '}</span>`;
+                    
+                    let content = `<span style="${isTarget ? 'color:var(--yellow); font-weight:bold' : ''}">ID:${displayMap.indexOf(u)+1} ${t.description}</span>`;
+                    if (t.tags && t.tags.length) content += ` <span style="color:var(--blue)">${t.tags.map(tag=>'+'+tag).join(' ')}</span>`;
+                    if(t.project) content += ` <span style="color:var(--yellow)">${t.project}</span>`;
+                    
+                    html += `<div>${prefix ? line : ''}${content}</div>`;
+                    
+                    const children = blocking[u] ? blocking[u].filter(c => relevantUUIDs.has(c)) : [];
+                    const newPrefix = prefix + (isLast ? '    ' : '│   ');
+                    
+                    children.forEach((child, i) => {
+                        renderTree(child, prefix ? newPrefix : '', i === children.length - 1);
+                    });
+                };
+
+                if (roots.length === 0 && relevantUUIDs.size > 0) renderTree(rootUuid, '', true);
+                else roots.forEach(r => renderTree(r, '', true));
+
+                html += '</div>';
+                print(html, false);
+            }
+
+            else if (cmd === 'annotate') {
+                const id = parseInt(args[0]);
+                if (!id || !displayMap[id-1]) return print('<span class="msg-error">Invalid ID.</span>');
+                const task = await dbOps.get(displayMap[id-1]);
+                const note = args.slice(1).join(' ');
+                if(!note) return print('<span class="msg-error">No annotation text.</span>');
+                if(!task.annotations) task.annotations = [];
+                task.annotations.push({ entry: Date.now(), description: note });
+                await dbOps.update(task);
+                execute('list');
+            }
+
+            else if (cmd === 'info') {
+                const id = parseInt(args[0] || rawCmd);
+                if (!id || !displayMap[id-1]) return print('<span class="msg-error">Invalid ID.</span>');
+                const t = await dbOps.get(displayMap[id-1]);
+                let html = `<div style="border:1px solid var(--base01); padding:10px; margin-bottom:10px">`;
+                html += `<div style="color:var(--yellow)">Task ${id} - ${t.uuid}</div>`;
+                html += `<div><b>Desc:</b> ${t.description}</div>`;
+                html += `<div><b>Status:</b> ${t.status}</div>`;
+                if(t.project) html += `<div><b>Project:</b> ${t.project}</div>`;
+                if(t.due) html += `<div><b>Due:</b> ${formatDate(t.due)}</div>`;
+                if(t.wait) html += `<div><b>Wait:</b> ${formatDate(t.wait)}</div>`;
+                if(t.recur) html += `<div><b>Recur:</b> ${t.recur}</div>`;
+                if(t.annotations && t.annotations.length > 0) {
+                     html += `<div style="margin-top:5px; border-top:1px dashed var(--base01); padding-top:5px"><b>Annotations:</b></div>`;
+                     t.annotations.forEach(a => { html += `<div style="margin-left:10px; font-size:0.9em; color:var(--base1)">${formatDate(a.entry)}: ${a.description}</div>`; });
+                }
+                html += `</div>`;
+                print(html, false);
+            }
+
             else if (targetId && (args[0] === 'mod' || args[0] === 'modify') || (['modify','mod'].includes(cmd) && args[0].match(/^\d+$/))) {
                 const id = targetId || parseInt(args[0]);
                 const tokens = targetId ? args : args.slice(1);
-                
                 if (!id || !displayMap[id-1]) return print('<span class="msg-error">Invalid ID.</span>');
                 const task = await dbOps.get(displayMap[id-1]);
-                
                 tokens.forEach(token => {
                     if (token.startsWith('pri:')) task.priority = token.split(':')[1].toUpperCase();
                     if (token.startsWith('pro:')) task.project = token.split(':')[1];
                     if (token.startsWith('due:')) task.due = parseDate(token.split(':')[1]);
+                    if (token.startsWith('wait:')) task.wait = parseDate(token.split(':')[1]);
+                    if (token.startsWith('recur:')) task.recur = token.split(':')[1];
                     if (token.startsWith('+')) task.tags.push(token.substring(1));
                     if (token.startsWith('dep:')) {
                          if(!task.depends) task.depends = [];
@@ -391,7 +559,25 @@
                 const id = targetId || parseInt(args.find(a => a.match(/^\d+$/)));
                 if (!id || !displayMap[id-1]) return print('<span class="msg-error">Invalid ID.</span>');
                 const task = await dbOps.get(displayMap[id-1]);
-                if(task) { task.status = 'completed'; await dbOps.update(task); execute('list'); }
+                if(task) { 
+                    task.status = 'completed'; 
+                    await dbOps.update(task);
+                    if(task.recur && task.due) {
+                        let nextDue = null, nextWait = null;
+                        if(task.recur.startsWith('dai')) nextDue = addDays(task.due, 1);
+                        else if(task.recur.startsWith('wee')) nextDue = addDays(task.due, 7);
+                        else if(task.recur.startsWith('mon')) nextDue = addMonths(task.due, 1);
+                        else if(task.recur.startsWith('yea')) nextDue = addMonths(task.due, 12);
+                        if (nextDue) {
+                            if (task.wait) nextWait = nextDue - (task.due - task.wait);
+                            const newTask = { ...task, uuid: generateUUID(), status: 'pending', due: nextDue, wait: nextWait, entry: Date.now(), annotations: [] };
+                            delete newTask.depends; 
+                            await dbOps.add(newTask);
+                            print(`<span class="msg-success">Recurring task created.</span>`);
+                        }
+                    }
+                    execute('list'); 
+                }
             }
 
             else if (['delete', 'rm'].includes(cmd)) {
@@ -402,45 +588,101 @@
             }
             
             else if (cmd === 'help') {
-                print(`<span style="color:var(--yellow)">Commands:</span> add, list, done, delete, modify, export, import`);
+                const sub = args[0];
+                if (!sub) {
+                    print(`<span style="color:var(--yellow)">Commands:</span> add, list, done, delete, modify, annotate, info, chain, export, import. Type <span class="msg-hl">help [cmd]</span> for details.`);
+                } else {
+                    const c = resolveCommand(sub);
+                    if (c === 'add') print(`<div class="msg-help"><span class="msg-hl">add</span> description <span class="msg-arg">pro:Project</span> <span class="msg-arg">pri:H/M/L</span> <span class="msg-arg">due:YYYYMMDD</span> <span class="msg-arg">wait:YYYYMMDD</span> <span class="msg-arg">recur:period</span> <span class="msg-arg">+tag</span></div>`);
+                    else if (c === 'modify') print(`<div class="msg-help"><span class="msg-hl">mod</span> ID [desc] <span class="msg-arg">pro:P</span> <span class="msg-arg">pri:H</span> <span class="msg-arg">due:Y</span> <span class="msg-arg">wait:Y</span> <span class="msg-arg">recur:P</span> <span class="msg-arg">+tag</span> <span class="msg-arg">dep:ID</span></div>`);
+                    else if (c === 'list') print(`<div class="msg-help"><span class="msg-hl">list</span> [search] <span class="msg-arg">pro:Project</span> <span class="msg-arg">+tag</span><br>Virtual: <span class="msg-arg">+OVERDUE</span> <span class="msg-arg">+TODAY</span> <span class="msg-arg">+WAITING</span> <span class="msg-arg">+BLOCKED</span> <span class="msg-arg">+ALL</span></div>`);
+                    else if (c === 'done') print(`<div class="msg-help"><span class="msg-hl">done</span> ID<br>Completes a task. If recurring, creates the next instance.</div>`);
+                    else if (c === 'delete') print(`<div class="msg-help"><span class="msg-hl">delete</span> ID<br>Permanently removes a task.</div>`);
+                    else if (c === 'annotate') print(`<div class="msg-help"><span class="msg-hl">annotate</span> ID <span class="msg-arg">note text...</span><br>Adds a timestamped note to a task.</div>`);
+                    else if (c === 'info') print(`<div class="msg-help"><span class="msg-hl">info</span> ID<br>Shows full details including annotations and full UUID.</div>`);
+                    else if (c === 'chain') print(`<div class="msg-help"><span class="msg-hl">chain</span> ID<br>Visualizes dependency tree for the specified task.</div>`);
+                    else print(`<span class="msg-error">No specific help for: ${sub}</span>`);
+                }
             }
+
             else print(`<span class="msg-error">Unknown: ${cmd}</span>`);
 
         } catch (err) { console.error(err); print(`<span class="msg-error">Error: ${err.message}</span>`); }
     };
 
-    // --- GHOST LOGIC ---
+    // --- GHOST & AUTOCOMPLETE ---
     const input = document.getElementById('cmd-input');
     const ghost = document.getElementById('ghost-input');
 
     input.addEventListener('input', () => {
         const val = input.value;
         const parts = val.split(' ');
+        const last = parts[parts.length - 1];
+        let suggestion = "";
         
-        // Only suggest if typing first word
         if (parts.length === 1 && val.length > 0) {
             const match = resolveCommand(val);
-            if (match && match !== val) {
-                const suffix = match.substring(val.length);
-                ghost.innerHTML = `<span style="opacity:0">${val}</span><span style="opacity:0.4">${suffix}</span>`;
-                return;
+            if (match && match !== val) suggestion = match.substring(val.length);
+        }
+        else if (last.startsWith('pro:') || last.startsWith('project:')) {
+            const prefix = last.includes(':') ? last.split(':')[1] : "";
+            if (prefix) {
+                for (let p of knownProjects) {
+                    if (p.startsWith(prefix) && p !== prefix) { suggestion = p.substring(prefix.length); break; }
+                }
             }
         }
-        ghost.innerHTML = '';
+        else if (last.startsWith('+')) {
+            const prefix = last.substring(1);
+            if (prefix) {
+                for (let t of knownTags) {
+                    if (t.startsWith(prefix) && t !== prefix) { suggestion = t.substring(prefix.length); break; }
+                }
+            }
+        }
+
+        if (suggestion) {
+            const prefixText = val; 
+            ghost.innerHTML = `<span style="opacity:0">${prefixText}</span><span style="opacity:0.4">${suggestion}</span>`;
+        } else {
+            ghost.innerHTML = '';
+        }
     });
 
     input.addEventListener('keydown', async (e) => {
-        if (e.key === 'Enter') { 
-            const val = input.value; 
-            input.value = ''; 
-            ghost.innerHTML = ''; 
-            await execute(val); 
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            const gText = ghost.textContent;
+            if(gText) {
+                input.value += gText.substring(input.value.length);
+                ghost.innerHTML = '';
+            }
         }
+        if (e.key === 'Enter') { const val = input.value; input.value = ''; ghost.innerHTML = ''; await execute(val); }
     });
 
-    // --- INIT ---
     initDB().then(async () => {
-        try { const tasks = await dbOps.getAll(); if(tasks.length) execute('list'); } catch(e){}
+        document.getElementById('import-picker').addEventListener('change', (e) => { 
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (ev) => {
+                try {
+                    const data = JSON.parse(ev.target.result);
+                    for (const t of data) if (t.uuid) await dbOps.update(t);
+                    print(`<span class="msg-success">Imported tasks.</span>`);
+                    execute('list');
+                } catch (err) { print(`<span class="msg-error">Error: ${err.message}</span>`); }
+                e.target.value = '';
+            };
+            reader.readAsText(file);
+        });
+        
+        try { 
+            const tasks = await dbOps.getAll(); 
+            updateCache(tasks); 
+            if(tasks.length > 0) execute('list'); 
+        } catch(e){}
     });
 
 </script>
