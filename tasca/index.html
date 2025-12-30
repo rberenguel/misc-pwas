@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#001015">
+    <title>Tasca</title>
+    <style>
+        :root {
+            /* Solarized Dark Palette */
+            --base03:  #001015;
+            --base02:  #073642;
+            --base01:  #586e75;
+            --base00:  #657b83;
+            --base0:   #839496;
+            --base1:   #93a1a1;
+            --yellow:  #b58900;
+            --orange:  #cb4b16;
+            --red:     #dc322f;
+            --magenta: #d33682;
+            --violet:  #6c71c4;
+            --blue:    #268bd2;
+            --cyan:    #2aa198;
+            --green:   #859900;
+        }
+        body {
+            background-color: var(--base03);
+            color: var(--base0);
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .input-line {
+            display: flex;
+            align-items: center;
+            background-color: var(--base03);
+            border-bottom: 1px solid var(--base02);
+            padding: 12px 10px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            flex-shrink: 0;
+        }
+        
+        .prompt { 
+            color: var(--base01); 
+            margin-right: 12px; 
+            font-weight: bold; 
+            font-size: 16px;
+            user-select: none;
+        }
+        
+        .input-stack {
+            position: relative;
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            height: 24px;
+        }
+        
+        input, .ghost {
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            font-size: 16px;
+            border: none;
+            outline: none;
+            background: transparent;
+            padding: 0;
+            margin: 0;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 24px;
+            line-height: 24px;
+            letter-spacing: normal;
+            box-sizing: border-box;
+        }
+
+        input {
+            color: var(--base1);
+            z-index: 2;
+        }
+        
+        /* Placeholder styling to match ghost/theme */
+        input::placeholder {
+            color: var(--base01);
+            opacity: 0.5;
+        }
+
+        .ghost {
+            color: var(--base01);
+            z-index: 1;
+            pointer-events: none;
+            white-space: pre;
+            opacity: 0.6;
+        }
+
+        #terminal-output {
+            flex-grow: 1;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            padding: 10px;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 50px;
+        }
+
+        .table-wrapper { overflow-x: auto; margin-bottom: 15px; }
+        table { border-collapse: collapse; width: 100%; text-align: left; min-width: 320px; }
+        th { border-bottom: 1px solid var(--base01); color: var(--base1); padding: 8px 4px; font-size: 12px;}
+        td { padding: 8px 4px; vertical-align: top; border-bottom: 1px solid #07364240; }
+        
+        .row-id { color: var(--base01); font-weight: bold; width: 25px; }
+        .row-proj { color: var(--yellow); font-weight: bold; }
+        .row-desc { word-break: break-word; }
+        .row-urgency { color: var(--base01); text-align: right; font-size: 0.9em; width: 40px;}
+        
+        .msg-success { color: var(--base1); }
+        .msg-error { color: var(--red); }
+        .msg-info { color: var(--base01); font-style: italic; }
+        
+        .tag-pill { background: var(--base02); color: var(--blue); padding: 1px 4px; border-radius: 3px; font-size: 0.85em; display: inline-block; margin-top: 2px;}
+        .dep-pill { color: var(--orange); font-weight: bold; margin-right: 4px; font-size: 0.9em; }
+        .blocked-pill { color: var(--base01); font-weight: bold; margin-right: 4px; font-size: 0.9em; }
+        
+        .date-pill { font-size: 0.85em; margin-right: 6px; }
+        .date-far { color: var(--base01); }
+        .date-soon { color: var(--yellow); font-weight: bold; }
+        .date-urgent { color: var(--red); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <input type="file" id="import-picker" style="display:none" accept=".json">
+
+    <div class="input-line">
+        <span class="prompt">❯</span>
+        <div class="input-stack">
+            <div id="ghost-input" class="ghost"></div>
+            <input type="text" id="cmd-input" autofocus autocomplete="off" spellcheck="false" placeholder="add Buy Milk pro:Home due:20250501...">
+        </div>
+    </div>
+
+    <div id="terminal-output">
+        <div style="color: var(--base01); margin-bottom: 10px;">Tasca v0.0.13 [Restored Placeholder]</div>
+    </div>
+
+<script>
+    // --- UTILS ---
+    const generateUUID = () => {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    };
+
+    const parseDate = (str) => {
+        if (!/^\d{8}$/.test(str)) return null;
+        const y = parseInt(str.substring(0,4));
+        const m = parseInt(str.substring(4,6)) - 1;
+        const d = parseInt(str.substring(6,8));
+        const date = new Date(y, m, d);
+        date.setHours(23, 59, 59, 999);
+        return date.getTime();
+    };
+    
+    const formatDate = (ts) => {
+        if(!ts) return "";
+        const d = new Date(ts);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}${m}${day}`;
+    };
+
+    const print = (html, clear = false) => {
+        const output = document.getElementById('terminal-output');
+        if(clear) output.innerHTML = '';
+        const div = document.createElement('div');
+        div.style.marginBottom = "8px";
+        div.innerHTML = html;
+        if (clear) output.innerHTML = ''; 
+        output.appendChild(div);
+        div.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    // --- DB ---
+    const DB_NAME = 'tasca_db';
+    const STORE_NAME = 'tasks';
+    let db;
+
+    const initDB = () => new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 3);
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: 'uuid' });
+        };
+        request.onsuccess = (e) => { db = e.target.result; resolve(db); };
+        request.onerror = (e) => reject(e.target.errorCode);
+    });
+
+    const dbOps = {
+        getAll: () => new Promise(resolve => {
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            tx.objectStore(STORE_NAME).getAll().onsuccess = e => resolve(e.target.result);
+        }),
+        add: (task) => new Promise((resolve) => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).add(task).onsuccess = () => resolve();
+        }),
+        update: (task) => new Promise(resolve => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).put(task).onsuccess = () => resolve();
+        }),
+        delete: (uuid) => new Promise(resolve => {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            tx.objectStore(STORE_NAME).delete(uuid).onsuccess = () => resolve();
+        }),
+        get: (uuid) => new Promise(resolve => {
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            tx.objectStore(STORE_NAME).get(uuid).onsuccess = e => resolve(e.target.result);
+        })
+    };
+
+    const handleExport = async () => {
+        const all = await dbOps.getAll();
+        const dataStr = JSON.stringify(all, null, 2);
+        const blob = new Blob([dataStr], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `tasca_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.json`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        print(`<span class="msg-success">Exported ${all.length} tasks.</span>`);
+    };
+
+    document.getElementById('import-picker').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            try {
+                const data = JSON.parse(ev.target.result);
+                for (const t of data) if (t.uuid) await dbOps.update(t);
+                print(`<span class="msg-success">Imported tasks.</span>`);
+                execute('list');
+            } catch (err) { print(`<span class="msg-error">Error: ${err.message}</span>`); }
+            e.target.value = '';
+        };
+        reader.readAsText(file);
+    });
+
+    // --- Logic ---
+    let displayMap = []; 
+    const C = { next: 15.0, due: 12.0, blocking: 8.0, blocked: -5.0, priority: { H: 6.0, M: 3.9, L: 1.8 }, age: 2.0, project: 1.0 };
+
+    const calculateUrgency = (t, allTasks) => {
+        let u = 0.0;
+        if (t.tags.includes('next')) u += C.next;
+        if (t.priority && C.priority[t.priority]) u += C.priority[t.priority];
+        if (t.project) u += C.project;
+        const ageDays = (Date.now() - t.entry) / (1000 * 60 * 60 * 24);
+        u += (ageDays > 100 ? C.age : (ageDays / 100) * C.age);
+        if (t.due) {
+            const daysLeft = (t.due - Date.now()) / (1000 * 60 * 60 * 24);
+            if (daysLeft <= 2) u += C.due; 
+            else if (daysLeft <= 14) u += C.due * (1 - (daysLeft - 2) / 12);
+        }
+        const isBlocking = allTasks.some(o => o.status === 'pending' && o.depends?.includes(t.uuid));
+        if (isBlocking) u += C.blocking;
+        if (t.depends?.length > 0) {
+            if (allTasks.filter(d => t.depends.includes(d.uuid)).some(d => d.status === 'pending')) u += C.blocked;
+        }
+        return u.toFixed(1);
+    };
+
+    const renderTable = (tasks, allTasks) => {
+        if (tasks.length === 0) return print('<span class="msg-info">No tasks found.</span>', true);
+        displayMap = tasks.map(t => t.uuid);
+        let html = `<div class="table-wrapper"><table><thead><tr><th style="width:20px">ID</th><th>Desc</th><th style="text-align:right">Urg</th></tr></thead><tbody>`;
+        tasks.forEach((t, index) => {
+            let desc = t.description;
+            if(t.project) desc = `<span class="row-proj">${t.project}</span> ${desc}`;
+            if(t.priority) desc = `<span style="color:var(--red); font-weight:bold">!${t.priority}</span> ${desc}`;
+            if (t.due) {
+                const daysLeft = (t.due - Date.now()) / (1000 * 60 * 60 * 24);
+                let cls = "date-far";
+                if (daysLeft < 1) cls = "date-urgent"; else if (daysLeft < 7) cls = "date-soon";
+                desc = `<span class="date-pill ${cls}">due:${formatDate(t.due)}</span>` + desc;
+            }
+            const tags = t.tags.length ? t.tags.map(tag => `<span class="tag-pill">+${tag}</span>`).join('') : '';
+            let depStr = "";
+            const isBlocking = allTasks.some(o => o.status === 'pending' && o.depends?.includes(t.uuid));
+            if (isBlocking) depStr += `<span class="dep-pill">[Blocking]</span>`;
+            if (t.depends?.length > 0 && allTasks.filter(d => t.depends.includes(d.uuid)).some(d => d.status === 'pending')) depStr += `<span class="blocked-pill">[Blocked]</span>`;
+            
+            html += `<tr><td class="row-id">${index + 1}</td><td class="row-desc">${depStr}${desc} ${tags} <span style="color:var(--base01); font-size:0.8em">(${Math.floor((Date.now() - t.entry) / 864e5)}d)</span></td><td class="row-urgency">${t.urgency}</td></tr>`;
+        });
+        html += `</tbody></table></div>`;
+        print(html, true); 
+    };
+
+    // --- COMMAND HANDLING ---
+    const VALID_COMMANDS = ['add', 'log', 'list', 'ls', 'next', 'done', 'delete', 'rm', 'modify', 'mod', 'export', 'import', 'help', 'clear'];
+    
+    const resolveCommand = (str) => {
+        const matches = VALID_COMMANDS.filter(c => c.startsWith(str));
+        return matches.length === 1 ? matches[0] : null;
+    };
+
+    const execute = async (str) => {
+        try {
+            const parts = str.trim().split(/\s+/);
+            if(!parts.length || parts[0] === '') return;
+            if(parts[0] === 'task') parts.shift();
+
+            let rawCmd = parts[0];
+            let cmd = resolveCommand(rawCmd);
+            if (!cmd && rawCmd.match(/^\d+$/)) cmd = 'info'; 
+            if (!cmd) cmd = rawCmd; 
+
+            let args = parts.slice(1);
+            let targetId = rawCmd.match(/^\d+$/) ? parseInt(rawCmd) : null;
+
+            if (cmd === 'export') await handleExport();
+            else if (cmd === 'import') document.getElementById('import-picker').click();
+            else if (cmd === 'clear') document.getElementById('terminal-output').innerHTML = '';
+
+            else if (['add', 'log'].includes(cmd)) {
+                let desc = [], proj = "", priority = "", tags = [], depends = [], due = null;
+                for (let token of args) {
+                    if (token.startsWith('pro:') || token.startsWith('project:')) proj = token.split(':')[1];
+                    else if (token.startsWith('pri:') || token.startsWith('priority:')) priority = token.split(':')[1].toUpperCase();
+                    else if (token.startsWith('dep:')) token.split(':')[1].split(',').forEach(id => { if(displayMap[id-1]) depends.push(displayMap[id-1]); });
+                    else if (token.startsWith('due:')) due = parseDate(token.split(':')[1]);
+                    else if (token.startsWith('+')) tags.push(token.substring(1));
+                    else desc.push(token);
+                }
+                if (desc.length === 0) return print('<span class="msg-error">No description.</span>');
+                await dbOps.add({ uuid: generateUUID(), description: desc.join(' '), project: proj, priority, tags, depends, due, status: 'pending', entry: Date.now() });
+                execute('list');
+            }
+
+            else if (['list', 'ls', 'next'].includes(cmd)) {
+                const all = await dbOps.getAll();
+                let pending = all.filter(t => t.status === 'pending');
+                let search = [], fProj = null, fTags = [];
+                for (let token of args) {
+                    if (token.startsWith('pro:') || token.startsWith('project:')) fProj = token.split(':')[1];
+                    else if (token.startsWith('+')) fTags.push(token.substring(1));
+                    else search.push(token.toLowerCase());
+                }
+                if (fProj) pending = pending.filter(t => t.project === fProj);
+                if (fTags.length) pending = pending.filter(t => fTags.every(tg => t.tags.includes(tg)));
+                if (search.length) pending = pending.filter(t => {
+                    const d = t.description.toLowerCase();
+                    return search.every(s => d.includes(s));
+                });
+                pending.forEach(t => t.urgency = calculateUrgency(t, all));
+                pending.sort((a,b) => parseFloat(b.urgency) - parseFloat(a.urgency));
+                renderTable(pending, all);
+            }
+
+            else if (targetId && (args[0] === 'mod' || args[0] === 'modify') || (['modify','mod'].includes(cmd) && args[0].match(/^\d+$/))) {
+                const id = targetId || parseInt(args[0]);
+                const tokens = targetId ? args : args.slice(1);
+                
+                if (!id || !displayMap[id-1]) return print('<span class="msg-error">Invalid ID.</span>');
+                const task = await dbOps.get(displayMap[id-1]);
+                
+                tokens.forEach(token => {
+                    if (token.startsWith('pri:')) task.priority = token.split(':')[1].toUpperCase();
+                    if (token.startsWith('pro:')) task.project = token.split(':')[1];
+                    if (token.startsWith('due:')) task.due = parseDate(token.split(':')[1]);
+                    if (token.startsWith('+')) task.tags.push(token.substring(1));
+                    if (token.startsWith('dep:')) {
+                         if(!task.depends) task.depends = [];
+                         token.split(':')[1].split(',').forEach(i => { if(displayMap[i-1]) task.depends.push(displayMap[i-1]); });
+                    }
+                });
+                await dbOps.update(task);
+                execute('list');
+            }
+
+            else if (cmd === 'done' || (targetId && args[0] === 'done')) {
+                const id = targetId || parseInt(args.find(a => a.match(/^\d+$/)));
+                if (!id || !displayMap[id-1]) return print('<span class="msg-error">Invalid ID.</span>');
+                const task = await dbOps.get(displayMap[id-1]);
+                if(task) { task.status = 'completed'; await dbOps.update(task); execute('list'); }
+            }
+
+            else if (['delete', 'rm'].includes(cmd)) {
+                const id = parseInt(args[0]);
+                if (!id || !displayMap[id-1]) return print('<span class="msg-error">Invalid ID.</span>');
+                await dbOps.delete(displayMap[id-1]);
+                execute('list');
+            }
+            
+            else if (cmd === 'help') {
+                print(`<span style="color:var(--yellow)">Commands:</span> add, list, done, delete, modify, export, import`);
+            }
+            else print(`<span class="msg-error">Unknown: ${cmd}</span>`);
+
+        } catch (err) { console.error(err); print(`<span class="msg-error">Error: ${err.message}</span>`); }
+    };
+
+    // --- GHOST LOGIC ---
+    const input = document.getElementById('cmd-input');
+    const ghost = document.getElementById('ghost-input');
+
+    input.addEventListener('input', () => {
+        const val = input.value;
+        const parts = val.split(' ');
+        
+        // Only suggest if typing first word
+        if (parts.length === 1 && val.length > 0) {
+            const match = resolveCommand(val);
+            if (match && match !== val) {
+                const suffix = match.substring(val.length);
+                ghost.innerHTML = `<span style="opacity:0">${val}</span><span style="opacity:0.4">${suffix}</span>`;
+                return;
+            }
+        }
+        ghost.innerHTML = '';
+    });
+
+    input.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter') { 
+            const val = input.value; 
+            input.value = ''; 
+            ghost.innerHTML = ''; 
+            await execute(val); 
+        }
+    });
+
+    // --- INIT ---
+    initDB().then(async () => {
+        try { const tasks = await dbOps.getAll(); if(tasks.length) execute('list'); } catch(e){}
+    });
+
+</script>
+</body>
+</html>
