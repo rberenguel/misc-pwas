@@ -1,0 +1,175 @@
+:root {
+    --bg-color: #000;
+    --text-color: #fff;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: -apple-system, system-ui, sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.6s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+/* --- TYPOGRAPHY --- */
+#timer {
+    font-size: 42vmin;
+    font-weight: 900;
+    line-height: 0.8;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -2px;
+    pointer-events: none; /* Critical: lets clicks pass to body */
+}
+
+#round-info {
+    font-size: 8vmin;
+    font-weight: 700;
+    margin-top: 2vh;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    opacity: 0.8;
+    pointer-events: none;
+}
+
+/* --- SCREENS & OVERLAYS --- */
+.screen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.3s ease;
+    z-index: 10;
+}
+
+/* Start Screen */
+#start-screen {
+    background-color: #000;
+    z-index: 20;
+}
+
+/* Pause Screen */
+#pause-screen {
+    background-color: rgba(0,0,0,0.85);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    z-index: 30;
+    display: none;
+    cursor: default;
+}
+
+/* History Screen */
+#history-screen {
+    background-color: #111;
+    z-index: 40;
+    display: none;
+    justify-content: flex-start;
+    padding-top: 80px;
+    cursor: default;
+}
+
+/* Delete Confirmation Modal */
+#delete-modal {
+    background-color: rgba(0,0,0,0.9);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    z-index: 50;
+    display: none;
+    cursor: default;
+}
+
+/* --- BUTTONS --- */
+.btn-group {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 70%;
+    max-width: 300px;
+}
+
+.btn {
+    background: transparent;
+    border: 3px solid #fff;
+    color: #fff;
+    padding: 20px;
+    font-size: 1.5rem;
+    font-weight: 800;
+    text-align: center;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 12px;
+}
+
+.btn:active {
+    background: #fff;
+    color: #000;
+}
+
+#history-toggle {
+    position: absolute;
+    top: env(safe-area-inset-top, 20px);
+    right: 20px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    opacity: 0.6;
+    padding: 20px;
+    z-index: 50; /* Ensure it's always clickable */
+}
+
+/* History List */
+#history-list {
+    width: 85%;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.history-item {
+    border-bottom: 1px solid #333;
+    padding: 15px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1.1rem;
+    color: #eee;
+}
+
+.history-item-content {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+}
+
+.history-delete {
+    background: transparent;
+    border: 1px solid #c00;
+    color: #c00;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 6px;
+    margin-left: 15px;
+}
+
+.history-delete:active {
+    background: #c00;
+    color: #000;
+}
+
+/* Utility Class for Fading */
+.hidden {
+    opacity: 0;
+    pointer-events: none; /* Critical: allows clicking 'through' the hidden start screen */
+}
