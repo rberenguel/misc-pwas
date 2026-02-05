@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="fonts/reforma.css" />
     <link rel="stylesheet" href="fonts/roboto.css" />
     <link rel="stylesheet" href="fonts/iconoir/iconoir-font.css" />
+    <link rel="stylesheet" href="fonts/phosphor/phosphor.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link id="google-font-link" href="" rel="stylesheet" />
@@ -42,6 +43,39 @@
           transform: rotate(360deg);
         }
       }
+      .autocomplete-item {
+        padding: 0.5rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        transition: background-color 0.15s;
+      }
+      .autocomplete-item:hover,
+      .autocomplete-item.selected {
+        background-color: #4b5563;
+      }
+      .autocomplete-icon {
+        font-size: 1.25rem;
+        width: 1.5rem;
+        text-align: center;
+        flex-shrink: 0;
+      }
+      .autocomplete-name {
+        font-size: 0.875rem;
+        color: #e5e7eb;
+      }
+      .autocomplete-source {
+        font-size: 0.75rem;
+        color: #9ca3af;
+        margin-left: auto;
+      }
+      .iconoir-icon {
+        font-family: "iconoir";
+      }
+      .phosphor-icon {
+        font-family: "Phosphor-Light";
+      }
     </style>
   </head>
   <body
@@ -54,7 +88,7 @@
       <div class="lg:w-1/2 w-full space-y-6">
         <h1 class="text-2xl md:text-3xl font-bold text-white">Iconer</h1>
 
-        <div>
+        <div class="relative">
           <label
             for="letter-input"
             class="block text-sm font-medium text-gray-300 mb-1"
@@ -65,7 +99,17 @@
             id="letter-input"
             value="A"
             class="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
+            autocomplete="off"
           />
+          <div
+            id="autocomplete-dropdown"
+            class="hidden absolute z-10 w-full mt-1 bg-gray-700 border border-gray-600 rounded-lg shadow-lg max-h-64 overflow-y-auto"
+          >
+            <div id="autocomplete-list" class="py-1"></div>
+          </div>
+          <p class="text-xs text-gray-400 mt-1">
+            Type : for Iconoir or { for Phosphor (semantic search enabled)
+          </p>
         </div>
 
         <div>
@@ -190,6 +234,6 @@
 
     <style id="custom-css-style"></style>
 
-    <script src="main.js"></script>
+    <script type="module" src="main.js"></script>
   </body>
 </html>
