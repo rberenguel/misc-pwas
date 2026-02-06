@@ -1,53 +1,95 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
     <title>ugh</title>
-    <link rel="manifest" href="manifest.json">
-    <link rel="icon" href="media/favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="css/style.css">
-</head>
-<body>
-
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" href="media/favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
     <div id="start-screen" class="screen">
-        <div id="history-toggle">HISTORY</div>
-        <h1 style="font-size: 15vw; margin: 0; line-height: 0.9;">ugh</h1>
-        <p style="opacity: 0.5; margin-bottom: 60px;">TAP TO START</p>
+      <div id="history-toggle">HISTORY</div>
+      <h1 style="font-size: 15vw; margin: 0; line-height: 0.9">ugh</h1>
+      <p style="opacity: 0.5; margin-bottom: 60px">TAP TO START</p>
     </div>
 
     <div id="pause-screen" class="screen">
-        <h1 style="font-size: 12vw; margin-bottom: 40px; color: #fff;">PAUSED</h1>
-        <div class="btn-group">
-            <div id="btn-resume" class="btn" style="border-color: #0c0; color: #0c0;">RESUME</div>
-            <div id="btn-cancel" class="btn" style="border-color: #cc0; color: #cc0;">CANCEL</div>
-            <div id="btn-finish" class="btn" style="border-color: #c00; color: #c00;">FINISH</div>
+      <h1 style="font-size: 12vw; margin-bottom: 40px; color: #fff">PAUSED</h1>
+      <div class="btn-group">
+        <div
+          id="btn-resume"
+          class="btn"
+          style="border-color: #0c0; color: #0c0"
+        >
+          RESUME
         </div>
+        <div
+          id="btn-cancel"
+          class="btn"
+          style="border-color: #cc0; color: #cc0"
+        >
+          CANCEL
+        </div>
+        <div
+          id="btn-finish"
+          class="btn"
+          style="border-color: #c00; color: #c00"
+        >
+          FINISH
+        </div>
+      </div>
     </div>
 
     <div id="history-screen" class="screen">
-        <h2 style="margin-bottom: 20px; color: #fff;">SESSIONS</h2>
-        <div id="history-list"></div>
-        <div class="btn-group" style="margin-top: 30px; width: 70%; max-width: 300px;">
-            <div id="btn-export-history" class="btn" style="border-width: 1px;">EXPORT MD</div>
-            <div id="btn-close-history" class="btn" style="border-width: 1px;">CLOSE</div>
+      <h2 style="margin-bottom: 20px; color: #fff">SESSIONS</h2>
+      <div id="history-list"></div>
+      <div
+        class="btn-group"
+        style="margin-top: 30px; width: 70%; max-width: 300px"
+      >
+        <div id="btn-export-history" class="btn" style="border-width: 1px">
+          EXPORT MD
         </div>
+        <div id="btn-close-history" class="btn" style="border-width: 1px">
+          CLOSE
+        </div>
+      </div>
     </div>
 
     <div id="delete-modal" class="screen">
-        <h1 style="font-size: 10vw; margin-bottom: 20px; color: #fff;">DELETE SESSION?</h1>
-        <p style="opacity: 0.7; margin-bottom: 40px; font-size: 1.1rem;">This cannot be undone</p>
-        <div class="btn-group">
-            <div id="btn-confirm-delete" class="btn" style="border-color: #c00; color: #c00;">DELETE</div>
-            <div id="btn-cancel-delete" class="btn">CANCEL</div>
+      <h1 style="font-size: 10vw; margin-bottom: 20px; color: #fff">
+        DELETE SESSION?
+      </h1>
+      <p style="opacity: 0.7; margin-bottom: 40px; font-size: 1.1rem">
+        This cannot be undone
+      </p>
+      <div class="btn-group">
+        <div
+          id="btn-confirm-delete"
+          class="btn"
+          style="border-color: #c00; color: #c00"
+        >
+          DELETE
         </div>
+        <div id="btn-cancel-delete" class="btn">CANCEL</div>
+      </div>
     </div>
 
-    <div id="timer">00</div>
-    <div id="round-info">ROUND 1</div>
+    <div id="countdown-container">
+      <div id="timer">00</div>
+      <div id="round-info">ROUND 1</div>
+    </div>
 
     <script type="module" src="js/app.js"></script>
-</body>
+  </body>
 </html>

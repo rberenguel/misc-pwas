@@ -1,7 +1,7 @@
 {
   "name": "ugh",
   "short_name": "ugh",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#000000",
