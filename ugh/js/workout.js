@@ -3,13 +3,33 @@ import { elements, updateColors, resetColors, toggleWakeLock } from './ui.js';
 import { tick } from './timer.js';
 import { saveSession } from './history.js';
 
+async function countdown() {
+    return new Promise((resolve) => {
+        let count = 3;
+        elements.timer.innerText = count.toString();
+        elements.timer.style.fontSize = '28vmin';
+        elements.roundInfo.style.display = 'none';
+
+        const countdownInterval = setInterval(() => {
+            count--;
+            if (count > 0) {
+                elements.timer.innerText = count.toString();
+            } else {
+                clearInterval(countdownInterval);
+                elements.timer.style.fontSize = '42vmin';
+                resolve();
+            }
+        }, 1000);
+    });
+}
+
 export async function startWorkout() {
-    state.current = STATE.RUNNING;
+    state.current = STATE.COUNTDOWN;
 
     // Reset Values
     state.seconds = 60;
     state.totalMinutes = 0;
-    elements.timer.innerText = "00";
+    elements.timer.innerText = "3";
     elements.roundInfo.innerText = "ROUND 1";
 
     // UI
@@ -18,6 +38,14 @@ export async function startWorkout() {
 
     // Wake Lock
     await toggleWakeLock(true);
+
+    // Countdown
+    await countdown();
+
+    // Start running
+    state.current = STATE.RUNNING;
+    elements.timer.innerText = "00";
+    elements.roundInfo.style.display = 'block';
 
     // Loop
     clearInterval(state.timerInterval);
@@ -31,9 +59,21 @@ export function pauseWorkout() {
 }
 
 export async function resumeWorkout() {
-    state.current = STATE.RUNNING;
+    state.current = STATE.COUNTDOWN;
+    elements.roundInfo.style.display = 'none';
+    elements.timer.innerText = '3';
+    elements.timer.style.fontSize = '28vmin';
     elements.pauseScreen.style.display = 'none';
     await toggleWakeLock(true);
+
+    // Countdown
+    await countdown();
+
+    // Start running
+    state.current = STATE.RUNNING;
+    elements.timer.innerText = state.seconds.toString().padStart(2, '0');
+
+    // Loop
     state.timerInterval = setInterval(tick, 1000);
 }
 

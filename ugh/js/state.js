@@ -1,5 +1,6 @@
 export const STATE = {
     IDLE: 'idle',
+    COUNTDOWN: 'countdown',
     RUNNING: 'running',
     PAUSED: 'paused'
 };
