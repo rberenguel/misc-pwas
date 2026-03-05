@@ -38,35 +38,73 @@ const pauseIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24
 const resetIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>`;
 
 // --- Initialization ---
-function initNumpad() {
-  for (let i = 2; i <= 18; i++) {
-    const btn = document.createElement("button");
-    btn.className = "numpad-btn";
-    btn.innerText = i;
-    btn.onclick = () => handleInput(i);
-    btn.disabled = true;
-    numpadButtons.push(btn);
-    elNumpad.appendChild(btn);
+// --- Core Logic ---
+// Extract the input buffering logic into a reusable function
+function processDigitInput(digit) {
+  if (gameState !== "playing") return;
+
+  keyBuffer += digit;
+
+  if (keyTimeout) clearTimeout(keyTimeout);
+
+  // Auto-submit if 2 digits are entered, OR if a single digit != "1" is entered 
+  // (since the maximum sum in 1-back 1-9 addition is 18)
+  if (
+    keyBuffer.length === 2 ||
+    (keyBuffer !== "1" && keyBuffer.length === 1)
+  ) {
+    const val = parseInt(keyBuffer, 10);
+    handleInput(val);
+    keyBuffer = "";
+  } else {
+    // Wait 300ms to see if a second digit is typed for sums 10-18
+    keyTimeout = setTimeout(() => {
+      const val = parseInt(keyBuffer, 10);
+      if (!isNaN(val)) handleInput(val);
+      keyBuffer = "";
+    }, 300);
   }
-
-  // Add controls wrapper
-  const controlsWrapper = document.createElement("div");
-  controlsWrapper.className = "controls-wrapper";
-
-  btnPlay = document.createElement("button");
-  btnPlay.className = "control-btn play-btn";
-  btnPlay.innerHTML = playIcon;
-  btnPlay.onclick = togglePlayState;
-
-  const btnReset = document.createElement("button");
-  btnReset.className = "control-btn reset-btn";
-  btnReset.innerHTML = resetIcon;
-  btnReset.onclick = resetGame;
-
-  controlsWrapper.appendChild(btnPlay);
-  controlsWrapper.appendChild(btnReset);
-  elNumpad.appendChild(controlsWrapper);
 }
+
+// --- Initialization ---
+// --- Initialization ---
+function initNumpad() {
+  const layout = [
+    '1', '2', '3',
+    '4', '5', '6',
+    '7', '8', '9',
+    'play', '0', 'reset'
+  ];
+
+  layout.forEach(key => {
+    if (key === 'play') {
+      btnPlay = document.createElement("button");
+      btnPlay.className = "numpad-btn play-btn"; 
+      btnPlay.innerHTML = playIcon;
+      btnPlay.onclick = togglePlayState;
+      elNumpad.appendChild(btnPlay);
+    } else if (key === 'reset') {
+      const btnReset = document.createElement("button");
+      btnReset.className = "numpad-btn reset-btn";
+      btnReset.innerHTML = resetIcon;
+      btnReset.onclick = resetGame;
+      elNumpad.appendChild(btnReset);
+    } else {
+      const btn = document.createElement("button");
+      btn.className = "numpad-btn";
+      btn.innerText = key;
+      btn.onclick = () => {
+        triggerHaptic();
+        processDigitInput(key);
+      };
+      btn.disabled = true;
+      numpadButtons.push(btn);
+      elNumpad.appendChild(btn);
+    }
+  });
+}
+
+
 
 // --- Core Logic ---
 function handleTick() {
@@ -234,30 +272,15 @@ function resetGame() {
 }
 
 // --- Keyboard Support ---
+// --- Keyboard Support ---
 window.addEventListener("keydown", (e) => {
   if (gameState !== "playing") return;
 
   if (e.key >= "0" && e.key <= "9") {
-    keyBuffer += e.key;
-
-    if (keyTimeout) clearTimeout(keyTimeout);
-
-    if (
-      keyBuffer.length === 2 ||
-      (keyBuffer !== "1" && keyBuffer.length === 1)
-    ) {
-      const val = parseInt(keyBuffer, 10);
-      handleInput(val);
-      keyBuffer = "";
-    } else {
-      keyTimeout = setTimeout(() => {
-        const val = parseInt(keyBuffer, 10);
-        if (!isNaN(val)) handleInput(val);
-        keyBuffer = "";
-      }, 300);
-    }
+    processDigitInput(e.key);
   }
 });
+
 
 // Run Init
 initHaptic();

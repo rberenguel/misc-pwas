@@ -61,13 +61,16 @@ button {
 }
 
 /* Layout */
+
 .app-container {
   width: 100%;
   max-width: 28rem;
-  padding: 1.5rem;
+  padding: 0.5rem;
   display: flex;
   flex-direction: column;
+  justify-content: top; /* Add this to center the whole app vertically */
   height: 100dvh;
+	margin-bottom:10%;
 }
 
 .header-stats {
@@ -122,9 +125,8 @@ button {
   border-radius: 9999px;
 }
 
-/* Display Area */
 .display-area {
-  flex: 1;
+  /* Remove flex: 1; */
   min-height: 160px;
   display: flex;
   align-items: center;
@@ -208,13 +210,13 @@ button {
   animation: pop 0.15s ease-out forwards;
 }
 
-/* Numpad */
 .numpad {
-  margin-top: 2rem;
+  margin-top: 2rem; /* Revert this back from 'auto' */
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
 }
+
 
 .numpad-btn {
   background-color: var(--bg-btn);
