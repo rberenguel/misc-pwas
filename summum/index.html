@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Summum</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="manifest" href="manifest.json" />
+  </head>
+  <body>
+    <div class="app-container">
+      <!-- Header Stats -->
+      <div class="header-stats">
+        <div>
+          <div class="stat-label">CCT • Visual</div>
+          <div class="stat-group">
+            <div>
+              <span class="label">Acc:</span> <span id="ui-acc">0</span>%
+            </div>
+            <div>
+              <span class="label">Strk:</span> <span id="ui-streak">0</span>
+            </div>
+          </div>
+        </div>
+        <div class="stat-right">
+          <div>
+            <span class="label">Pace:</span> <span id="ui-pace">3.00</span>s
+          </div>
+          <div>
+            <span class="label">Best:</span> <span id="ui-best">3.00</span>s
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress Bar -->
+      <div class="progress-container">
+        <div id="progress-bar" class="progress-bar" style="width: 100%"></div>
+      </div>
+
+      <!-- Display Area -->
+      <div id="display-area" class="display-area border-normal">
+        <div id="idle-text" class="idle-text">
+          <p>Sum current digit with the previous.</p>
+          <p class="sub">2 correct = faster. 1 miss = slower.</p>
+        </div>
+        <div id="digit" class="digit-text hidden">?</div>
+      </div>
+
+      <!-- Input Keypad Container -->
+      <div id="numpad" class="numpad">
+        <!-- Buttons injected via JS -->
+      </div>
+
+      <!-- Status Text -->
+      <div id="status-text" class="status-text"></div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

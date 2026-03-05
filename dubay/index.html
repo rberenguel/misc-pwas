@@ -1,398 +1,527 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Italic handwriting analysis tool for profiling text patterns and joins">
-    <meta name="theme-color" content="#2b6cb0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Italic handwriting analysis tool for profiling text patterns and joins"
+    />
+    <meta name="theme-color" content="#2b6cb0" />
     <title>Dubay</title>
-    <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="favicon.ico" type="image/x-icon" />
+    <link rel="manifest" href="manifest.json" />
     <style>
+      :root {
+        --bg: #ffffff;
+        --text: #1a1a1a;
+        --border: #cbd5e0;
+        --accent: #2b6cb0;
+        --subtle: #718096;
+        --card-bg: #f7fafc;
+        --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+      }
+
+      @media (prefers-color-scheme: dark) {
         :root {
-            --bg: #ffffff;
-            --text: #1a1a1a;
-            --border: #cbd5e0;
-            --accent: #2b6cb0;
-            --subtle: #718096;
-            --card-bg: #f7fafc;
-            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+          --bg: #1a202c;
+          --text: #f7fafc;
+          --border: #2d3748;
+          --accent: #63b3ed;
+          --subtle: #a0aec0;
+          --card-bg: #2d3748;
+          --shadow: none;
         }
+      }
 
-        @media (prefers-color-scheme: dark) {
-            :root {
-                --bg: #1a202c;
-                --text: #f7fafc;
-                --border: #2d3748;
-                --accent: #63b3ed;
-                --subtle: #a0aec0;
-                --card-bg: #2d3748;
-                --shadow: none;
-            }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        background-color: var(--bg);
+        color: var(--text);
+        margin: 0;
+        padding: 0;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .main-container {
+        flex: 1;
+        width: 100%;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+      }
+
+      /* Views */
+      .view {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      .view.hidden {
+        display: none !important;
+      }
+
+      /* Input View */
+      textarea {
+        flex: 1;
+        width: 100%;
+        background: var(--bg);
+        color: var(--text);
+        border: 2px solid var(--border);
+        border-radius: 8px;
+        padding: 20px;
+        font-family: monospace;
+        font-size: 16px;
+        line-height: 1.6;
+        resize: none;
+        box-sizing: border-box;
+      }
+
+      textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+
+      /* Output View */
+      .output-scroller {
+        flex: 1;
+        overflow-y: auto;
+        padding-right: 5px;
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        padding-bottom: 40px;
+      }
+
+      .card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 15px;
+        box-shadow: var(--shadow);
+        break-inside: avoid;
+      }
+
+      .card.full-width {
+        grid-column: span 2;
+      }
+
+      .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 10px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 6px;
+      }
+
+      .card h3 {
+        margin: 0;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--subtle);
+      }
+
+      .card-desc {
+        font-size: 0.8rem;
+        color: var(--accent);
+        font-style: italic;
+      }
+
+      .data-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        font-family: monospace;
+        font-size: 1rem;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+        gap: 6px 15px;
+      }
+
+      .data-list li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .count {
+        color: var(--subtle);
+        font-size: 0.75em;
+        background: var(--border);
+        padding: 1px 5px;
+        border-radius: 8px;
+      }
+
+      /* Toolbar */
+      .toolbar {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        margin-bottom: 15px;
+        gap: 15px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 10px;
+      }
+
+      .btn-link {
+        background: none;
+        border: none;
+        color: var(--subtle);
+        cursor: pointer;
+        font-size: 0.85rem;
+        padding: 0;
+      }
+      .btn-link:hover {
+        text-decoration: underline;
+        color: var(--accent);
+      }
+
+      .btn-print {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 4px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        font-weight: 500;
+      }
+      .btn-print:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      /* PRINT STYLES */
+      @media print {
+        @page {
+          margin: 1cm;
+          size: portrait;
         }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
-            margin: 0;
-            padding: 0;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
+          background: white;
+          color: black;
+          height: auto;
+          overflow: visible;
+          font-size: 11pt;
         }
-
         .main-container {
-            flex: 1;
-            width: 100%;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            position: relative;
+          max-width: 100%;
+          margin: 0;
+          padding: 0;
+          display: block;
         }
-
-        /* Views */
-        .view {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
+        #inputView,
+        .toolbar {
+          display: none !important;
         }
-
-        .view.hidden { display: none !important; }
-
-        /* Input View */
-        textarea {
-            flex: 1;
-            width: 100%;
-            background: var(--bg);
-            color: var(--text);
-            border: 2px solid var(--border);
-            border-radius: 8px;
-            padding: 20px;
-            font-family: monospace;
-            font-size: 16px;
-            line-height: 1.6;
-            resize: none;
-            box-sizing: border-box;
+        #outputView {
+          display: block !important;
         }
-
-        textarea:focus { outline: none; border-color: var(--accent); }
-
-        /* Output View */
         .output-scroller {
-            flex: 1;
-            overflow-y: auto;
-            padding-right: 5px;
+          overflow: visible;
+          height: auto;
         }
 
         .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            padding-bottom: 40px;
+          display: block;
         }
-
         .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 15px;
-            box-shadow: var(--shadow);
-            break-inside: avoid;
+          background: white;
+          border: 1px solid #000;
+          box-shadow: none;
+          margin-bottom: 15px;
+          border-radius: 0;
+          width: 100%;
         }
-
-        .card.full-width {
-            grid-column: span 2;
-        }
-
         .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: baseline;
-            margin-bottom: 10px;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 6px;
+          border-bottom: 1px solid #000;
         }
-
         .card h3 {
-            margin: 0;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--subtle);
+          color: #000;
+          font-weight: bold;
         }
-
         .card-desc {
-            font-size: 0.8rem;
-            color: var(--accent);
-            font-style: italic;
+          color: #444;
         }
-
-        .data-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            font-family: monospace;
-            font-size: 1rem;
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-            gap: 6px 15px;
-        }
-
-        .data-list li {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
         .count {
-            color: var(--subtle);
-            font-size: 0.75em;
-            background: var(--border);
-            padding: 1px 5px;
-            border-radius: 8px;
+          border: 1px solid #ccc;
+          background: white;
+          color: black;
         }
 
-        /* Toolbar */
-        .toolbar {
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-            margin-bottom: 15px;
-            gap: 15px;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 10px;
+        .main-container::before {
+          content: "Italic Handwriting Analysis Drill";
+          display: block;
+          font-size: 1.5rem;
+          font-weight: bold;
+          margin-bottom: 10px;
+          border-bottom: 2px solid black;
         }
-
-        .btn-link {
-            background: none;
-            border: none;
-            color: var(--subtle);
-            cursor: pointer;
-            font-size: 0.85rem;
-            padding: 0;
-        }
-        .btn-link:hover { text-decoration: underline; color: var(--accent); }
-
-        .btn-print {
-            background: var(--bg);
-            border: 1px solid var(--border);
-            color: var(--text);
-            padding: 4px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-        .btn-print:hover { border-color: var(--accent); color: var(--accent); }
-
-        /* PRINT STYLES */
-        @media print {
-            @page { margin: 1cm; size: portrait; }
-            body { background: white; color: black; height: auto; overflow: visible; font-size: 11pt; }
-            .main-container { max-width: 100%; margin: 0; padding: 0; display: block; }
-            #inputView, .toolbar { display: none !important; }
-            #outputView { display: block !important; }
-            .output-scroller { overflow: visible; height: auto; }
-            
-            .stats-grid { display: block; }
-            .card { 
-                background: white; 
-                border: 1px solid #000; 
-                box-shadow: none; 
-                margin-bottom: 15px; 
-                border-radius: 0;
-                width: 100%;
-            }
-            .card-header { border-bottom: 1px solid #000; }
-            .card h3 { color: #000; font-weight: bold; }
-            .card-desc { color: #444; }
-            .count { border: 1px solid #ccc; background: white; color: black; }
-
-            .main-container::before {
-                content: "Italic Handwriting Analysis Drill";
-                display: block;
-                font-size: 1.5rem;
-                font-weight: bold;
-                margin-bottom: 10px;
-                border-bottom: 2px solid black;
-            }
-        }
-
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
+    <div class="main-container">
+      <div id="inputView" class="view">
+        <textarea
+          id="inputText"
+          placeholder="Paste text here to analyze...&#10;&#10;Auto-switches on paste.&#10;Press ESC to toggle view."
+        ></textarea>
+      </div>
 
-<div class="main-container">
-
-    <div id="inputView" class="view">
-        <textarea id="inputText" placeholder="Paste text here to analyze...&#10;&#10;Auto-switches on paste.&#10;Press ESC to toggle view."></textarea>
-    </div>
-
-    <div id="outputView" class="view hidden">
+      <div id="outputView" class="view hidden">
         <div class="toolbar">
-            <button class="btn-link" onclick="switchView('input')">Edit Text (ESC)</button>
-            <button class="btn-print" onclick="window.print()">Print Analysis</button>
+          <button class="btn-link" onclick="switchView('input')">
+            Edit Text (ESC)
+          </button>
+          <button class="btn-print" onclick="window.print()">
+            Print Analysis
+          </button>
         </div>
         <div class="output-scroller" id="outputContent">
-            <!-- Content injected here -->
+          <!-- Content injected here -->
         </div>
+      </div>
     </div>
 
-</div>
+    <script>
+      const inputView = document.getElementById("inputView");
+      const outputView = document.getElementById("outputView");
+      const textarea = document.getElementById("inputText");
+      const outputContent = document.getElementById("outputContent");
 
-<script>
-    const inputView = document.getElementById('inputView');
-    const outputView = document.getElementById('outputView');
-    const textarea = document.getElementById('inputText');
-    const outputContent = document.getElementById('outputContent');
+      // --- CLASSIFICATION RULES ---
 
-    // --- CLASSIFICATION RULES ---
+      // Join 1: Speed (Diagonals from baseline to n, m, r, etc)
+      const SPEED_TARGETS = new Set([
+        "n",
+        "m",
+        "r",
+        "x",
+        "i",
+        "u",
+        "w",
+        "y",
+        "t",
+        "l",
+        "h",
+        "k",
+        "b",
+        "p",
+        "j",
+      ]);
 
-    // Join 1: Speed (Diagonals from baseline to n, m, r, etc)
-    const SPEED_TARGETS = new Set(['n', 'm', 'r', 'x', 'i', 'u', 'w', 'y', 't', 'l', 'h', 'k', 'b', 'p', 'j']); 
-    
-    // Join 3: Hooks (Anti-Crumble)
-    const HOOK_TARGETS = new Set(['a', 'c', 'd', 'g', 'o', 'q', 's']);
-    
-    // Join 4: Into 'e' (Diagonal from BASELINE only)
-    const E_TARGET = new Set(['e']);
-    const JOIN_4_SOURCES = new Set(['a', 'c', 'd', 'e', 'h', 'i', 'k', 'l', 'm', 'n', 't', 'u', 'z']);
+      // Join 3: Hooks (Anti-Crumble)
+      const HOOK_TARGETS = new Set(["a", "c", "d", "g", "o", "q", "s"]);
 
-    // Join 5: Bridges (Horizontal out)
-    const HORIZONTAL_SOURCES = new Set(['o', 'v', 'w']);
-    
-    // Lifts: Reset points
-    const LIFT_SOURCES = new Set(['g', 'j', 'q', 'y', 'b', 'p']); 
-    const LIFT_TARGETS = new Set(['f', 'z']);
+      // Join 4: Into 'e' (Diagonal from BASELINE only)
+      const E_TARGET = new Set(["e"]);
+      const JOIN_4_SOURCES = new Set([
+        "a",
+        "c",
+        "d",
+        "e",
+        "h",
+        "i",
+        "k",
+        "l",
+        "m",
+        "n",
+        "t",
+        "u",
+        "z",
+      ]);
 
-    // Paste Handler
-    textarea.addEventListener('paste', () => { setTimeout(() => switchView('output'), 50); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') toggleView(); });
+      // Join 5: Bridges (Horizontal out)
+      const HORIZONTAL_SOURCES = new Set(["o", "v", "w"]);
 
-    function toggleView() {
-        inputView.classList.contains('hidden') ? switchView('input') : switchView('output');
-    }
+      // Lifts: Reset points
+      const LIFT_SOURCES = new Set(["g", "j", "q", "y", "b", "p"]);
+      const LIFT_TARGETS = new Set(["f", "z"]);
 
-    function switchView(mode) {
-        if (mode === 'output') {
-            analyzeText();
-            inputView.classList.add('hidden');
-            outputView.classList.remove('hidden');
+      // Paste Handler
+      textarea.addEventListener("paste", () => {
+        setTimeout(() => switchView("output"), 50);
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") toggleView();
+      });
+
+      function toggleView() {
+        inputView.classList.contains("hidden")
+          ? switchView("input")
+          : switchView("output");
+      }
+
+      function switchView(mode) {
+        if (mode === "output") {
+          analyzeText();
+          inputView.classList.add("hidden");
+          outputView.classList.remove("hidden");
         } else {
-            outputView.classList.add('hidden');
-            inputView.classList.remove('hidden');
-            textarea.focus();
+          outputView.classList.add("hidden");
+          inputView.classList.remove("hidden");
+          textarea.focus();
         }
-    }
+      }
 
-    function analyzeText() {
+      function analyzeText() {
         const text = textarea.value.toLowerCase();
         if (!text.trim()) {
-            outputContent.innerHTML = '<div style="text-align:center; color:var(--subtle); margin-top:40px;">Processing...</div>';
-            return;
+          outputContent.innerHTML =
+            '<div style="text-align:center; color:var(--subtle); margin-top:40px;">Processing...</div>';
+          return;
         }
 
         const words = text.match(/[a-z']+/g) || [];
-        const frequency = { 
-            words: {}, 
-            speed: {}, 
-            hooks: {}, 
-            bridges: {}, 
-            lifts: {}, 
-            e_joins: {},
-            doubles: {}
+        const frequency = {
+          words: {},
+          speed: {},
+          hooks: {},
+          bridges: {},
+          lifts: {},
+          e_joins: {},
+          doubles: {},
         };
 
-        words.forEach(word => {
-            if (word.length > 1) frequency.words[word] = (frequency.words[word] || 0) + 1;
-            
-            const cleanWord = word.replace(/'/g, '');
-            
-            // HEURISTIC: Skip connector analysis for short words (<= 3 chars)
-            // These should be practiced as whole-word vocabulary units.
-            if (cleanWord.length <= 3) return;
+        words.forEach((word) => {
+          if (word.length > 1)
+            frequency.words[word] = (frequency.words[word] || 0) + 1;
 
-            for (let i = 0; i < cleanWord.length - 1; i++) {
-                const c1 = cleanWord[i];
-                const c2 = cleanWord[i+1];
-                const bigram = c1 + c2;
+          const cleanWord = word.replace(/'/g, "");
 
-                // 1. Doubles check (Rhythm)
-                if (c1 === c2) {
-                    frequency.doubles[bigram] = (frequency.doubles[bigram] || 0) + 1;
-                }
+          // HEURISTIC: Skip connector analysis for short words (<= 3 chars)
+          // These should be practiced as whole-word vocabulary units.
+          if (cleanWord.length <= 3) return;
 
-                // 2. Lifts (Highest Priority)
-                if (LIFT_SOURCES.has(c1) || LIFT_TARGETS.has(c2)) {
-                    frequency.lifts[bigram] = (frequency.lifts[bigram] || 0) + 1;
-                    continue; 
-                }
+          for (let i = 0; i < cleanWord.length - 1; i++) {
+            const c1 = cleanWord[i];
+            const c2 = cleanWord[i + 1];
+            const bigram = c1 + c2;
 
-                // 3. Bridges (Horizontal out overrides target)
-                if (HORIZONTAL_SOURCES.has(c1)) {
-                    frequency.bridges[bigram] = (frequency.bridges[bigram] || 0) + 1;
-                    continue;
-                }
-
-                // 4. Join 4: Into 'e' (Strict Check: Only from baseline sources)
-                if (E_TARGET.has(c2) && JOIN_4_SOURCES.has(c1)) {
-                    frequency.e_joins[bigram] = (frequency.e_joins[bigram] || 0) + 1;
-                    continue;
-                }
-
-                // 5. Hooks (Anti-Crumble)
-                if (HOOK_TARGETS.has(c2)) {
-                    frequency.hooks[bigram] = (frequency.hooks[bigram] || 0) + 1;
-                    continue;
-                }
-
-                // 6. Speed (Diagonals & Swings)
-                if (SPEED_TARGETS.has(c2)) {
-                    frequency.speed[bigram] = (frequency.speed[bigram] || 0) + 1;
-                    continue;
-                }
+            // 1. Doubles check (Rhythm)
+            if (c1 === c2) {
+              frequency.doubles[bigram] = (frequency.doubles[bigram] || 0) + 1;
             }
+
+            // 2. Lifts (Highest Priority)
+            if (LIFT_SOURCES.has(c1) || LIFT_TARGETS.has(c2)) {
+              frequency.lifts[bigram] = (frequency.lifts[bigram] || 0) + 1;
+              continue;
+            }
+
+            // 3. Bridges (Horizontal out overrides target)
+            if (HORIZONTAL_SOURCES.has(c1)) {
+              frequency.bridges[bigram] = (frequency.bridges[bigram] || 0) + 1;
+              continue;
+            }
+
+            // 4. Join 4: Into 'e' (Strict Check: Only from baseline sources)
+            if (E_TARGET.has(c2) && JOIN_4_SOURCES.has(c1)) {
+              frequency.e_joins[bigram] = (frequency.e_joins[bigram] || 0) + 1;
+              continue;
+            }
+
+            // 5. Hooks (Anti-Crumble)
+            if (HOOK_TARGETS.has(c2)) {
+              frequency.hooks[bigram] = (frequency.hooks[bigram] || 0) + 1;
+              continue;
+            }
+
+            // 6. Speed (Diagonals & Swings)
+            if (SPEED_TARGETS.has(c2)) {
+              frequency.speed[bigram] = (frequency.speed[bigram] || 0) + 1;
+              continue;
+            }
+          }
         });
 
         renderOutput(frequency);
-    }
+      }
 
-    function renderOutput(data) {
-        const getTop = (obj, limit=16) => Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, limit);
-        
+      function renderOutput(data) {
+        const getTop = (obj, limit = 16) =>
+          Object.entries(obj)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, limit);
+
         let html = '<div class="stats-grid">';
-        
+
         // Full width vocab card
-        html += createCard("Top Vocabulary", "Short & Frequent Words (Practice as Units)", getTop(data.words, 24), true);
-        
+        html += createCard(
+          "Top Vocabulary",
+          "Short & Frequent Words (Practice as Units)",
+          getTop(data.words, 24),
+          true,
+        );
+
         // Row 1
-        html += createCard("Join 3: Hooks (Anti-Crumble)", "Stop & Reverse into a, c, d, g, o, q, s", getTop(data.hooks));
-        html += createCard("Join 4: The 'e' Loop", "Diagonal from baseline (hit the waistline)", getTop(data.e_joins));
+        html += createCard(
+          "Join 3: Hooks (Anti-Crumble)",
+          "Stop & Reverse into a, c, d, g, o, q, s",
+          getTop(data.hooks),
+        );
+        html += createCard(
+          "Join 4: The 'e' Loop",
+          "Diagonal from baseline (hit the waistline)",
+          getTop(data.e_joins),
+        );
 
         // Row 2
-        html += createCard("Join 1/2: Speed Flow", "Diagonal & Swing-ups (Rhythm)", getTop(data.speed));
-        html += createCard("Join 5: Bridges", "Horizontal out (o, v, w). Don't drop.", getTop(data.bridges));
+        html += createCard(
+          "Join 1/2: Speed Flow",
+          "Diagonal & Swing-ups (Rhythm)",
+          getTop(data.speed),
+        );
+        html += createCard(
+          "Join 5: Bridges",
+          "Horizontal out (o, v, w). Don't drop.",
+          getTop(data.bridges),
+        );
 
         // Row 3
-        html += createCard("Lifts (Reset)", "Lift after g, j, y, q, b, p or before f, z", getTop(data.lifts));
-        html += createCard("Doubles (Rhythm)", "Separation or Modification required", getTop(data.doubles));
+        html += createCard(
+          "Lifts (Reset)",
+          "Lift after g, j, y, q, b, p or before f, z",
+          getTop(data.lifts),
+        );
+        html += createCard(
+          "Doubles (Rhythm)",
+          "Separation or Modification required",
+          getTop(data.doubles),
+        );
 
-        html += '</div>';
+        html += "</div>";
         outputContent.innerHTML = html;
-    }
+      }
 
-    function createCard(title, desc, items, fullWidth = false) {
-        if (items.length === 0) return '';
-        const list = items.map(([k, v]) => `<li><span>${k}</span><span class="count">${v}</span></li>`).join('');
-        const className = fullWidth ? 'card full-width' : 'card';
+      function createCard(title, desc, items, fullWidth = false) {
+        if (items.length === 0) return "";
+        const list = items
+          .map(
+            ([k, v]) =>
+              `<li><span>${k}</span><span class="count">${v}</span></li>`,
+          )
+          .join("");
+        const className = fullWidth ? "card full-width" : "card";
         return `<div class="${className}"><div class="card-header"><h3>${title}</h3><div class="card-desc">${desc}</div></div><ul class="data-list">${list}</ul></div>`;
-    }
-</script>
-</body>
+      }
+    </script>
+  </body>
 </html>

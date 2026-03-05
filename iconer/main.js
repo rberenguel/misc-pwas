@@ -245,7 +245,10 @@ function showAutocomplete(searchTerm, iconType) {
 
     // Then add direct name matches that weren't found via semantic search
     for (const [name] of phosphorMap) {
-      if (!seen.has(name) && name.toLowerCase().includes(searchTerm.toLowerCase())) {
+      if (
+        !seen.has(name) &&
+        name.toLowerCase().includes(searchTerm.toLowerCase())
+      ) {
         icons.push({ name, type: "phosphor", hexCode: phosphorMap.get(name) });
       }
     }
