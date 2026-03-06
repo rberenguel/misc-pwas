@@ -184,9 +184,9 @@ function handleInput(val) {
     updateFeedback("correct");
 
     streak++;
-    if (streak > 0 && streak % 2 === 0) {
-      // Fast speed up: drop interval by 25%
-      intervalMs = Math.max(500, Math.round(intervalMs * 0.75));
+    if (streak > 0 && streak % 3 === 0) {
+      // Fast speed up: drop interval by N-  %
+      intervalMs = Math.max(500, Math.round(intervalMs * 0.85));
       fastestInterval = Math.min(fastestInterval, intervalMs);
     }
   } else {
