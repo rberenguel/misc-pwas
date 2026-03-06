@@ -12,7 +12,6 @@
   </head>
   <body>
     <div class="app-container">
-      <!-- Header Stats -->
       <div class="header-stats">
         <div>
         <div class="stat-label">Summum <span id="app-version" class="version-text"></span></div>
@@ -35,30 +34,45 @@
         </div>
       </div>
 
-      <!-- Progress Bar -->
       <div class="progress-container">
         <div id="progress-bar" class="progress-bar" style="width: 100%"></div>
       </div>
 
-      <!-- Display Area -->
       <div id="display-area" class="display-area border-normal">
         <div id="idle-text" class="idle-text">
           <p>Sum current digit with the previous.</p>
-          <p class="sub">2 correct = faster. 1 miss = slower.</p>
+          <p class="sub">2 correct = faster. 1 miss = slower. 20 rounds.</p>
         </div>
         <div id="digit" class="digit-text hidden">?</div>
       </div>
 
-      <!-- Input Keypad Container -->
       <div id="numpad" class="numpad">
-        <!-- Buttons injected via JS -->
-      </div>
+        </div>
 
-      <!-- Status Text -->
       <div id="status-text" class="status-text"></div>
+    </div>
+
+    <div id="results-modal" class="modal-overlay hidden">
+      <div class="modal-content">
+        <h2>Session Complete</h2>
+        <div class="modal-stats">
+          <div class="modal-stat">
+            <span class="label">Correct:</span>
+            <span><span id="modal-correct">0</span> / <span id="modal-total">0</span></span>
+          </div>
+          <div class="modal-stat">
+            <span class="label">Accuracy:</span>
+            <span><span id="modal-acc">0</span>%</span>
+          </div>
+          <div class="modal-stat">
+            <span class="label">Best Pace:</span>
+            <span><span id="modal-best">0</span>s</span>
+          </div>
+        </div>
+        <button id="modal-close-btn" class="modal-btn">Close</button>
+      </div>
     </div>
 
     <script type="module" src="app.js"></script>
   </body>
 </html>
- 

@@ -1,10 +1,13 @@
 import { initHaptic, triggerHaptic, triggerHapticError } from "./haptic.js";
 
 // --- State ---
-let gameState = "idle"; // 'idle', 'playing', 'paused'
+const MAX_ROUNDS = 50;
+
+let gameState = "idle"; // 'idle', 'playing', 'paused', 'ended'
 let currentDigit = null;
 let previousDigit = null;
 let intervalMs = 3000;
+let currentTickMs = 3000
 let fastestInterval = 3000;
 
 let streak = 0;
@@ -29,6 +32,7 @@ const elDigit = document.getElementById("digit");
 const elStatus = document.getElementById("status-text");
 const elNumpad = document.getElementById("numpad");
 const elVersion = document.getElementById("app-version");
+const elModalCloseBtn = document.getElementById("modal-close-btn");
 
 let numpadButtons = [];
 let btnPlay = null;
@@ -38,9 +42,7 @@ const playIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
 const pauseIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
 const resetIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>`;
 
-// --- Initialization ---
 // --- Core Logic ---
-// Extract the input buffering logic into a reusable function
 function processDigitInput(digit) {
   if (gameState !== "playing") return;
 
@@ -48,13 +50,8 @@ function processDigitInput(digit) {
 
   if (keyTimeout) clearTimeout(keyTimeout);
 
-  // Calculate what the answer should be
   const expectedSum = previousDigit !== null ? previousDigit + currentDigit : 0;
 
-  // Auto-submit if:
-  // 1. 2 digits are entered
-  // 2. A single digit other than "1" is entered
-  // 3. The expected answer is < 10 (meaning any "1" pressed is definitely wrong)
   if (
     keyBuffer.length === 2 ||
     (keyBuffer !== "1" && keyBuffer.length === 1) ||
@@ -68,7 +65,7 @@ function processDigitInput(digit) {
       const val = parseInt(keyBuffer, 10);
       if (!isNaN(val)) handleInput(val);
       keyBuffer = "";
-    }, 5000); // Or whatever delay you prefer
+    }, 5000); 
   }
 }
 
@@ -86,14 +83,12 @@ function initNumpad() {
       btnPlay.className = "numpad-btn play-btn"; 
       btnPlay.innerHTML = playIcon;
       
-      // Instant visual squeeze
       btnPlay.onpointerdown = () => btnPlay.classList.add("pressed");
       const clearPlay = () => btnPlay.classList.remove("pressed");
       btnPlay.onpointerup = clearPlay;
       btnPlay.onpointercancel = clearPlay;
       btnPlay.onpointerout = clearPlay;
       
-      // Haptics and logic on release
       btnPlay.onclick = togglePlayState;
 
       elNumpad.appendChild(btnPlay);
@@ -102,14 +97,12 @@ function initNumpad() {
       btnReset.className = "numpad-btn reset-btn";
       btnReset.innerHTML = resetIcon;
       
-      // Instant visual squeeze
       btnReset.onpointerdown = () => btnReset.classList.add("pressed");
       const clearReset = () => btnReset.classList.remove("pressed");
       btnReset.onpointerup = clearReset;
       btnReset.onpointercancel = clearReset;
       btnReset.onpointerout = clearReset;
       
-      // Haptics and logic on release
       btnReset.onclick = resetGame;
 
       elNumpad.appendChild(btnReset);
@@ -118,7 +111,6 @@ function initNumpad() {
       btn.className = "numpad-btn";
       btn.innerText = key;
       
-      // Instant visual squeeze
       btn.onpointerdown = () => {
         if (!btn.disabled) btn.classList.add("pressed");
       };
@@ -127,7 +119,6 @@ function initNumpad() {
       btn.onpointercancel = clearBtn;
       btn.onpointerout = clearBtn;
 
-      // Haptics and logic on release
       btn.onclick = () => {
         if (btn.disabled) return;
         triggerHaptic();
@@ -139,37 +130,40 @@ function initNumpad() {
       elNumpad.appendChild(btn);
     }
   });
+
+  elModalCloseBtn.onclick = closeModal;
 }
 
-
-
-
-
-// --- Core Logic ---
 function handleTick() {
-	if (keyTimeout) {
+  if (keyTimeout) {
     clearTimeout(keyTimeout);
     keyTimeout = null;
   }
   keyBuffer = "";
-  // Check for missed answer
+
   if (!hasAnsweredCurrent && previousDigit !== null) {
     handleError("miss");
+    if (gameState === "ended") return;
   } else {
     updateFeedback("none");
   }
 
-  // Generate next
   previousDigit = currentDigit;
   currentDigit = Math.floor(Math.random() * 9) + 1;
 
-  // If previous is null, this is the very first digit, no answer expected yet
   hasAnsweredCurrent = previousDigit === null;
+
+  // NEW: Add a 10% + 150ms physical buffer for 2-digit answers
+  if (previousDigit !== null && (previousDigit + currentDigit) >= 10) {
+    currentTickMs = Math.round(intervalMs * 1.1) + 150;
+  } else {
+    currentTickMs = intervalMs;
+  }
 
   updateUI();
   startProgressBar();
 
-  timerId = setTimeout(handleTick, intervalMs);
+  timerId = setTimeout(handleTick, currentTickMs);
 }
 
 function handleInput(val) {
@@ -185,9 +179,12 @@ function handleInput(val) {
 
     streak++;
     if (streak > 0 && streak % 3 === 0) {
-      // Fast speed up: drop interval by N-  %
       intervalMs = Math.max(500, Math.round(intervalMs * 0.85));
       fastestInterval = Math.min(fastestInterval, intervalMs);
+    }
+    
+    if (total >= MAX_ROUNDS) {
+      endGame();
     }
   } else {
     handleError("wrong");
@@ -201,8 +198,33 @@ function handleError(type) {
   total++;
   streak = 0;
   updateFeedback(type);
-  // Slow down: only increase interval by 5% on a miss
   intervalMs = Math.min(5000, Math.round(intervalMs * 1.05));
+
+  if (total >= MAX_ROUNDS) {
+    endGame();
+  }
+}
+
+function endGame() {
+  gameState = "ended";
+  clearTimeout(timerId);
+  stopProgressBar();
+  
+  const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+  document.getElementById("modal-correct").innerText = correct;
+  document.getElementById("modal-total").innerText = total;
+  document.getElementById("modal-acc").innerText = accuracy;
+  document.getElementById("modal-best").innerText = (fastestInterval / 1000).toFixed(2);
+
+  // Slight delay before throwing up the modal to let the user see the final answer pop
+  setTimeout(() => {
+    document.getElementById("results-modal").classList.remove("hidden");
+  }, 500);
+}
+
+function closeModal() {
+  document.getElementById("results-modal").classList.add("hidden");
+  resetGame();
 }
 
 // --- UI Updates ---
@@ -216,17 +238,18 @@ function updateUI() {
   elPace.innerText = (intervalMs / 1000).toFixed(2);
   elBest.innerText = (fastestInterval / 1000).toFixed(2);
 
-  if (gameState === "idle") {
-    elIdleText.classList.remove("hidden");
-    elDigit.classList.add("hidden");
+  if (gameState === "idle" || gameState === "ended") {
+    if (gameState === "idle") {
+      elIdleText.classList.remove("hidden");
+      elDigit.classList.add("hidden");
+    }
   } else {
     elIdleText.classList.add("hidden");
     elDigit.classList.remove("hidden");
     elDigit.innerText = currentDigit !== null ? currentDigit : "?";
 
-    // Retrigger pop animation
     elDigit.classList.remove("animate-pop");
-    void elDigit.offsetWidth; // trigger reflow
+    void elDigit.offsetWidth; 
     elDigit.classList.add("animate-pop");
   }
 
@@ -260,27 +283,25 @@ function startProgressBar() {
   elProgress.style.width = "100%";
   elProgress.style.backgroundColor = "var(--color-blue)";
 
-  // Force reflow
   void elProgress.offsetWidth;
 
-  // The width shrinks linearly, the color changes near the end
-  elProgress.style.transition = `width ${intervalMs}ms linear, background-color ${intervalMs}ms ease-in`;
+  // NEW: Use currentTickMs here
+  elProgress.style.transition = `width ${currentTickMs}ms linear, background-color ${currentTickMs}ms ease-in`;
   elProgress.style.width = "10%";
   elProgress.style.backgroundColor = "#ff0000";
-	elProgress.style.width = "0%";
+  elProgress.style.width = "0%";
   elProgress.style.backgroundColor = "#ff0000";
 }
 
-
 function stopProgressBar() {
   elProgress.style.transition = "none";
-  // Calculate remaining width based on computed style if we wanted true pause/resume,
-  // but simpler to just snap to 0 or 100 for this type of rapid game.
 }
 
 // --- Controls ---
 function togglePlayState() {
   triggerHaptic();
+  if (gameState === "ended") return;
+
   if (gameState === "playing") {
     gameState = "paused";
     clearTimeout(timerId);
@@ -293,9 +314,9 @@ function togglePlayState() {
     if (wasIdle) {
       handleTick();
     } else {
-      // Restart current tick
       startProgressBar();
-      timerId = setTimeout(handleTick, intervalMs);
+      // NEW: Resume using the current tick's allotted time
+      timerId = setTimeout(handleTick, currentTickMs); 
     }
   }
   updateUI();
@@ -308,6 +329,7 @@ function resetGame() {
   currentDigit = null;
   previousDigit = null;
   intervalMs = 3000;
+  currentTickMs = 3000; // NEW: Reset tick time
   fastestInterval = 3000;
   streak = 0;
   correct = 0;
@@ -321,7 +343,6 @@ function resetGame() {
   updateUI();
 }
 
-// --- Keyboard Support ---
 // --- Keyboard Support ---
 window.addEventListener("keydown", (e) => {
   if (gameState !== "playing") return;
@@ -342,7 +363,6 @@ async function initVersion() {
     console.error("Failed to load manifest version:", error);
   }
 }
-
 
 // Run Init
 initHaptic();
