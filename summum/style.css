@@ -60,17 +60,16 @@ button {
   outline: none;
 }
 
-/* Layout */
-
 .app-container {
   width: 100%;
   max-width: 28rem;
   padding: 0.5rem;
+  padding-bottom: 1rem; /* Added padding to keep it slightly off the bottom edge */
   display: flex;
   flex-direction: column;
-  justify-content: top; /* Add this to center the whole app vertically */
+  justify-content: top;
   height: 100dvh;
-	margin-bottom:10%;
+  /* Removed margin-bottom: 10%; */
 }
 
 .header-stats {
@@ -211,7 +210,7 @@ button {
 }
 
 .numpad {
-  margin-top: 2rem; /* Revert this back from 'auto' */
+  margin-top: auto; /* Pushes the numpad down to the bottom */
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
@@ -221,9 +220,9 @@ button {
 .numpad-btn {
   background-color: var(--bg-btn);
   color: var(--text-slate-200);
-  height: 3.5rem;
+  height: 4.5rem; /* Increased from 3.5rem */
   border-radius: 0.75rem;
-  font-size: 1.5rem;
+  font-size: 1.75rem; /* Increased from 1.5rem */
   font-weight: 500;
   display: flex;
   align-items: center;
@@ -231,6 +230,12 @@ button {
   transition:
     background-color 0.15s,
     color 0.15s;
+}
+
+.controls-wrapper {
+  display: flex;
+  gap: 0.5rem;
+  height: 4.5rem; /* Increased from 3.5rem to match numpad keys */
 }
 
 .numpad-btn:not(:disabled):hover {
@@ -248,12 +253,7 @@ button {
 }
 
 /* Controls */
-.controls-wrapper {
-  display: flex;
-  gap: 0.5rem;
-  height: 3.5rem;
-}
-
+.
 .control-btn {
   flex: 1;
   background-color: var(--bg-btn);
