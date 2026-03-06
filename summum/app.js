@@ -72,8 +72,6 @@ function processDigitInput(digit) {
   }
 }
 
-// --- Initialization ---
-// --- Initialization ---
 function initNumpad() {
   const layout = [
     '1', '2', '3',
@@ -87,28 +85,63 @@ function initNumpad() {
       btnPlay = document.createElement("button");
       btnPlay.className = "numpad-btn play-btn"; 
       btnPlay.innerHTML = playIcon;
+      
+      // Instant visual squeeze
+      btnPlay.onpointerdown = () => btnPlay.classList.add("pressed");
+      const clearPlay = () => btnPlay.classList.remove("pressed");
+      btnPlay.onpointerup = clearPlay;
+      btnPlay.onpointercancel = clearPlay;
+      btnPlay.onpointerout = clearPlay;
+      
+      // Haptics and logic on release
       btnPlay.onclick = togglePlayState;
+
       elNumpad.appendChild(btnPlay);
     } else if (key === 'reset') {
       const btnReset = document.createElement("button");
       btnReset.className = "numpad-btn reset-btn";
       btnReset.innerHTML = resetIcon;
+      
+      // Instant visual squeeze
+      btnReset.onpointerdown = () => btnReset.classList.add("pressed");
+      const clearReset = () => btnReset.classList.remove("pressed");
+      btnReset.onpointerup = clearReset;
+      btnReset.onpointercancel = clearReset;
+      btnReset.onpointerout = clearReset;
+      
+      // Haptics and logic on release
       btnReset.onclick = resetGame;
+
       elNumpad.appendChild(btnReset);
     } else {
       const btn = document.createElement("button");
       btn.className = "numpad-btn";
       btn.innerText = key;
+      
+      // Instant visual squeeze
+      btn.onpointerdown = () => {
+        if (!btn.disabled) btn.classList.add("pressed");
+      };
+      const clearBtn = () => btn.classList.remove("pressed");
+      btn.onpointerup = clearBtn;
+      btn.onpointercancel = clearBtn;
+      btn.onpointerout = clearBtn;
+
+      // Haptics and logic on release
       btn.onclick = () => {
+        if (btn.disabled) return;
         triggerHaptic();
         processDigitInput(key);
       };
+
       btn.disabled = true;
       numpadButtons.push(btn);
       elNumpad.appendChild(btn);
     }
   });
 }
+
+
 
 
 
@@ -225,13 +258,19 @@ function updateFeedback(type) {
 function startProgressBar() {
   elProgress.style.transition = "none";
   elProgress.style.width = "100%";
+  elProgress.style.backgroundColor = "var(--color-blue)";
 
   // Force reflow
   void elProgress.offsetWidth;
 
-  elProgress.style.transition = `width ${intervalMs}ms linear`;
-  elProgress.style.width = "0%";
+  // The width shrinks linearly, the color changes near the end
+  elProgress.style.transition = `width ${intervalMs}ms linear, background-color ${intervalMs}ms ease-in`;
+  elProgress.style.width = "10%";
+  elProgress.style.backgroundColor = "#ff0000";
+	elProgress.style.width = "0%";
+  elProgress.style.backgroundColor = "#ff0000";
 }
+
 
 function stopProgressBar() {
   elProgress.style.transition = "none";

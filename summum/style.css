@@ -228,17 +228,26 @@ button {
 .numpad-btn {
   background-color: var(--bg-btn);
   color: var(--text-slate-200);
-  height: 4.5rem; /* Increased from 3.5rem */
+  height: 4.5rem; 
   border-radius: 0.75rem;
-  font-size: 1.75rem; /* Increased from 1.5rem */
+  font-size: 1.75rem; 
   font-weight: 500;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition:
-    background-color 0.15s,
-    color 0.15s;
+  /* Add the transition here so it animates when released */
+  transition: transform 0.1s, background-color 0.15s, color 0.15s;
 }
+
+/* Replace :active with .pressed */
+.numpad-btn.pressed {
+  background-color: var(--color-blue);
+  color: #fff;
+  transform: scale(0.92); 
+}
+
+
+
 
 .controls-wrapper {
   display: flex;
@@ -260,8 +269,21 @@ button {
   cursor: not-allowed;
 }
 
+.numpad-btn:not(:disabled):active {
+  background-color: var(--color-blue);
+  color: #fff;
+  transform: scale(0.92); /* Adds a physical push-down effect */
+  transition: transform 0.05s, background-color 0.15s, color 0.15s;
+}
+
+.control-btn:active {
+  background-color: var(--bg-btn-active);
+  transform: scale(0.92);
+  transition: transform 0.05s;
+}
+
 /* Controls */
-.
+
 .control-btn {
   flex: 1;
   background-color: var(--bg-btn);
