@@ -57,12 +57,12 @@ function processDigitInput(digit) {
     handleInput(val);
     keyBuffer = "";
   } else {
-    // Wait 300ms to see if a second digit is typed for sums 10-18
+    // Wait 500ms to see if a second digit is typed for sums 10-18
     keyTimeout = setTimeout(() => {
       const val = parseInt(keyBuffer, 10);
       if (!isNaN(val)) handleInput(val);
       keyBuffer = "";
-    }, 300);
+    }, 500);
   }
 }
 
