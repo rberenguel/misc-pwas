@@ -47,22 +47,27 @@ function processDigitInput(digit) {
 
   if (keyTimeout) clearTimeout(keyTimeout);
 
-  // Auto-submit if 2 digits are entered, OR if a single digit != "1" is entered 
-  // (since the maximum sum in 1-back 1-9 addition is 18)
+  // Calculate what the answer should be
+  const expectedSum = previousDigit !== null ? previousDigit + currentDigit : 0;
+
+  // Auto-submit if:
+  // 1. 2 digits are entered
+  // 2. A single digit other than "1" is entered
+  // 3. The expected answer is < 10 (meaning any "1" pressed is definitely wrong)
   if (
     keyBuffer.length === 2 ||
-    (keyBuffer !== "1" && keyBuffer.length === 1)
+    (keyBuffer !== "1" && keyBuffer.length === 1) ||
+    (expectedSum < 10 && keyBuffer.length === 1)
   ) {
     const val = parseInt(keyBuffer, 10);
     handleInput(val);
     keyBuffer = "";
   } else {
-    // Wait 500ms to see if a second digit is typed for sums 10-18
     keyTimeout = setTimeout(() => {
       const val = parseInt(keyBuffer, 10);
       if (!isNaN(val)) handleInput(val);
       keyBuffer = "";
-    }, 500);
+    }, 5000); // Or whatever delay you prefer
   }
 }
 
@@ -108,6 +113,11 @@ function initNumpad() {
 
 // --- Core Logic ---
 function handleTick() {
+	if (keyTimeout) {
+    clearTimeout(keyTimeout);
+    keyTimeout = null;
+  }
+  keyBuffer = "";
   // Check for missed answer
   if (!hasAnsweredCurrent && previousDigit !== null) {
     handleError("miss");
