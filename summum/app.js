@@ -28,6 +28,7 @@ const elIdleText = document.getElementById("idle-text");
 const elDigit = document.getElementById("digit");
 const elStatus = document.getElementById("status-text");
 const elNumpad = document.getElementById("numpad");
+const elVersion = document.getElementById("app-version");
 
 let numpadButtons = [];
 let btnPlay = null;
@@ -291,8 +292,21 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
+async function initVersion() {
+  try {
+    const response = await fetch("manifest.json");
+    const manifest = await response.json();
+    if (elVersion && manifest.version) {
+      elVersion.innerText = `v${manifest.version}`;
+    }
+  } catch (error) {
+    console.error("Failed to load manifest version:", error);
+  }
+}
+
 
 // Run Init
 initHaptic();
 initNumpad();
+initVersion();
 updateUI();
