@@ -1,4 +1,8 @@
 import { initHaptic, triggerHaptic, triggerHapticError } from "./haptic.js";
+import { saveSessionRecord, getHistory } from "./storage.js";
+import { openHistoryModal } from "./history.js";
+import { injectFakeHistory } from "./faker.js";
+import { FireSystem } from "./fire.js";
 
 // --- State ---
 const MAX_ROUNDS = 50;
@@ -7,7 +11,7 @@ let gameState = "idle"; // 'idle', 'playing', 'paused', 'ended'
 let currentDigit = null;
 let previousDigit = null;
 let intervalMs = 3000;
-let currentTickMs = 3000
+let currentTickMs = 3000;
 let fastestInterval = 3000;
 
 let streak = 0;
@@ -21,10 +25,7 @@ let keyBuffer = "";
 let keyTimeout = null;
 
 // --- DOM Elements ---
-const elAcc = document.getElementById("ui-acc");
-const elStreak = document.getElementById("ui-streak");
-const elPace = document.getElementById("ui-pace");
-const elBest = document.getElementById("ui-best");
+const elBatteryIcon = document.getElementById("battery-icon");
 const elProgress = document.getElementById("progress-bar");
 const elDisplayArea = document.getElementById("display-area");
 const elIdleText = document.getElementById("idle-text");
@@ -65,44 +66,52 @@ function processDigitInput(digit) {
       const val = parseInt(keyBuffer, 10);
       if (!isNaN(val)) handleInput(val);
       keyBuffer = "";
-    }, 5000); 
+    }, 5000);
   }
 }
 
 function initNumpad() {
   const layout = [
-    '1', '2', '3',
-    '4', '5', '6',
-    '7', '8', '9',
-    'play', '0', 'reset'
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "reset",
+    "0",
+    "play",
   ];
 
-  layout.forEach(key => {
-    if (key === 'play') {
+  layout.forEach((key) => {
+    if (key === "play") {
       btnPlay = document.createElement("button");
-      btnPlay.className = "numpad-btn play-btn"; 
+      btnPlay.className = "numpad-btn play-btn";
       btnPlay.innerHTML = playIcon;
-      
+
       btnPlay.onpointerdown = () => btnPlay.classList.add("pressed");
       const clearPlay = () => btnPlay.classList.remove("pressed");
       btnPlay.onpointerup = clearPlay;
       btnPlay.onpointercancel = clearPlay;
       btnPlay.onpointerout = clearPlay;
-      
+
       btnPlay.onclick = togglePlayState;
 
       elNumpad.appendChild(btnPlay);
-    } else if (key === 'reset') {
+    } else if (key === "reset") {
       const btnReset = document.createElement("button");
       btnReset.className = "numpad-btn reset-btn";
       btnReset.innerHTML = resetIcon;
-      
+
       btnReset.onpointerdown = () => btnReset.classList.add("pressed");
       const clearReset = () => btnReset.classList.remove("pressed");
       btnReset.onpointerup = clearReset;
       btnReset.onpointercancel = clearReset;
       btnReset.onpointerout = clearReset;
-      
+
       btnReset.onclick = resetGame;
 
       elNumpad.appendChild(btnReset);
@@ -110,7 +119,7 @@ function initNumpad() {
       const btn = document.createElement("button");
       btn.className = "numpad-btn";
       btn.innerText = key;
-      
+
       btn.onpointerdown = () => {
         if (!btn.disabled) btn.classList.add("pressed");
       };
@@ -154,13 +163,14 @@ function handleTick() {
   hasAnsweredCurrent = previousDigit === null;
 
   // NEW: Add a 10% + 150ms physical buffer for 2-digit answers
-  if (previousDigit !== null && (previousDigit + currentDigit) >= 10) {
+  if (previousDigit !== null && previousDigit + currentDigit >= 10) {
     currentTickMs = Math.round(intervalMs * 1.1) + 150;
   } else {
     currentTickMs = intervalMs;
   }
 
   updateUI();
+  updateBatteryIcon();
   startProgressBar();
 
   timerId = setTimeout(handleTick, currentTickMs);
@@ -178,11 +188,12 @@ function handleInput(val) {
     updateFeedback("correct");
 
     streak++;
+    updateGlow();
     if (streak > 0 && streak % 3 === 0) {
       intervalMs = Math.max(500, Math.round(intervalMs * 0.85));
       fastestInterval = Math.min(fastestInterval, intervalMs);
     }
-    
+
     if (total >= MAX_ROUNDS) {
       endGame();
     }
@@ -192,11 +203,14 @@ function handleInput(val) {
 
   hasAnsweredCurrent = true;
   updateUI();
+  updateBatteryIcon();
 }
 
+// --- Core Logic ---
 function handleError(type) {
   total++;
   streak = 0;
+  updateGlow();
   updateFeedback(type);
   intervalMs = Math.min(5000, Math.round(intervalMs * 1.05));
 
@@ -209,15 +223,23 @@ function endGame() {
   gameState = "ended";
   clearTimeout(timerId);
   stopProgressBar();
-  
+
   const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
   document.getElementById("modal-correct").innerText = correct;
   document.getElementById("modal-total").innerText = total;
   document.getElementById("modal-acc").innerText = accuracy;
-  document.getElementById("modal-best").innerText = (fastestInterval / 1000).toFixed(2);
+  document.getElementById("modal-best").innerText = (
+    fastestInterval / 1000
+  ).toFixed(2);
 
   // Slight delay before throwing up the modal to let the user see the final answer pop
   setTimeout(() => {
+    saveSessionRecord({
+      accuracy: accuracy,
+      finalPace: parseFloat((intervalMs / 1000).toFixed(2)),
+      bestPace: parseFloat((fastestInterval / 1000).toFixed(2)),
+    });
+
     document.getElementById("results-modal").classList.remove("hidden");
   }, 500);
 }
@@ -228,16 +250,45 @@ function closeModal() {
 }
 
 // --- UI Updates ---
+function updateBatteryIcon() {
+  if (!elBatteryIcon) return;
+
+  const progressRatio = total / MAX_ROUNDS;
+
+  // Calculate insets matching nb's logic exactly
+  const bottom = 88;
+  const top = 8;
+
+  // Overall progress gradient
+  const progressInset = bottom - progressRatio * (bottom - top);
+  elBatteryIcon.style.setProperty("--progress-inset", `${progressInset}%`);
+  elBatteryIcon.style.setProperty("--fire-inset", `${progressInset}%`);
+
+  // Update fire particles
+  FireSystem.update(progressRatio, progressInset);
+}
+
+function updateGlow() {
+  if (!elDisplayArea) return;
+  if (gameState !== "playing" && gameState !== "ended") {
+    elDisplayArea.style.boxShadow = "none";
+    return;
+  }
+
+  // Base glow calculation off streak (e.g. up to a max 10 streak)
+  const glowLevel = Math.min(streak, 10);
+  if (glowLevel > 0) {
+    // scale from 5px to 25px blur based on streak
+    const blur = 5 + glowLevel * 2;
+    const opacity = 0.2 + glowLevel * 0.05;
+    elDisplayArea.style.boxShadow =
+      "0 0 " + blur + "px rgba(234, 179, 8, " + opacity + ")"; // Using a yellow-ish tailwind color
+  } else {
+    elDisplayArea.style.boxShadow = "none";
+  }
+}
+
 function updateUI() {
-  const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
-  elAcc.innerText = accuracy;
-
-  elStreak.innerText = streak;
-  elStreak.className = streak >= 4 ? "streak-hot" : "";
-
-  elPace.innerText = (intervalMs / 1000).toFixed(2);
-  elBest.innerText = (fastestInterval / 1000).toFixed(2);
-
   if (gameState === "idle" || gameState === "ended") {
     if (gameState === "idle") {
       elIdleText.classList.remove("hidden");
@@ -249,7 +300,7 @@ function updateUI() {
     elDigit.innerText = currentDigit !== null ? currentDigit : "?";
 
     elDigit.classList.remove("animate-pop");
-    void elDigit.offsetWidth; 
+    void elDigit.offsetWidth;
     elDigit.classList.add("animate-pop");
   }
 
@@ -286,7 +337,12 @@ function startProgressBar() {
   void elProgress.offsetWidth;
 
   // NEW: Use currentTickMs here
-  elProgress.style.transition = `width ${currentTickMs}ms linear, background-color ${currentTickMs}ms ease-in`;
+  elProgress.style.transition =
+    "width " +
+    currentTickMs +
+    "ms linear, background-color " +
+    currentTickMs +
+    "ms ease-in";
   elProgress.style.width = "10%";
   elProgress.style.backgroundColor = "#ff0000";
   elProgress.style.width = "0%";
@@ -316,7 +372,7 @@ function togglePlayState() {
     } else {
       startProgressBar();
       // NEW: Resume using the current tick's allotted time
-      timerId = setTimeout(handleTick, currentTickMs); 
+      timerId = setTimeout(handleTick, currentTickMs);
     }
   }
   updateUI();
@@ -340,6 +396,8 @@ function resetGame() {
   elProgress.style.width = "100%";
 
   updateFeedback("none");
+  updateGlow();
+  updateBatteryIcon();
   updateUI();
 }
 
@@ -357,7 +415,7 @@ async function initVersion() {
     const response = await fetch("manifest.json");
     const manifest = await response.json();
     if (elVersion && manifest.version) {
-      elVersion.innerText = `v${manifest.version}`;
+      elVersion.innerText = "v" + manifest.version;
     }
   } catch (error) {
     console.error("Failed to load manifest version:", error);
@@ -365,7 +423,30 @@ async function initVersion() {
 }
 
 // Run Init
-initHaptic();
-initNumpad();
-initVersion();
-updateUI();
+async function init() {
+  getHistory(); // Pre-warm the localStorage cache
+  initHaptic();
+  initNumpad();
+  initVersion();
+  FireSystem.init();
+  updateUI();
+  updateBatteryIcon();
+}
+init();
+
+const statsBtn = document.getElementById("stats-btn");
+if (statsBtn) {
+  statsBtn.addEventListener("click", () => {
+    openHistoryModal();
+  });
+}
+
+const closeHistoryBtn = document.getElementById("close-history-btn");
+if (closeHistoryBtn) {
+  closeHistoryBtn.addEventListener("click", () => {
+    document.getElementById("history-modal").classList.add("hidden");
+  });
+}
+
+// Make faker available globally
+window.injectFakeHistory = injectFakeHistory;

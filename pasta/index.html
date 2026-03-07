@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Pasta</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="manifest" href="./manifest.json" />
+  </head>
+  <body>
+    <input
+      type="file"
+      id="import-picker"
+      style="display: none"
+      accept=".json"
+    />
+    <div class="input-line">
+      <span class="prompt">❯</span>
+      <div class="input-stack">
+        <textarea
+          id="cmd-input"
+          rows="1"
+          autofocus
+          spellcheck="false"
+          placeholder="search or 'add name content'"
+        ></textarea>
+      </div>
+    </div>
+    <div id="terminal-output"></div>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

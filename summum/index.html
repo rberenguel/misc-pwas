@@ -7,30 +7,45 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <title>Summum</title>
+    <link rel="stylesheet" href="fonts/inter.css" />
+    <link rel="stylesheet" href="fonts/phosphor/phosphor.css" />
     <link rel="stylesheet" href="style.css" />
     <link rel="manifest" href="manifest.json" />
   </head>
   <body>
     <div class="app-container">
       <div class="header-stats">
-        <div>
-        <div class="stat-label">Summum <span id="app-version" class="version-text"></span></div>
-          <div class="stat-group">
-            <div>
-              <span class="label">Acc:</span> <span id="ui-acc">0</span>%
+        <div
+          class="stat-label"
+          style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-right: 0.5rem;
+            width: 100%;
+          "
+        >
+          <div>Summum <span id="app-version" class="version-text"></span></div>
+          <button
+            id="stats-btn"
+            aria-label="Stats"
+            style="
+              background: none;
+              border: none;
+              padding: 0;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            "
+          >
+            <div class="brain-container" id="battery-icon">
+              <div class="brain-base">&#xe74e;</div>
+              <div class="brain-progress-fill">&#xe74e;</div>
+              <div class="brain-fire-fill">&#xe74e;</div>
+              <canvas id="fire-canvas"></canvas>
             </div>
-            <div>
-              <span class="label">Strk:</span> <span id="ui-streak">0</span>
-            </div>
-          </div>
-        </div>
-        <div class="stat-right">
-          <div>
-            <span class="label">Pace:</span> <span id="ui-pace">3.00</span>s
-          </div>
-          <div>
-            <span class="label">Best:</span> <span id="ui-best">3.00</span>s
-          </div>
+          </button>
         </div>
       </div>
 
@@ -46,8 +61,7 @@
         <div id="digit" class="digit-text hidden">?</div>
       </div>
 
-      <div id="numpad" class="numpad">
-        </div>
+      <div id="numpad" class="numpad"></div>
 
       <div id="status-text" class="status-text"></div>
     </div>
@@ -58,7 +72,10 @@
         <div class="modal-stats">
           <div class="modal-stat">
             <span class="label">Correct:</span>
-            <span><span id="modal-correct">0</span> / <span id="modal-total">0</span></span>
+            <span
+              ><span id="modal-correct">0</span> /
+              <span id="modal-total">0</span></span
+            >
           </div>
           <div class="modal-stat">
             <span class="label">Accuracy:</span>
@@ -70,6 +87,33 @@
           </div>
         </div>
         <button id="modal-close-btn" class="modal-btn">Close</button>
+      </div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="history-modal" class="modal-overlay hidden">
+      <div
+        class="modal-content"
+        style="
+          padding: 1rem 0;
+          height: 90vh;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          width: 95%;
+          max-width: 24rem;
+        "
+      >
+        <h2 style="margin: 0 1rem 0.5rem 1rem">History</h2>
+        <div
+          id="history-list"
+          style="flex: 1 1 auto; overflow-y: auto; padding: 0 1rem"
+        >
+          <!-- Calendar grid will be generated here -->
+        </div>
+        <div style="padding: 0 1rem; margin-top: 1rem">
+          <button id="close-history-btn" class="modal-btn">Close</button>
+        </div>
       </div>
     </div>
 

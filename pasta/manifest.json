@@ -1,0 +1,17 @@
+{
+  "name": "Pasta",
+  "short_name": "Pasta",
+  "version": "0.0.1",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#001015",
+  "theme_color": "#001015",
+  "description": "A minimal snippet manager.",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
