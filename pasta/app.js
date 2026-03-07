@@ -64,23 +64,46 @@ const refresh = async () => {
 const output = document.getElementById("terminal-output"),
   input = document.getElementById("cmd-input");
 
+const extractTags = (text) => {
+  const tags = [...text.matchAll(/!(\w+)/g)].map((m) => m[1].toLowerCase());
+  const cleanText = text.replace(/!(\w+)/g, "").replace(/[ \t]+/g, " ").trim();
+  return { cleanText, tags };
+};
+
 const render = (query = "") => {
   const q = (typeof query === "string" ? query : "").toLowerCase();
-  const filtered = snippets.filter(
-    (s) =>
-      s.name.toLowerCase().includes(q) || s.content.toLowerCase().includes(q),
-  );
+  const tokens = q.trim().split(/[ \t]+/).filter(Boolean);
+  const tags = tokens.filter((t) => t.startsWith("!")).map((t) => t.slice(1));
+  const texts = tokens.filter((t) => !t.startsWith("!"));
+
+  const filtered = snippets.filter((s) => {
+    const hasAllTags = tags.every((t) => (s.tags || []).includes(t));
+    const matchesText =
+      texts.length === 0 ||
+      texts.every(
+        (t) =>
+          s.name.toLowerCase().includes(t) || s.content.toLowerCase().includes(t),
+      );
+    return hasAllTags && matchesText;
+  });
+
   rowMap = filtered;
   output.innerHTML = filtered
-    .map(
-      (s, i) => `
+    .map((s, i) => {
+      const tagHtml = (s.tags || [])
+        .map((t) => `<span class="tag-pill">${t}</span>`)
+        .join(" ");
+      return `
         <div class="snippet-item" data-index="${i}">
-            <span class="row-id">${i + 1}</span>
-            <span class="snippet-name">${s.name}</span>
-            <span class="snippet-preview">${s.content.split("\n")[0].substring(0, 60)}${s.content.includes("\n") || s.content.length > 60 ? "..." : ""}</span>
+            <div class="snippet-row">
+                <span class="row-id">${i + 1}</span>
+                <span class="snippet-name">${s.name}</span>
+                <span class="snippet-preview">${s.content.split("\n")[0]}</span>
+            </div>
+            ${tagHtml ? `<div style="margin-left: 35px; margin-top: 4px;">${tagHtml}</div>` : ""}
         </div>
-    `,
-    )
+    `;
+    })
     .join("");
 };
 
@@ -191,9 +214,12 @@ input.addEventListener("keydown", async (e) => {
         /^(?:add|a)[ \t]+([^ \t\n]+)(?:[ \t]+([\s\S]*))?$/i,
       );
       if (match && match[1]) {
-        const name = match[1];
-        const content = match[2] ? match[2].trim() : "";
-        await dbOps.put({ name, content });
+        const { cleanText: name, tags: nameTags } = extractTags(match[1]);
+        const { cleanText: content, tags: contentTags } = extractTags(
+          match[2] ? match[2].trim() : "",
+        );
+        const tags = [...new Set([...nameTags, ...contentTags])];
+        await dbOps.put({ name, content, tags });
         input.value = "";
         input.style.height = "auto";
         await refresh();
@@ -211,20 +237,37 @@ input.addEventListener("keydown", async (e) => {
         await refresh();
       }
     } else if (cmd === "mod" || cmd === "modify" || cmd === "m") {
-      const match = valStr.match(
-        /^(?:mod|modify|m)[ \t]+(\d+)[ \t]+([^ \t\n]+)(?:[ \t]+([\s\S]*))?$/i,
-      );
-      if (match && match[1] && match[2]) {
+      const match = valStr.match(/^(?:mod|modify|m)[ \t]+(\d+)(?:[ \t]+([\s\S]*))?$/i);
+      if (match && match[1]) {
         const id = parseInt(match[1]);
-        const newName = match[2];
-        const newContent = match[3] ? match[3].trim() : "";
-
+        const tokens = match[2] ? match[2].trim().split(/[ \t]+/) : [];
         const oldSnip = rowMap[id - 1];
+
         if (oldSnip) {
+          const tagsToToggle = tokens.filter(t => t.startsWith("!")).map(t => t.substring(1).toLowerCase());
+          const textTokens = tokens.filter(t => !t.startsWith("!"));
+          
+          let newName = oldSnip.name;
+          let newContent = oldSnip.content;
+          let newTags = [...(oldSnip.tags || [])];
+
+          // Toggle tags
+          tagsToToggle.forEach(t => {
+            const idx = newTags.indexOf(t);
+            if (idx >= 0) newTags.splice(idx, 1);
+            else newTags.push(t);
+          });
+
+          // Update text if tokens provided
+          if (textTokens.length > 0) {
+            newName = textTokens[0];
+            newContent = textTokens.slice(1).join(" ");
+          }
+
           if (newName !== oldSnip.name) {
             await dbOps.del(oldSnip.name);
           }
-          await dbOps.put({ name: newName, content: newContent });
+          await dbOps.put({ name: newName, content: newContent, tags: newTags });
         }
         input.value = "";
         input.style.height = "auto";
@@ -236,12 +279,33 @@ input.addEventListener("keydown", async (e) => {
         const id = parseInt(match[1]);
         const snip = rowMap[id - 1];
         if (snip) {
-          input.value = `mod ${id} ${snip.name} ${snip.content}`;
+          const tagStr = (snip.tags || []).map(t => "!" + t).join(" ");
+          input.value = `mod ${id} ${snip.name} ${snip.content}${tagStr ? " " + tagStr : ""}`;
           input.style.height = "auto";
           input.style.height = input.scrollHeight + "px";
           input.focus();
           input.setSelectionRange(input.value.length, input.value.length);
         }
+      }
+    } else if (cmd === "info" || cmd === "i") {
+      const match = valStr.match(/^(?:info|i)[ \t]+(\d+)/i);
+      if (match && match[1]) {
+        const id = parseInt(match[1]);
+        const snip = rowMap[id - 1];
+        if (snip) {
+          const tagHtml = (snip.tags || [])
+            .map((t) => `<span class="tag-pill">${t}</span>`)
+            .join(" ");
+          const html = `
+            <div class="msg-standalone" style="border-left: 2px solid var(--yellow); padding-left: 10px;">
+                <div style="color:var(--yellow); font-weight:bold; margin-bottom:5px;">${snip.name}</div>
+                <div style="white-space: pre-wrap; color:var(--base1); margin-bottom:8px;">${snip.content}</div>
+                ${tagHtml ? `<div>${tagHtml}</div>` : ""}
+            </div>`;
+          output.innerHTML = html + output.innerHTML;
+        }
+        input.value = "";
+        input.style.height = "auto";
       }
     } else if (!valStr) {
       input.value = "";
@@ -251,9 +315,11 @@ input.addEventListener("keydown", async (e) => {
       const h = valStr.match(/^(?:help|\?)[ \t]+([\s\S]*)$/i)?.[1] || "";
       let html = "";
       if (!h) {
-        html = `<div class="msg-standalone"><span style="color:var(--yellow)">Commands:</span> list/l, add, rm/remove, mod, edit, help, link, save, load, imp, exp. Type <span class="msg-hl">help [cmd]</span> for details.</div>`;
+        html = `<div class="msg-standalone"><span style="color:var(--yellow)">Commands:</span> list/l, add, rm/remove, mod, edit, info/i, help, link, save, load, imp, exp. Type <span class="msg-hl">help [cmd]</span> for details.</div>`;
       } else if (h === "list" || h === "l") {
-        html = `<div class="msg-help msg-standalone"><span class="msg-hl">list</span> [query] (or <span class="msg-hl">l</span>)<br>Filters snippets by query. Shows all if no query provided.</div>`;
+        html = `<div class="msg-help msg-standalone"><span class="msg-hl">list</span> [query] (or <span class="msg-hl">l</span>)<br>Filters snippets by query. Use multiple <span class="msg-hl">!tag</span> tokens for AND search. Shows all if no query provided.</div>`;
+      } else if (h === "info" || h === "i") {
+        html = `<div class="msg-help msg-standalone"><span class="msg-hl">info</span> ID (or <span class="msg-hl">i</span>)<br>Displays the full content and tags of a snippet in the terminal output.</div>`;
       } else if (h === "add" || h === "a") {
         html = `<div class="msg-help msg-standalone"><span class="msg-hl">add</span> name <span class="msg-arg">content...</span><br>Creates a new snippet. Overwrites if name exists.</div>`;
       } else if (h === "mod" || h === "m") {
