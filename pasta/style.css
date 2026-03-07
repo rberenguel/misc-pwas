@@ -32,6 +32,13 @@ body {
   border-bottom: 1px solid var(--base02);
   align-items: flex-start;
 }
+.input-stack {
+  position: relative;
+  flex-grow: 1;
+  display: flex;
+  align-items: flex-start;
+  min-height: 24px;
+}
 .prompt {
   color: var(--cyan);
   margin-right: 12px;
@@ -40,15 +47,20 @@ body {
 }
 
 textarea {
+  font-family: "Monoid", "Menlo", "Monaco", "Courier New", monospace;
+  font-size: 16px;
   background: transparent;
   border: none;
   outline: none;
   color: var(--base1);
   width: 100%;
-  font-size: 16px;
   resize: none;
   line-height: 24px;
-  field-sizing: content; /* Modern browser support for auto-height */
+  letter-spacing: normal;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  -webkit-text-size-adjust: 100%;
+  field-sizing: content;
   min-height: 24px;
   padding: 0;
 }
