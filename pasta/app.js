@@ -66,13 +66,19 @@ const output = document.getElementById("terminal-output"),
 
 const extractTags = (text) => {
   const tags = [...text.matchAll(/!(\w+)/g)].map((m) => m[1].toLowerCase());
-  const cleanText = text.replace(/!(\w+)/g, "").replace(/[ \t]+/g, " ").trim();
+  const cleanText = text
+    .replace(/!(\w+)/g, "")
+    .replace(/[ \t]+/g, " ")
+    .trim();
   return { cleanText, tags };
 };
 
 const render = (query = "") => {
   const q = (typeof query === "string" ? query : "").toLowerCase();
-  const tokens = q.trim().split(/[ \t]+/).filter(Boolean);
+  const tokens = q
+    .trim()
+    .split(/[ \t]+/)
+    .filter(Boolean);
   const tags = tokens.filter((t) => t.startsWith("!")).map((t) => t.slice(1));
   const texts = tokens.filter((t) => !t.startsWith("!"));
 
@@ -82,7 +88,8 @@ const render = (query = "") => {
       texts.length === 0 ||
       texts.every(
         (t) =>
-          s.name.toLowerCase().includes(t) || s.content.toLowerCase().includes(t),
+          s.name.toLowerCase().includes(t) ||
+          s.content.toLowerCase().includes(t),
       );
     return hasAllTags && matchesText;
   });
@@ -237,22 +244,26 @@ input.addEventListener("keydown", async (e) => {
         await refresh();
       }
     } else if (cmd === "mod" || cmd === "modify" || cmd === "m") {
-      const match = valStr.match(/^(?:mod|modify|m)[ \t]+(\d+)(?:[ \t]+([\s\S]*))?$/i);
+      const match = valStr.match(
+        /^(?:mod|modify|m)[ \t]+(\d+)(?:[ \t]+([\s\S]*))?$/i,
+      );
       if (match && match[1]) {
         const id = parseInt(match[1]);
         const tokens = match[2] ? match[2].trim().split(/[ \t]+/) : [];
         const oldSnip = rowMap[id - 1];
 
         if (oldSnip) {
-          const tagsToToggle = tokens.filter(t => t.startsWith("!")).map(t => t.substring(1).toLowerCase());
-          const textTokens = tokens.filter(t => !t.startsWith("!"));
-          
+          const tagsToToggle = tokens
+            .filter((t) => t.startsWith("!"))
+            .map((t) => t.substring(1).toLowerCase());
+          const textTokens = tokens.filter((t) => !t.startsWith("!"));
+
           let newName = oldSnip.name;
           let newContent = oldSnip.content;
           let newTags = [...(oldSnip.tags || [])];
 
           // Toggle tags
-          tagsToToggle.forEach(t => {
+          tagsToToggle.forEach((t) => {
             const idx = newTags.indexOf(t);
             if (idx >= 0) newTags.splice(idx, 1);
             else newTags.push(t);
@@ -267,7 +278,11 @@ input.addEventListener("keydown", async (e) => {
           if (newName !== oldSnip.name) {
             await dbOps.del(oldSnip.name);
           }
-          await dbOps.put({ name: newName, content: newContent, tags: newTags });
+          await dbOps.put({
+            name: newName,
+            content: newContent,
+            tags: newTags,
+          });
         }
         input.value = "";
         input.style.height = "auto";
@@ -279,8 +294,7 @@ input.addEventListener("keydown", async (e) => {
         const id = parseInt(match[1]);
         const snip = rowMap[id - 1];
         if (snip) {
-          const tagStr = (snip.tags || []).map(t => "!" + t).join(" ");
-          input.value = `mod ${id} ${snip.name} ${snip.content}${tagStr ? " " + tagStr : ""}`;
+          input.value = `mod ${id} ${snip.name} ${snip.content}`;
           input.style.height = "auto";
           input.style.height = input.scrollHeight + "px";
           input.focus();
@@ -315,7 +329,7 @@ input.addEventListener("keydown", async (e) => {
       const h = valStr.match(/^(?:help|\?)[ \t]+([\s\S]*)$/i)?.[1] || "";
       let html = "";
       if (!h) {
-        html = `<div class="msg-standalone"><span style="color:var(--yellow)">Commands:</span> list/l, add, rm/remove, mod, edit, info/i, help, link, save, load, imp, exp. Type <span class="msg-hl">help [cmd]</span> for details.</div>`;
+        html = `<div class="msg-standalone"><span style="color:var(--yellow)">Pasta${appVersion ? " v" + appVersion : ""}</span> — Commands: list/l, add, rm/remove, mod, edit, info/i, copy/cp, help, link, save, load, imp, exp. Type <span class="msg-hl">help [cmd]</span> for details.</div>`;
       } else if (h === "list" || h === "l") {
         html = `<div class="msg-help msg-standalone"><span class="msg-hl">list</span> [query] (or <span class="msg-hl">l</span>)<br>Filters snippets by query. Use multiple <span class="msg-hl">!tag</span> tokens for AND search. Shows all if no query provided.</div>`;
       } else if (h === "info" || h === "i") {
@@ -326,6 +340,8 @@ input.addEventListener("keydown", async (e) => {
         html = `<div class="msg-help msg-standalone"><span class="msg-hl">mod</span> ID <span class="msg-arg">newName</span> <span class="msg-arg">newContent...</span><br>Updates an existing snippet. Replaces name and content.</div>`;
       } else if (h === "edit" || h === "ed") {
         html = `<div class="msg-help msg-standalone"><span class="msg-hl">edit</span> ID<br>Populates the input with a <span class="msg-hl">mod</span> command for quick editing. preserves newlines.</div>`;
+      } else if (h === "copy" || h === "cp") {
+        html = `<div class="msg-help msg-standalone"><span class="msg-hl">copy</span> (or <span class="msg-hl">cp</span>)<br>Copies all currently visible snippets to the clipboard, joined by a blank line.</div>`;
       } else if (h === "rm" || h === "remove") {
         html = `<div class="msg-help msg-standalone"><span class="msg-hl">rm</span> ID (or <span class="msg-hl">remove</span>)<br>Deletes the snippet at the specified ID.</div>`;
       } else if (h === "link" || h === "save" || h === "load") {
@@ -339,6 +355,13 @@ input.addEventListener("keydown", async (e) => {
       input.style.height = "auto";
       input.style.height = input.scrollHeight + "px";
       output.innerHTML = html + output.innerHTML;
+    } else if (cmd === "copy" || cmd === "cp") {
+      if (rowMap.length > 0) {
+        const text = rowMap.map((s) => s.content).join("\n\n");
+        await navigator.clipboard.writeText(text);
+      }
+      input.value = "";
+      input.style.height = "auto";
     } else if (cmd === "list" || cmd === "l") {
       const query = valStr.match(/^(?:list|l)[ \t]+([\s\S]*)$/i)?.[1] || "";
       input.value = "";
@@ -413,5 +436,12 @@ document.body.addEventListener("click", async (e) => {
     }
   }
 });
+
+let appVersion = "";
+fetch("manifest.json")
+  .then((r) => r.json())
+  .then((m) => {
+    appVersion = m.version || "";
+  });
 
 initDB().then(refresh);
