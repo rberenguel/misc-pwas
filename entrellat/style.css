@@ -41,6 +41,22 @@ h1 {
     font-weight: 800;
 }
 
+#app-title {
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.version-text {
+    font-size: 0.65rem;
+    opacity: 0.5;
+    font-weight: 400;
+    text-transform: lowercase;
+    letter-spacing: 0;
+    margin-left: 0.2rem;
+}
+
 #score-board {
     font-size: 1.2rem;
     font-weight: bold;
@@ -130,10 +146,125 @@ h1 {
     opacity: 1 !important;
 }
 
+/* ── Info button ── */
+#info-btn {
+    background: none;
+    border: 1px solid var(--ui-border);
+    color: var(--text-color);
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+#info-btn:hover {
+    opacity: 1;
+}
+
+/* ── Intro overlay ── */
+.intro-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.intro-overlay.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.intro-content {
+    text-align: center;
+    padding: 2.5rem 2rem;
+    border-radius: 16px;
+    background: rgba(10, 10, 10, 0.9);
+    border: 1px solid var(--ui-border);
+    box-sizing: border-box;
+    max-width: 90%;
+    width: 400px;
+}
+
+.intro-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 16px;
+    margin-bottom: 1rem;
+}
+
+.intro-title {
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: 3px;
+    color: var(--accent-color);
+    margin: 0 0 0.25rem;
+}
+
+.intro-tagline {
+    font-size: 0.95rem;
+    opacity: 0.5;
+    margin: 0 0 1.5rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.intro-rules {
+    list-style: none;
+    padding: 0;
+    text-align: left;
+    line-height: 1.9;
+    margin-bottom: 2rem;
+    opacity: 0.85;
+    font-size: 1rem;
+}
+
+.intro-rules li::before {
+    content: "· ";
+    color: var(--accent-color);
+}
+
+.intro-play-btn {
+    background: var(--accent-color);
+    color: #000;
+    border: none;
+    padding: 0.8rem 3rem;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: 800;
+    cursor: pointer;
+    font-family: inherit;
+    letter-spacing: 1px;
+    transition: opacity 0.2s, transform 0.1s;
+}
+
+.intro-play-btn:hover {
+    opacity: 0.85;
+}
+
+.intro-play-btn:active {
+    transform: scale(0.96);
+}
+
 /* ── Mobile portrait ── */
 @media (max-width: 768px) and (orientation: portrait) {
     #game-container {
         flex: 1;
+        min-height: 0;
     }
 
     #ui-container {
@@ -142,7 +273,8 @@ h1 {
         bottom: auto;
         left: auto;
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(2, min(44vw, 22dvh));
+        justify-content: center;
         gap: 8px;
         padding: 8px;
         background: var(--bg-color);
@@ -150,12 +282,9 @@ h1 {
     }
 
     .option-card {
-        width: auto;
-        height: auto;
-        aspect-ratio: 1;
+        width: min(44vw, 22dvh);
+        height: min(44vw, 22dvh);
         box-sizing: border-box;
+        padding: 4px;
     }
-
-
-
 }

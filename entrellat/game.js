@@ -324,15 +324,64 @@ document.querySelectorAll('.option-card').forEach(card => {
     });
 });
 
+// --- DRAG TO ROTATE ---
+let isDragging = false;
+let lastPointerX = 0;
+let lastPointerY = 0;
+const DRAG_SENSITIVITY = 0.007;
+const _quatY = new THREE.Quaternion();
+const _quatX = new THREE.Quaternion();
+const _axisY = new THREE.Vector3(0, 1, 0);
+const _axisX = new THREE.Vector3(1, 0, 0);
+
+const gameContainer = document.getElementById('game-container');
+
+gameContainer.addEventListener('mousedown', e => {
+    isDragging = true;
+    lastPointerX = e.clientX;
+    lastPointerY = e.clientY;
+});
+
+gameContainer.addEventListener('touchstart', e => {
+    isDragging = true;
+    lastPointerX = e.touches[0].clientX;
+    lastPointerY = e.touches[0].clientY;
+}, { passive: true });
+
+window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    const dx = e.clientX - lastPointerX;
+    const dy = e.clientY - lastPointerY;
+    lastPointerX = e.clientX;
+    lastPointerY = e.clientY;
+    _quatY.setFromAxisAngle(_axisY, -dx * DRAG_SENSITIVITY);
+    _quatX.setFromAxisAngle(_axisX, -dy * DRAG_SENSITIVITY);
+    shapeGroup.quaternion.premultiply(_quatY).premultiply(_quatX);
+});
+
+window.addEventListener('touchmove', e => {
+    if (!isDragging) return;
+    const dx = e.touches[0].clientX - lastPointerX;
+    const dy = e.touches[0].clientY - lastPointerY;
+    lastPointerX = e.touches[0].clientX;
+    lastPointerY = e.touches[0].clientY;
+    _quatY.setFromAxisAngle(_axisY, -dx * DRAG_SENSITIVITY);
+    _quatX.setFromAxisAngle(_axisX, -dy * DRAG_SENSITIVITY);
+    shapeGroup.quaternion.premultiply(_quatY).premultiply(_quatX);
+}, { passive: true });
+
+window.addEventListener('mouseup', () => { isDragging = false; });
+window.addEventListener('touchend', () => { isDragging = false; });
+
 // --- ANIMATION LOOP ---
 function animate() {
     requestAnimationFrame(animate);
 
-    if (!isResolving) {
+    if (!isResolving && !isDragging) {
         shapeGroup.rotation.x += 0.003;
         shapeGroup.rotation.y += 0.005;
         shapeGroup.rotation.z += 0.002;
-    } else {
+    } else if (isResolving) {
         shapeGroup.quaternion.slerp(targetQuaternion, 0.1);
     }
 
@@ -375,6 +424,30 @@ window.addEventListener('resize', () => {
             }
         });
     });
+});
+
+// --- VERSION ---
+fetch('manifest.json')
+    .then(r => r.json())
+    .then(manifest => {
+        if (!manifest.version) return;
+        const v = 'v' + manifest.version;
+        const elV = document.getElementById('app-version');
+        const elVI = document.getElementById('app-version-intro');
+        if (elV) elV.innerText = v;
+        if (elVI) elVI.innerText = v;
+    })
+    .catch(() => {});
+
+// --- INTRO / INFO ---
+const introEl = document.getElementById('intro');
+
+document.getElementById('play-btn').addEventListener('click', () => {
+    introEl.classList.remove('visible');
+});
+
+document.getElementById('info-btn').addEventListener('click', () => {
+    introEl.classList.add('visible');
 });
 
 // Init

@@ -1,7 +1,7 @@
 {
     "name": "Entrellat",
     "short_name": "Entrellat",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "A spatial reasoning game about axis projection",
     "start_url": ".",
     "display": "standalone",
