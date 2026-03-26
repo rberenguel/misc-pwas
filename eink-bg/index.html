@@ -535,6 +535,9 @@
         }
       });
 
+      canvas.addEventListener("touchend", () => (isDragging = false));
+      canvas.addEventListener("touchcancel", () => (isDragging = false));
+
       canvas.addEventListener(
         "touchmove",
         (e) => {
