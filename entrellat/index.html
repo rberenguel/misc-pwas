@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrellat</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" type="image/png" href="icon.png">
+    <link rel="manifest" href="manifest.json">
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "./libs/three.js"
+        }
+    }
+    </script>
+</head>
+<body>
+
+    <div id="header">
+        <div id="score-board"><span id="score">0</span></div>
+    </div>
+
+    <div id="game-container">
+        <div id="webgl-canvas"></div>
+        <div id="overlay">MATCH</div>
+    </div>
+
+    <div id="ui-container">
+        <div class="option-card" data-index="0"><canvas width="200" height="200"></canvas></div>
+        <div class="option-card" data-index="1"><canvas width="200" height="200"></canvas></div>
+        <div class="option-card" data-index="2"><canvas width="200" height="200"></canvas></div>
+        <div class="option-card" data-index="3"><canvas width="200" height="200"></canvas></div>
+    </div>
+
+    <script type="module" src="game.js"></script>
+</body>
+</html>
