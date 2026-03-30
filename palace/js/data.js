@@ -1,14 +1,14 @@
 export const MAJOR_PEGS = [
-    "Tie", "Noah", "Ma", "Rye", "Law", "Shoe", "Cow", "Ivy", "Bee", "Toes",
-    "Tot", "Tin", "Tomb", "Tire", "Towel", "Dish", "Dog", "Dove", "Tub", "Nose",
-    "Net", "Nun", "Name", "Nero", "Nail", "Notch", "Neck", "Knife", "Knob", "Mice",
-    "Mat", "Moon", "Mummy", "Mower", "Mule", "Match", "Mug", "Movie", "Map", "Rose",
-    "Rat", "Rain", "Ram", "Rower", "Roll", "Roach", "Rock", "Roof", "Rope", "Lace",
-    "Lot", "Lion", "Loom", "Lure", "Lily", "Leech", "Log", "Lava", "Lip", "Cheese",
-    "Sheet", "Chain", "Jam", "Cherry", "Jail", "Judge", "Chalk", "Chef", "Ship", "Case",
-    "Cat", "Coin", "Comb", "Car", "Coal", "Cage", "Cake", "Cave", "Cup", "Fez",
-    "Fat", "Phone", "Foam", "Fire", "Foil", "Fish", "Fog", "Fife", "Fob", "Bus",
-    "Bat", "Bone", "Bum", "Bear", "Bell", "Beach", "Book", "Puff", "Pipe", "Daisies"
+    "Tie", "Neo", "Ham", "Ray", "Owl", "Shoe", "Key", "Wave", "Bee", "Toes",
+    "Toad", "Tin", "Tomb", "Tire", "Towel", "Dish", "Dog", "Dove", "Tub", "Nose",
+    "Net", "Nun", "Name", "Noir", "Nail", "Notch", "Neck", "Knife", "Knob", "Mice",
+    "Mat", "Moon", "Mummy", "Homer", "Mule", "Match", "Mug", "Movie", "Map", "Rose",
+    "Rat", "Rain", "Ram", "Rory", "Rail", "Arch", "Rock", "Rifle", "Rope", "Lisa",
+    "Latte", "Lion", "Llama", "Lyre", "Leela", "Leech", "Lake", "Lava", "Lip", "Cheese",
+    "Shit", "Chain", "Jam", "Cherry", "Joel", "Judge", "Chalk", "Chef", "Ship", "Case",
+    "Cat", "Coin", "Comb", "Car", "Coal", "Cage", "Cake", "Coffee", "Cup", "Fez",
+    "Fat", "Phone", "Foam", "Fry", "Foil", "Fish", "Fog", "FIFA", "FBI", "Bus",
+    "Bat", "Bone", "Bamm", "Bear", "Bell", "Beach", "Book", "Beef", "Pipe", "Daisies"
 ];
 
 // Consonant sounds for each digit in the Major System
