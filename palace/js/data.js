@@ -1,8 +1,8 @@
 export const MAJOR_PEGS = [
-    "Tie", "Neo", "Ham", "Ray", "Owl", "Shoe", "Key", "Wave", "Bee", "Toes",
+    "Tie", "Neo", "Moe", "Ray", "Owl", "Shoe", "Key", "Wave", "Bee", "Toes",
     "Toad", "Tin", "Tomb", "Tire", "Towel", "Dish", "Dog", "Dove", "Tub", "Nose",
-    "Net", "Neon", "Name", "Noir", "Nail", "Notch", "Neck", "Knife", "Knob", "Mice",
-    "Mat", "Moon", "Mummy", "Homer", "Mule", "Match", "Mug", "Movie", "Map", "Rose",
+    "Net", "Neon", "Name", "Noir", "Nail", "Nacho", "Neck", "Knife", "Knob", "Mice",
+    "Moat", "Moon", "Mummy", "Homer", "Mule", "Marge", "Mug", "Movie", "Map", "Rose",
     "Rat", "Rain", "Ram", "Rory", "Rail", "Arch", "Rock", "Rifle", "Rope", "Lisa",
     "Latte", "Lion", "Llama", "Lyre", "Leela", "Leech", "Lake", "Lava", "Lip", "Cheese",
     "Shit", "Chain", "Jam", "Cherry", "Joel", "Judge", "Chalk", "Chef", "Ship", "Case",
