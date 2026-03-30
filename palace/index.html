@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Palace</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icon.png" type="image/png">
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="stylesheet" href="fonts/phosphor/phosphor.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <header class="app-header">
+        <span class="app-title">PALACE</span>
+        <span id="app-version" class="app-version"></span>
+        <button id="btn-global-x" class="header-x">
+            <i class="ph-light ph-x"></i>
+        </button>
+    </header>
+
+    <!-- ── Menu ── -->
+    <div id="screen-menu" class="screen active">
+        <div class="menu-modes">
+            <div class="mode-card" id="btn-menu-mode1"><i class="ph-light ph-book-bookmark"></i></div>
+            <div class="mode-card" id="btn-menu-mode2"><i class="ph-light ph-list-numbers"></i></div>
+            <div class="mode-card" id="btn-menu-mode3"><i class="ph-light ph-list-magnifying-glass"></i></div>
+        </div>
+        <div class="menu-footer">
+            <button id="btn-menu-stats" class="secondary">Stats &amp; Progress</button>
+        </div>
+    </div>
+
+    <!-- ── Mode 1 Setup ── -->
+    <div id="screen-mode1-setup" class="screen">
+        <div class="setup-choices">
+            <div class="choice-btn" id="btn-m1-20">20</div>
+            <div class="choice-btn" id="btn-m1-50">50</div>
+            <div class="choice-btn" id="btn-m1-100">100</div>
+        </div>
+    </div>
+
+    <!-- ── Mode 1 Drill ── -->
+    <div id="screen-mode1-drill" class="screen">
+        <div id="flashcard" class="big-display">
+            <div id="flashcard-number" class="number">42</div>
+            <div id="flashcard-word" class="word">Rain</div>
+            <div id="flashcard-hint" class="hint"></div>
+        </div>
+        <div id="mode1-controls" class="grade-controls">
+            <button id="btn-m1-fail" class="action-btn error-btn"><i class="ph-light ph-x"></i></button>
+            <button id="btn-m1-pass" class="action-btn success-btn"><i class="ph-light ph-check"></i></button>
+        </div>
+        <div class="encoding-footer">
+            <div class="encoding-progress-bar"><div id="mode1-progress-fill"></div></div>
+            <span id="mode1-progress-label" class="encoding-label"></span>
+        </div>
+    </div>
+
+    <!-- ── Mode 2 Setup ── -->
+    <div id="screen-mode2-setup" class="screen">
+        <div class="setup-choices">
+            <div class="choice-btn" id="btn-m2-20">20</div>
+            <div class="choice-btn" id="btn-m2-50">50</div>
+            <div class="choice-btn" id="btn-m2-100">100</div>
+        </div>
+    </div>
+
+    <!-- ── Mode 3 Setup ── -->
+    <div id="screen-mode3-setup" class="screen">
+        <div class="setup-choices">
+            <div class="choice-btn" id="btn-m3-10">10</div>
+            <div class="choice-btn" id="btn-m3-20">20</div>
+            <div class="choice-btn" id="btn-m3-50">50</div>
+        </div>
+    </div>
+
+    <!-- ── Encoding (Modes 2 & 3) ── -->
+    <div id="screen-encoding" class="screen">
+        <div id="m3-extras" style="display: none;">
+            <div id="m3-peg-text" class="peg-header">31 — Mat</div>
+        </div>
+        <div id="big-icon-view" class="big-display"></div>
+        <div class="encoding-footer">
+            <div class="encoding-progress-bar"><div id="encoding-progress-fill"></div></div>
+            <span id="encoding-counter" class="encoding-label">1 / 20</span>
+        </div>
+    </div>
+
+    <!-- ── Decoding (Modes 2 & 3) ── -->
+    <div id="screen-decoding" class="screen">
+        <h2 id="decoding-prompt" class="decoding-prompt">Recall icon 1 of 20</h2>
+        <div id="decoding-grid" class="icon-grid"></div>
+        <button id="btn-empty" style="display: none; background-color: var(--secondary); color: var(--bg); width: 100%; margin: 0;">Slot is Empty</button>
+    </div>
+
+    <!-- ── Stats ── -->
+    <div id="screen-stats" class="screen">
+        <div class="tab-bar">
+            <button class="tab-btn active" data-tab="overview">Overview</button>
+            <button class="tab-btn" data-tab="mode1">Index</button>
+            <button class="tab-btn" data-tab="mode2">Sequence</button>
+            <button class="tab-btn" data-tab="mode3">Recall</button>
+        </div>
+
+        <div id="tab-overview" class="tab-panel active"></div>
+        <div id="tab-mode1"    class="tab-panel"></div>
+        <div id="tab-mode2"    class="tab-panel"></div>
+        <div id="tab-mode3"    class="tab-panel"></div>
+
+        <div class="stats-footer">
+            <button id="btn-export" class="secondary">Export</button>
+            <button id="btn-import" class="secondary">Import</button>
+            <button id="btn-clear"  class="secondary" style="border-color: var(--error); color: var(--error);">Clear</button>
+        </div>
+        <input type="file" id="import-file-input" accept=".json" style="display:none">
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js');
+        }
+    </script>
+</body>
+</html>
