@@ -1,4 +1,4 @@
-import { getSessions, computePegStatsM1, computePegStatsM3, exportStats, importStats, clearStats } from './stats.js';
+import { getSessions, computePegStatsM1, computePegStatsM3, exportStats, importStats } from './stats.js';
 import { buildRadar } from './radar.js';
 import { MAJOR_PEGS } from './data.js';
 import { triggerHaptic, triggerHapticError } from '../libs/haptic.js';
@@ -314,12 +314,6 @@ export function initStatsWiring(onRerender) {
         e.target.value = '';
     });
 
-    document.getElementById('btn-clear').addEventListener('click', () => {
-        triggerHaptic();
-        if (confirm('Clear ALL stats? This cannot be undone.')) {
-            clearStats().then(() => onRerender());
-        }
-    });
 }
 
 // Called every time the stats screen is opened

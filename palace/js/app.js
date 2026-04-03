@@ -43,6 +43,23 @@ const state = {
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 
+// ── Result overlay ────────────────────────────────────────────────────────────
+
+let _resultCb = null;
+function showResult(msg, cb) {
+    _resultCb = cb;
+    document.getElementById('result-text').textContent = msg;
+    document.getElementById('result-overlay').hidden = false;
+}
+document.getElementById('result-overlay').addEventListener('click', () => {
+    document.getElementById('result-overlay').hidden = true;
+    const cb = _resultCb;
+    _resultCb = null;
+    if (cb) cb();
+});
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+
 function navTo(screenId) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(screenId).classList.add('active');
@@ -95,8 +112,7 @@ function scoreMode1(correct) {
     if (state.currentIndex >= state.drillLength) {
         const totalMs = Date.now() - state.sessionStartTime;
         recordSession({ mode: 1, drillLength: state.drillLength, totalMs, cards: state.m1Cards });
-        alert(`Drill complete! ${state.mode1Score} / ${state.drillLength}`);
-        navTo('screen-menu');
+        showResult(`${state.mode1Score} / ${state.drillLength}`, () => navTo('screen-menu'));
     } else {
         renderMode1Card();
     }
@@ -271,8 +287,7 @@ function handleGridTap(tappedIcon, element) {
 
         element.style.backgroundColor = 'var(--error)';
         setTimeout(() => {
-            alert(`Wrong! Drill ended.`);
-            finishDrill(false);
+            showResult('Wrong!', () => finishDrill(false));
         }, 150);
     }
 }
@@ -294,7 +309,7 @@ function finishDrill(success) {
             totalMs
         });
         m2TestResults.length = 0;
-        if (success) alert('Perfect! Drill complete.');
+        if (success) { showResult('Perfect!', () => navTo('screen-menu')); return; }
     } else {
         recordSession({
             mode: 3,
@@ -304,7 +319,7 @@ function finishDrill(success) {
             totalMs
         });
         m3TestResults.length = 0;
-        if (success) alert('Perfect score! Drill complete.');
+        if (success) { showResult('Perfect!', () => navTo('screen-menu')); return; }
     }
 
     navTo('screen-menu');

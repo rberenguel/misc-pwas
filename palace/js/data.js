@@ -1,6 +1,6 @@
 export const MAJOR_PEGS = [
     "Tie", "Neo", "Moe", "Ray", "Owl", "Shoe", "Key", "Wave", "Bee", "Toes",
-    "Toad", "Tin", "Tomb", "Tire", "Towel", "Dish", "Dog", "Dove", "Tub", "Nose",
+    "Toad", "Tin", "Time", "Tire", "Towel", "Dish", "Dog", "Dove", "Tub", "Nose",
     "Net", "Neon", "Name", "Noir", "Nail", "Nacho", "Neck", "Knife", "Knob", "Mice",
     "Moat", "Moon", "Mummy", "Homer", "Mule", "Marge", "Mug", "Movie", "Map", "Rose",
     "Rat", "Rain", "Ram", "Rory", "Rail", "Arch", "Rock", "Rifle", "Rope", "Lisa",
@@ -8,7 +8,7 @@ export const MAJOR_PEGS = [
     "Shit", "Chain", "Jam", "Cherry", "Joel", "Judge", "Chalk", "Chef", "Ship", "Case",
     "Cat", "Coin", "Comb", "Car", "Coal", "Cage", "Cake", "Coffee", "Cup", "Fez",
     "Fat", "Phone", "Foam", "Fry", "Foil", "Fish", "Fog", "FIFA", "FBI", "Bus",
-    "Bat", "Bone", "Bamm", "Bear", "Bell", "Beach", "Book", "Beef", "Pipe", "Daisies"
+    "Bat", "Bone", "Boom", "Bear", "Bell", "Beach", "Book", "Beef", "Pipe", "Daisies"
 ];
 
 // Consonant sounds for each digit in the Major System
