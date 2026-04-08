@@ -1,6 +1,6 @@
 {
   "name": "Palace",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "short_name": "Palace",
   "description": "Mental scratchpad trainer",
   "start_url": "./index.html",
