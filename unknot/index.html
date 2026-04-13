@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Unknot</title>
+    <title>Unknot 3.0</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #151318;
+            background-color: #121015;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             color: white;
             user-select: none;
@@ -34,86 +34,97 @@
         }
         h1 {
             margin: 0;
-            font-size: 28px;
-            letter-spacing: 4px;
-            color: #ECA8CE;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            font-size: 32px;
+            letter-spacing: 6px;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(255,255,255,0.3);
             text-transform: uppercase;
         }
         p {
             margin: 5px 0 0 0;
             font-size: 14px;
-            color: #8B769F;
+            color: #a395b3;
+            max-width: 300px;
+            line-height: 1.4;
+        }
+        .highlight-text {
+            color: #ECA8CE;
+            font-weight: bold;
         }
         .btn {
-            background: #2a2435;
-            border: 2px solid #8B769F;
+            background: rgba(42, 36, 53, 0.8);
+            backdrop-filter: blur(4px);
+            border: 1px solid #6F597A;
             border-radius: 8px;
             color: white;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: bold;
-            padding: 12px 24px;
+            padding: 12px 20px;
             cursor: pointer;
             transition: all 0.2s;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
             text-transform: uppercase;
             letter-spacing: 1px;
         }
         .btn:hover {
-            background: #8B769F;
-            color: #151318;
+            background: #6F597A;
+            color: #fff;
             transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(111, 89, 122, 0.4);
         }
         .btn:active {
-            transform: translateY(2px);
+            transform: translateY(1px);
+        }
+        .btn-primary {
+            background: #AA6B95;
+            border-color: #ECA8CE;
+        }
+        .btn-primary:hover {
+            background: #ECA8CE;
+            color: #121015;
+            box-shadow: 0 4px 12px rgba(236, 168, 206, 0.4);
         }
         .controls-group {
             display: flex;
+            flex-wrap: wrap;
             gap: 10px;
+            max-width: 350px;
         }
         .slider-group {
             display: flex;
             flex-direction: column;
             gap: 8px;
             background: rgba(42, 36, 53, 0.6);
+            backdrop-filter: blur(4px);
             padding: 12px 16px;
             border-radius: 8px;
             border: 1px solid #6F597A;
+            width: fit-content;
         }
         .slider-group label {
-            font-size: 14px;
+            font-size: 13px;
             font-weight: bold;
-            color: #ECA8CE;
+            color: #a395b3;
+            letter-spacing: 1px;
         }
         input[type="range"] {
-            accent-color: #AA6B95;
+            accent-color: #ECA8CE;
             cursor: pointer;
-            width: 100%;
-        }
-        #scramble-btn {
-            background: #AA6B95;
-            border-color: #ECA8CE;
-            margin-left: 10px;
-        }
-        #scramble-btn:hover {
-            background: #ECA8CE;
-            color: #151318;
+            width: 150px;
         }
         .hint {
             position: absolute;
-            bottom: 20px; left: 0; right: 0;
+            bottom: 25px; left: 0; right: 0;
             text-align: center;
             font-size: 12px;
-            color: #8B769F;
+            color: #a395b3;
             pointer-events: none;
-            letter-spacing: 1px;
-            background: rgba(21, 19, 24, 0.7);
-            padding: 10px;
+            letter-spacing: 2px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
         }
         #win-overlay {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(21, 19, 24, 0.85);
+            background: rgba(18, 16, 21, 0.9);
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -124,10 +135,13 @@
             z-index: 10;
         }
         #win-overlay h2 {
-            font-size: 48px;
-            color: #ECA8CE;
-            margin-bottom: 20px;
-            letter-spacing: 4px;
+            font-size: 52px;
+            background: linear-gradient(90deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 30px;
+            letter-spacing: 6px;
+            text-shadow: 0 0 20px rgba(255, 154, 158, 0.2);
         }
     </style>
 </head>
@@ -139,24 +153,25 @@
     <div class="info">
         <div>
             <h1>UNKNOT</h1>
-            <p>Drag block faces to shift the inner pink knot.</p>
+            <p>Restore the shape by realigning the <span class="highlight-text">color gradient</span>. Drag slices along the arrow paths to shift them through the frame.</p>
         </div>
         <div class="controls-group">
-            <button class="btn" onclick="generateNew()">New Knot</button>
-            <button class="btn" id="scramble-btn" onclick="scramblePuzzle()">Scramble</button>
+            <button class="btn" onclick="generateNew()">New Puzzle</button>
+            <button class="btn" onclick="scramblePuzzle()">Scramble</button>
+            <button class="btn btn-primary" id="peek-btn">Hold to Peek</button>
         </div>
         <div class="slider-group">
-            <label for="size-slider">Grid Size: <span id="size-val">5</span>x<span id="size-val2">5</span></label>
-            <input type="range" id="size-slider" min="4" max="9" value="5" onchange="generateNew()" oninput="document.getElementById('size-val').innerText = this.value; document.getElementById('size-val2').innerText = this.value;">
+            <label for="size-slider">GRID SIZE: <span id="size-val" style="color:#fff">5</span></label>
+            <input type="range" id="size-slider" min="4" max="9" value="5" onchange="generateNew()" oninput="document.getElementById('size-val').innerText = this.value;">
         </div>
     </div>
 </div>
 
-<div class="hint">DRAG BACKGROUND TO PAN &nbsp;&bull;&nbsp; DRAG FACES TO SHIFT PLANES</div>
+<div class="hint">DRAG BACKGROUND TO PAN &nbsp;&bull;&nbsp; SCROLL TO ZOOM</div>
 
 <div id="win-overlay">
-    <h2>KNOT RESTORED!</h2>
-    <button class="btn" onclick="generateNew()">Generate New Puzzle</button>
+    <h2>GRADIENT RESTORED!</h2>
+    <button class="btn btn-primary" onclick="generateNew()" style="font-size: 16px; padding: 15px 30px;">Generate Next Level</button>
 </div>
 
 <script>
@@ -165,31 +180,44 @@
 
     // --- ENGINE STATE ---
     let S = 5; 
-    let cageGrid = []; // Static Purple Frame
-    let grid = []; // Movable Pink Knot
+    let cageGrid = []; 
+    let grid = []; 
     let originalGrid = []; 
-    let faces = [];
     let puzzleSolved = true;
+    let isPeeking = false;
     
-    // Camera / View properties
-    let tileW = 36; 
-    let tileH = 18; 
+    // Rendering State
+    let staticFaces = [];
+    let movingFaces = [];
+    
+    // Camera properties
+    let tileW = 40; 
+    let tileH = 20; 
     let offsetX = 0;
     let offsetY = 0;
     
-    // Interaction state
+    // Interaction & Animation state
     let dragMode = null; 
-    let activeFace = null;
+    let hoveredFace = null;
+    let activeAxis = null;     // The plane's normal axis (X, Y, Z)
+    let activeIndex = -1;      // The grid index of the plane
+    let dragShiftAxis = null;  // The axis the slice is actively sliding along
+    let dragVisualShift = 0;   // Continuous float [-0.5, 0.5] for rendering
     let dragStartX = 0;
     let dragStartY = 0;
     let panLastX = 0;
     let panLastY = 0;
 
-    const palette = {
-        1: { top: '#6F597A', right: '#6F597A', left: '#6F597A' }, 
-        2: { top: '#DEACCA', right: '#DEACCA', left: '#DEACCA' }, 
-        3: { top: '#AA6B95', right: '#AA6B95', left: '#AA6B95' }  
-    };
+    // Projection constants mapping 3D space to 2D screen directions
+    let projX = { cx: 0, cy: 0 };
+    let projY = { cx: 0, cy: 0 };
+    let projZ = { cx: 0, cy: 0 };
+
+    function updateProjections() {
+        projX = { cx: tileW, cy: tileH };
+        projY = { cx: -tileW, cy: tileH };
+        projZ = { cx: 0, cy: -tileH * 2 };
+    }
 
     // --- PROCEDURAL GENERATOR ---
     function generateIntricateStructure(size) {
@@ -203,7 +231,7 @@
             for(let i=0; i<segments; i++) {
                 let axis = Math.floor(Math.random() * 3);
                 let dir = Math.random() > 0.5 ? 1 : -1;
-                let length = Math.floor(Math.random() * 3) + 1; 
+                let length = Math.floor(Math.random() * 4) + 1; 
                 
                 for(let step=0; step<length; step++) {
                     let nx = cx + (axis === 0 ? dir : 0);
@@ -211,60 +239,17 @@
                     let nz = cz + (axis === 2 ? dir : 0);
                     
                     if (nx >= 1 && nx <= S-2 && ny >= 1 && ny <= S-2 && nz >= 1 && nz <= S-2) {
-                        let otherColor = color === 2 ? 3 : 2;
-                        if (tempGrid[nx][ny][nz] !== otherColor) {
-                            cx = nx; cy = ny; cz = nz;
-                            tempGrid[cx][cy][cz] = color;
-                        } else break; 
+                        cx = nx; cy = ny; cz = nz;
+                        tempGrid[cx][cy][cz] = color;
                     } else break; 
                 }
             }
         }
 
         function clamp(val) { return Math.max(1, Math.min(val, S-2)); }
-        buildContiguousKnot(clamp(mid), clamp(mid), clamp(mid), 2, Math.max(3, S));
-        buildContiguousKnot(clamp(mid-1), clamp(mid+1), clamp(mid-1), 3, Math.max(2, S-1));
-        if (S > 4) buildContiguousKnot(clamp(mid+1), clamp(mid-1), clamp(mid+1), 2, Math.max(1, S-2)); 
+        buildContiguousKnot(clamp(mid), clamp(mid), clamp(mid), 2, Math.max(5, S*2));
+        buildContiguousKnot(clamp(mid-1), clamp(mid+1), clamp(mid-1), 2, Math.max(3, S));
 
-        const visited = new Set();
-        function carve(x, y, z) {
-            visited.add(`${x},${y},${z}`);
-            if (tempGrid[x][y][z] === 0) tempGrid[x][y][z] = 1; 
-            
-            let dirs = [[2,0,0], [-2,0,0], [0,2,0], [0,-2,0], [0,0,2], [0,0,-2]];
-            dirs.sort(() => Math.random() - 0.5);
-            for (let d of dirs) {
-                const nx = x + d[0], ny = y + d[1], nz = z + d[2];
-                if (nx>=0 && nx<S && ny>=0 && ny<S && nz>=0 && nz<S) {
-                    if (!visited.has(`${nx},${ny},${nz}`)) {
-                        let mx = x + d[0]/2, my = y + d[1]/2, mz = z + d[2]/2;
-                        if (tempGrid[mx][my][mz] === 0) tempGrid[mx][my][mz] = 1;
-                        carve(nx, ny, nz);
-                    }
-                }
-            }
-        }
-        
-        carve(0, 0, 0);
-        carve(S-1, S-1, 0);
-
-        for(let i = 0; i < S*S*S * 0.2; i++) {
-            let x = Math.floor(Math.random()*S);
-            let y = Math.floor(Math.random()*S);
-            let z = Math.floor(Math.random()*S);
-            if(tempGrid[x][y][z] === 1) {
-                let dirs = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
-                let d = dirs[Math.floor(Math.random()*dirs.length)];
-                let ex = x+d[0]*2, ey = y+d[1]*2, ez = z+d[2]*2;
-                if(ex>=0 && ex<S && ey>=0 && ey<S && ez>=0 && ez<S) {
-                    if(tempGrid[ex][ey][ez] === 1) {
-                        let mx = x+d[0], my = y+d[1], mz = z+d[2];
-                        if (tempGrid[mx][my][mz] === 0) tempGrid[mx][my][mz] = 1;
-                    }
-                }
-            }
-        }
-        
         for(let x=0; x<S; x++) {
             for(let y=0; y<S; y++) {
                 for(let z=0; z<S; z++) {
@@ -272,166 +257,288 @@
                     if(x===0 || x===S-1) edges++;
                     if(y===0 || y===S-1) edges++;
                     if(z===0 || z===S-1) edges++;
-                    if(edges >= 2 && tempGrid[x][y][z] === 0) tempGrid[x][y][z] = 1;
+                    if(edges >= 2 && tempGrid[x][y][z] === 0 && Math.random() > 0.2) {
+                        tempGrid[x][y][z] = 1;
+                    }
                 }
             }
         }
 
-        for(let x=mid-1; x<S; x++) {
-            for(let y=mid-1; y<S; y++) {
-                for(let z=mid-1; z<S; z++) {
-                    if (tempGrid[x][y][z] === 1 && Math.random() > 0.05) {
-                        tempGrid[x][y][z] = 0;
-                    }
-                }
-            }
-        }
-        
-        let hollowLoops = S > 5 ? 10 : 5;
-        for(let i=0; i<hollowLoops; i++) {
-            let rx = Math.floor(Math.random()*Math.max(1, S-3));
-            let ry = Math.floor(Math.random()*Math.max(1, S-3));
-            let rz = Math.floor(Math.random()*Math.max(1, S-3));
-            for(let dx=0; dx<3; dx++) {
-                for(let dy=0; dy<3; dy++) {
-                    for(let dz=0; dz<3; dz++) {
-                        if (rx+dx < S && ry+dy < S && rz+dz < S) {
-                            if (tempGrid[rx+dx][ry+dy][rz+dz] === 1 && Math.random() > 0.3) {
-                                tempGrid[rx+dx][ry+dy][rz+dz] = 0;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
         for(let x=0; x<S; x++) {
             for(let y=0; y<S; y++) {
                 for(let z=0; z<S; z++) {
-                    if (tempGrid[x][y][z] !== 0) {
+                    if (tempGrid[x][y][z] === 2) {
                         let neighbors = 0;
-                        if(x<S-1 && tempGrid[x+1][y][z]===tempGrid[x][y][z]) neighbors++;
-                        if(x>0 && tempGrid[x-1][y][z]===tempGrid[x][y][z]) neighbors++;
-                        if(y<S-1 && tempGrid[x][y+1][z]===tempGrid[x][y][z]) neighbors++;
-                        if(y>0 && tempGrid[x][y-1][z]===tempGrid[x][y][z]) neighbors++;
-                        if(z<S-1 && tempGrid[x][y][z+1]===tempGrid[x][y][z]) neighbors++;
-                        if(z>0 && tempGrid[x][y][z-1]===tempGrid[x][y][z]) neighbors++;
+                        if(x<S-1 && tempGrid[x+1][y][z]===2) neighbors++;
+                        if(x>0 && tempGrid[x-1][y][z]===2) neighbors++;
+                        if(y<S-1 && tempGrid[x][y+1][z]===2) neighbors++;
+                        if(y>0 && tempGrid[x][y-1][z]===2) neighbors++;
+                        if(z<S-1 && tempGrid[x][y][z+1]===2) neighbors++;
+                        if(z>0 && tempGrid[x][y][z-1]===2) neighbors++;
                         if (neighbors === 0) tempGrid[x][y][z] = 0; 
                     }
                 }
             }
         }
 
-        // Split into static cage and dynamic knot grids
-        cageGrid = Array(S).fill().map(()=>Array(S).fill().map(()=>Array(S).fill(0)));
-        grid = Array(S).fill().map(()=>Array(S).fill().map(()=>Array(S).fill(0)));
+        cageGrid = Array(S).fill().map(()=>Array(S).fill().map(()=>Array(S).fill(null)));
+        grid = Array(S).fill().map(()=>Array(S).fill().map(()=>Array(S).fill(null)));
 
         for(let x=0; x<S; x++){
             for(let y=0; y<S; y++){
                 for(let z=0; z<S; z++){
                     if (tempGrid[x][y][z] === 1) {
-                        cageGrid[x][y][z] = 1;
-                    } else if (tempGrid[x][y][z] === 2 || tempGrid[x][y][z] === 3) {
-                        grid[x][y][z] = tempGrid[x][y][z];
+                        cageGrid[x][y][z] = { type: 'cage' };
+                    } else if (tempGrid[x][y][z] === 2) {
+                        grid[x][y][z] = { type: 'knot', ox: x, oy: y, oz: z };
                     }
                 }
             }
         }
-
         originalGrid = JSON.parse(JSON.stringify(grid));
     }
 
     // --- FLAT ISOMETRIC MATH ---
-    function project(x, y, z) {
+    function project(x, y, z, vx=0, vy=0, vz=0) {
+        let fx = x + vx;
+        let fy = y + vy;
+        let fz = z + vz;
         return {
-            cx: (x - y) * tileW + offsetX,
-            cy: (x + y) * tileH - z * (tileH * 2) + offsetY
+            cx: (fx - fy) * tileW + offsetX,
+            cy: (fx + fy) * tileH - fz * (tileH * 2) + offsetY
         };
     }
 
-    function hasExposedFace(type, x, y, z, colorType) {
-        if (x < 0 || y < 0 || z < 0 || x >= S || y >= S || z >= S) return false;
-        let c = grid[x][y][z] || cageGrid[x][y][z];
-        if (c !== colorType) return false; 
-        if (type === 'top') return (z === S - 1 || (grid[x][y][z + 1] || cageGrid[x][y][z + 1]) === 0);
-        if (type === 'left') return (y === S - 1 || (grid[x][y + 1][z] || cageGrid[x][y + 1][z]) === 0);
-        if (type === 'right') return (x === S - 1 || (grid[x + 1][y][z] || cageGrid[x + 1][y][z]) === 0);
-        return false;
-    }
+    function getFaceVertices(f, vx=0, vy=0, vz=0) {
+    const { x, y, z, face } = f;
+    if (face === 'top') return [project(x, y, z + 1, vx, vy, vz), project(x + 1, y, z + 1, vx, vy, vz), project(x + 1, y + 1, z + 1, vx, vy, vz), project(x, y + 1, z + 1, vx, vy, vz)];
+    if (face === 'left') return [project(x, y + 1, z + 1, vx, vy, vz), project(x + 1, y + 1, z + 1, vx, vy, vz), project(x + 1, y + 1, z, vx, vy, vz), project(x, y + 1, z, vx, vy, vz)];
+    if (face === 'right') return [project(x + 1, y, z + 1, vx, vy, vz), project(x + 1, y, z, vx, vy, vz), project(x + 1, y + 1, z, vx, vy, vz), project(x + 1, y + 1, z + 1, vx, vy, vz)];
+}
 
-    function getFaceVertices(f) {
-        const { x, y, z, type } = f;
-        if (type === 'top') return [project(x, y, z + 1), project(x + 1, y, z + 1), project(x + 1, y + 1, z + 1), project(x, y + 1, z + 1)];
-        if (type === 'left') return [project(x, y + 1, z + 1), project(x + 1, y + 1, z + 1), project(x + 1, y + 1, z), project(x, y + 1, z)];
-        if (type === 'right') return [project(x + 1, y, z + 1), project(x + 1, y, z), project(x + 1, y + 1, z), project(x + 1, y + 1, z + 1)];
-    }
+// --- SMART FACE BUILDER FOR DRAGGING ---
+function buildFacesForDrag() {
+    staticFaces = [];
+    movingFaces = [];
+    
+    // Safety guard to ensure grids are initialized before trying to build faces
+    if (!grid || grid.length === 0 || !cageGrid || cageGrid.length === 0) return;
 
-    // --- FACE BUILDER ---
-    function buildFaces() {
-        faces = [];
+    let targetGrid = isPeeking ? originalGrid : grid;
+
+    // Is this block part of the actively sliding slice?
+        let isMoving = (x, y, z) => {
+            if ((!dragMode || dragMode === 'pan') && dragMode !== 'springBack') return false;
+            if (activeAxis === 'X') return x === activeIndex;
+            if (activeAxis === 'Y') return y === activeIndex;
+            if (activeAxis === 'Z') return z === activeIndex;
+            return false;
+        };
+
+        // Neighbor check logic that handles chunk splits properly
+        let hasNeighbor = (nx, ny, nz, movingGroup) => {
+            if (nx<0 || ny<0 || nz<0 || nx>=S || ny>=S || nz>=S) return false;
+            let cell = targetGrid[nx][ny][nz] || cageGrid[nx][ny][nz];
+            if (!cell) return false;
+            return isMoving(nx, ny, nz) === movingGroup;
+        };
+
         for (let x = 0; x < S; x++) {
             for (let y = 0; y < S; y++) {
                 for (let z = 0; z < S; z++) {
-                    let T = grid[x][y][z] || cageGrid[x][y][z];
-                    if (T === 0) continue;
-                    let depth = x + y + z;
-                    if (z === S - 1 || (grid[x][y][z + 1] || cageGrid[x][y][z + 1]) === 0) faces.push({ type: 'top', x, y, z, color: T, depth: depth + 0.1 });
-                    if (y === S - 1 || (grid[x][y + 1][z] || cageGrid[x][y + 1][z]) === 0) faces.push({ type: 'left', x, y, z, color: T, depth: depth + 0.2 });
-                    if (x === S - 1 || (grid[x + 1][y][z] || cageGrid[x + 1][y][z]) === 0) faces.push({ type: 'right', x, y, z, color: T, depth: depth + 0.2 });
+                    let cell = targetGrid[x][y][z] || cageGrid[x][y][z];
+                    if (!cell) continue;
+
+                    let moving = isMoving(x, y, z);
+                    
+                    let addFace = (faceType, nx, ny, nz) => {
+                        let culled = hasNeighbor(nx, ny, nz, moving);
+                        if (!culled) {
+                            let f = { face: faceType, x, y, z, ...cell };
+                            
+                            // Precalculate edge line visibility
+                            if (faceType === 'top') {
+                                f.e0 = !hasNeighbor(x, y - 1, z, moving);
+                                f.e1 = !hasNeighbor(x + 1, y, z, moving);
+                                f.e2 = !hasNeighbor(x, y + 1, z, moving);
+                                f.e3 = !hasNeighbor(x - 1, y, z, moving);
+                            } else if (faceType === 'left') {
+                                f.e0 = !hasNeighbor(x, y, z + 1, moving);
+                                f.e1 = !hasNeighbor(x + 1, y, z, moving);
+                                f.e2 = !hasNeighbor(x, y, z - 1, moving);
+                                f.e3 = !hasNeighbor(x - 1, y, z, moving);
+                            } else if (faceType === 'right') {
+                                f.e0 = !hasNeighbor(x, y - 1, z, moving);
+                                f.e1 = !hasNeighbor(x, y, z - 1, moving);
+                                f.e2 = !hasNeighbor(x, y + 1, z, moving);
+                                f.e3 = !hasNeighbor(x, y, z + 1, moving);
+                            }
+
+                            if (moving) movingFaces.push(f);
+                            else staticFaces.push(f);
+                        }
+                    };
+
+                    addFace('top', x, y, z + 1);
+                    addFace('left', x, y + 1, z);
+                    addFace('right', x + 1, y, z);
                 }
             }
         }
-        faces.sort((a, b) => a.depth - b.depth);
     }
 
-    // --- RENDERING PIPELINE ---
+    function getFaceColor(f) {
+        if (f.type === 'cage') {
+            let op = f.face === 'top' ? 0.08 : f.face === 'left' ? 0.05 : 0.02;
+            return `rgba(139, 118, 159, ${op})`;
+        } else {
+            let r = Math.floor(40 + (f.ox / (S-1)) * 215);
+            let g = Math.floor(40 + (f.oy / (S-1)) * 215);
+            let b = Math.floor(40 + (f.oz / (S-1)) * 215);
+            let mult = f.face === 'top' ? 1.0 : f.face === 'left' ? 0.75 : 0.55;
+            return `rgb(${Math.floor(r*mult)}, ${Math.floor(g*mult)}, ${Math.floor(b*mult)})`;
+        }
+    }
+
     function drawLine(v0, v1) {
         ctx.moveTo(v0.cx, v0.cy);
         ctx.lineTo(v1.cx, v1.cy);
     }
 
+    function drawInteractionArrows(f) {
+        let [v0, v1, v2, v3] = getFaceVertices(f);
+        let cx = (v0.cx + v2.cx) / 2;
+        let cy = (v0.cy + v2.cy) / 2;
+
+        let drawArrow = (axisObj) => {
+            let len = 0.55;
+            let dx = axisObj.cx * len;
+            let dy = axisObj.cy * len;
+            
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + dx, cy + dy);
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx - dx, cy - dy);
+            
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+
+            // Dots at end to indicate handle
+            ctx.beginPath();
+            ctx.arc(cx + dx, cy + dy, 4, 0, Math.PI*2);
+            ctx.arc(cx - dx, cy - dy, 4, 0, Math.PI*2);
+            ctx.fillStyle = '#ECA8CE';
+            ctx.fill();
+        }
+
+        if (f.face === 'top') { drawArrow(projX); drawArrow(projY); }
+        if (f.face === 'right') { drawArrow(projY); drawArrow(projZ); }
+        if (f.face === 'left') { drawArrow(projX); drawArrow(projZ); }
+    }
+
+    // --- RENDERING LOOP ---
     function render() {
-        ctx.fillStyle = '#151318';
+        ctx.fillStyle = '#121015';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.lineWidth = 1.5;
-        ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
-        faces.forEach(f => {
-            const { x, y, z, type, color: T } = f;
-            const [v0, v1, v2, v3] = getFaceVertices(f);
+        let allRenderFaces = [...staticFaces];
 
-            ctx.fillStyle = palette[T][type];
+        // Process offsets for dynamically moving slice
+        if ((dragMode === 'shift' || dragMode === 'springBack') && dragShiftAxis) {
+            let vX = dragShiftAxis === 'X' ? dragVisualShift : 0;
+            let vY = dragShiftAxis === 'Y' ? dragVisualShift : 0;
+            let vZ = dragShiftAxis === 'Z' ? dragVisualShift : 0;
+
+            let wX = dragShiftAxis === 'X' ? (dragVisualShift > 0 ? dragVisualShift - S : dragVisualShift + S) : 0;
+            let wY = dragShiftAxis === 'Y' ? (dragVisualShift > 0 ? dragVisualShift - S : dragVisualShift + S) : 0;
+            let wZ = dragShiftAxis === 'Z' ? (dragVisualShift > 0 ? dragVisualShift - S : dragVisualShift + S) : 0;
+
+            for (let f of movingFaces) {
+                // Main shifting block
+                allRenderFaces.push({
+                    ...f, vX, vY, vZ,
+                    depth: (f.x + vX) + (f.y + vY) + (f.z + vZ) + (f.face==='top'?0.1:0.2)
+                });
+                // Cloned wrapping block (appears on opposite side)
+                allRenderFaces.push({
+                    ...f, vX: wX, vY: wY, vZ: wZ,
+                    depth: (f.x + wX) + (f.y + wY) + (f.z + wZ) + (f.face==='top'?0.1:0.2)
+                });
+            }
+        } else {
+            for (let f of movingFaces) {
+                allRenderFaces.push({ ...f, vX: 0, vY: 0, vZ: 0, depth: f.x + f.y + f.z + (f.face==='top'?0.1:0.2) });
+            }
+        }
+
+        allRenderFaces.sort((a, b) => a.depth - b.depth);
+
+        allRenderFaces.forEach(f => {
+            const [v0, v1, v2, v3] = getFaceVertices(f, f.vX||0, f.vY||0, f.vZ||0);
+
+            // Fill Block
+            ctx.fillStyle = getFaceColor(f);
             ctx.beginPath();
             ctx.moveTo(v0.cx, v0.cy); ctx.lineTo(v1.cx, v1.cy);
             ctx.lineTo(v2.cx, v2.cy); ctx.lineTo(v3.cx, v3.cy);
-            ctx.closePath(); ctx.fill();
+            ctx.closePath(); 
+            ctx.fill();
 
-            ctx.strokeStyle = '#ffffff';
+            // Edge Lines
             ctx.beginPath(); 
-            if (type === 'top') {
-                if (!hasExposedFace('top', x, y - 1, z, T)) drawLine(v0, v1);
-                if (!hasExposedFace('top', x + 1, y, z, T)) drawLine(v1, v2);
-                if (!hasExposedFace('top', x, y + 1, z, T)) drawLine(v2, v3);
-                if (!hasExposedFace('top', x - 1, y, z, T)) drawLine(v3, v0);
-            } else if (type === 'left') {
-                if (!hasExposedFace('left', x, y, z + 1, T)) drawLine(v0, v1);
-                if (!hasExposedFace('left', x + 1, y, z, T)) drawLine(v1, v2);
-                if (!hasExposedFace('left', x, y, z - 1, T)) drawLine(v2, v3);
-                if (!hasExposedFace('left', x - 1, y, z, T)) drawLine(v3, v0);
-            } else if (type === 'right') {
-                if (!hasExposedFace('right', x, y - 1, z, T)) drawLine(v0, v1);
-                if (!hasExposedFace('right', x, y, z - 1, T)) drawLine(v1, v2);
-                if (!hasExposedFace('right', x, y + 1, z, T)) drawLine(v2, v3);
-                if (!hasExposedFace('right', x, y, z + 1, T)) drawLine(v3, v0);
+            if (f.e0) drawLine(v0, v1);
+            if (f.e1) drawLine(v1, v2);
+            if (f.e2) drawLine(v2, v3);
+            if (f.e3) drawLine(v3, v0);
+            
+            ctx.strokeStyle = f.type === 'cage' ? 'rgba(139, 118, 159, 0.4)' : 'rgba(0,0,0,0.5)';
+            ctx.lineWidth = 1;
+
+            let isHoveredPlane = hoveredFace && f.type !== 'cage' && 
+                               ((hoveredFace.face === 'top' && f.z === hoveredFace.z) || 
+                                (hoveredFace.face === 'right' && f.x === hoveredFace.x) || 
+                                (hoveredFace.face === 'left' && f.y === hoveredFace.y));
+
+            if (isHoveredPlane && !puzzleSolved && !isPeeking && !dragMode) {
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2.5;
+                ctx.save();
+                ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                ctx.fill();
+                ctx.restore();
             }
+            
             ctx.stroke(); 
         });
+
+        // Draw Interactive UI Arrows on top of the hovered plane
+        if (hoveredFace && !puzzleSolved && !isPeeking && !dragMode) {
+            drawInteractionArrows(hoveredFace);
+        }
     }
 
-    // --- PUZZLE MECHANICS ---
-    function applyShift(inputGrid, planeAxis, planeIndex, shiftAxis, shiftDir) {
-        let newGrid = JSON.parse(JSON.stringify(inputGrid));
+    function animationLoop() {
+        if (dragMode === 'springBack') {
+            dragVisualShift *= 0.7; // Spring back ease
+            if (Math.abs(dragVisualShift) < 0.01) {
+                dragVisualShift = 0;
+                dragMode = null;
+                dragShiftAxis = null;
+                buildFacesForDrag();
+            }
+        }
+        render();
+        requestAnimationFrame(animationLoop);
+    }
+
+    // --- PUZZLE LOGIC ---
+    function shiftPlaneLogical(planeAxis, planeIndex, shiftAxis, shiftDir) {
+        if (puzzleSolved || isPeeking) return;
+        
+        let newGrid = JSON.parse(JSON.stringify(grid));
         for (let x=0; x<S; x++) {
             for (let y=0; y<S; y++) {
                 for (let z=0; z<S; z++) {
@@ -443,74 +550,66 @@
                     if (shiftAxis === 'X') px = (x - shiftDir + S) % S;
                     if (shiftAxis === 'Y') py = (y - shiftDir + S) % S;
                     if (shiftAxis === 'Z') pz = (z - shiftDir + S) % S;
-
-                    newGrid[x][y][z] = inputGrid[px][py][pz];
+                    newGrid[x][y][z] = grid[px][py][pz];
                 }
             }
         }
-        return newGrid;
-    }
-
-    function shiftPlane(planeAxis, planeIndex, shiftAxis, shiftDir) {
-        if (puzzleSolved) return;
-        
-        grid = applyShift(grid, planeAxis, planeIndex, shiftAxis, shiftDir);
-        buildFaces();
-        render();
+        grid = newGrid;
         checkWin();
     }
 
-    let precalculatedScramble = null;
-
     function isGridSolved(testGrid) {
-        for(let ox=0; ox<S; ox++) {
-            for(let oy=0; oy<S; oy++) {
-                for(let oz=0; oz<S; oz++) {
-                    let match = true;
-                    for(let x=0; x<S && match; x++) {
-                        for(let y=0; y<S && match; y++) {
-                            for(let z=0; z<S && match; z++) {
-                                let tx = (x + ox) % S;
-                                let ty = (y + oy) % S;
-                                let tz = (z + oz) % S;
-                                if (testGrid[tx][ty][tz] !== originalGrid[x][y][z]) match = false;
-                            }
-                        }
+        for(let x=0; x<S; x++) {
+            for(let y=0; y<S; y++) {
+                for(let z=0; z<S; z++) {
+                    let c1 = testGrid[x][y][z];
+                    let c2 = originalGrid[x][y][z];
+                    if (!c1 && c2) return false;
+                    if (c1 && !c2) return false;
+                    if (c1 && c2) {
+                        if (c1.ox !== c2.ox || c1.oy !== c2.oy || c1.oz !== c2.oz) return false;
                     }
-                    if (match) return true;
                 }
             }
         }
-        return false;
+        return true;
     }
 
+    let precalculatedScramble = null;
     function precalculateScramble() {
         precalculatedScramble = null;
-        const numMoves = S + 1; // e.g. 5x5 -> 6 moves, adaptive depth
         let attempts = 0;
         
-        while (attempts < 50) {
+        while (attempts < 100) {
             let testGrid = JSON.parse(JSON.stringify(originalGrid));
             const axes = ['X', 'Y', 'Z'];
             let lastPlaneAxis = null;
             let lastPlaneIndex = -1;
 
-            for(let i=0; i<numMoves; i++) {
+            for(let i=0; i<S+2; i++) {
                 let pAxis, pIndex;
-                // Prevent shifting the exact same plane consecutively to avoid trivial undo moves
                 do {
                     pAxis = axes[Math.floor(Math.random() * 3)];
                     pIndex = Math.floor(Math.random() * S);
                 } while (pAxis === lastPlaneAxis && pIndex === lastPlaneIndex);
                 
-                lastPlaneAxis = pAxis;
-                lastPlaneIndex = pIndex;
-                
+                lastPlaneAxis = pAxis; lastPlaneIndex = pIndex;
                 let sAxis = axes.filter(a => a !== pAxis)[Math.floor(Math.random() * 2)];
-                testGrid = applyShift(testGrid, pAxis, pIndex, sAxis, Math.random() > 0.5 ? 1 : -1);
+                
+                // Shift test logic inline
+                let g = JSON.parse(JSON.stringify(testGrid));
+                for(let x=0; x<S; x++) { for(let y=0; y<S; y++) { for(let z=0; z<S; z++) {
+                    if ((pAxis === 'X' && x !== pIndex) || (pAxis === 'Y' && y !== pIndex) || (pAxis === 'Z' && z !== pIndex)) continue;
+                    let px = x, py = y, pz = z;
+                    let dir = 1;
+                    if (sAxis === 'X') px = (x - dir + S) % S;
+                    if (sAxis === 'Y') py = (y - dir + S) % S;
+                    if (sAxis === 'Z') pz = (z - dir + S) % S;
+                    g[x][y][z] = testGrid[px][py][pz];
+                }}}
+                testGrid = g;
             }
 
-            // Verify the scramble is NOT immediately solved
             if (!isGridSolved(testGrid)) {
                 precalculatedScramble = testGrid;
                 return;
@@ -524,10 +623,8 @@
         document.getElementById('win-overlay').style.opacity = '0';
         document.getElementById('win-overlay').style.pointerEvents = 'none';
         puzzleSolved = false;
-
         grid = JSON.parse(JSON.stringify(precalculatedScramble));
-        buildFaces();
-        render();
+        buildFacesForDrag();
     }
 
     function checkWin() {
@@ -547,7 +644,8 @@
         ctx.scale(dpr, dpr);
         canvas.style.width = window.innerWidth + 'px';
         canvas.style.height = window.innerHeight + 'px';
-        render();
+        updateProjections();
+        buildFacesForDrag();
     }
     window.addEventListener('resize', resize);
 
@@ -560,13 +658,11 @@
         document.getElementById('win-overlay').style.opacity = '0';
         document.getElementById('win-overlay').style.pointerEvents = 'none';
         puzzleSolved = true; 
-        
         let newSize = parseInt(document.getElementById('size-slider').value);
         generateIntricateStructure(newSize);
-        precalculateScramble(); // Pre-process valid scramble in the background
-        buildFaces();
+        precalculateScramble();
         recenter();
-        render();
+        buildFacesForDrag();
     }
 
     function pointInQuad(px, py, v0, v1, v2, v3) {
@@ -577,30 +673,36 @@
         let d2 = sign(px, py, v1.cx, v1.cy, v2.cx, v2.cy);
         let d3 = sign(px, py, v2.cx, v2.cy, v3.cx, v3.cy);
         let d4 = sign(px, py, v3.cx, v3.cy, v0.cx, v0.cy);
-        let has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0) || (d4 < 0);
-        let has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0) || (d4 > 0);
-        return !(has_neg && has_pos);
+        return !(((d1 < 0) || (d2 < 0) || (d3 < 0) || (d4 < 0)) && ((d1 > 0) || (d2 > 0) || (d3 > 0) || (d4 > 0)));
     }
+
+    const peekBtn = document.getElementById('peek-btn');
+    const togglePeek = (state) => {
+        if (puzzleSolved || dragMode) return;
+        isPeeking = state;
+        buildFacesForDrag();
+    };
+    ['mousedown', 'touchstart'].forEach(e => peekBtn.addEventListener(e, (ev) => { ev.preventDefault(); togglePeek(true); }));
+    ['mouseup', 'mouseleave', 'touchend'].forEach(e => peekBtn.addEventListener(e, (ev) => { ev.preventDefault(); togglePeek(false); }));
 
     canvas.addEventListener('pointerdown', (e) => {
         const rect = canvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
 
-        activeFace = null;
-        for (let i = faces.length - 1; i >= 0; i--) {
-            const v = getFaceVertices(faces[i]);
-            if (pointInQuad(mouseX, mouseY, v[0], v[1], v[2], v[3])) {
-                activeFace = faces[i];
-                break;
-            }
-        }
-
-        if (activeFace && !puzzleSolved) {
+        if (hoveredFace && hoveredFace.type !== 'cage' && !puzzleSolved && !isPeeking) {
             dragMode = 'shift';
             dragStartX = mouseX;
             dragStartY = mouseY;
+            dragShiftAxis = null;
+            dragVisualShift = 0;
             canvas.style.cursor = 'grabbing';
+            
+            if (hoveredFace.face === 'top') { activeAxis = 'Z'; activeIndex = hoveredFace.z; }
+            if (hoveredFace.face === 'right') { activeAxis = 'X'; activeIndex = hoveredFace.x; }
+            if (hoveredFace.face === 'left') { activeAxis = 'Y'; activeIndex = hoveredFace.y; }
+            
+            buildFacesForDrag();
         } else {
             dragMode = 'pan';
             panLastX = mouseX;
@@ -610,63 +712,79 @@
     });
 
     window.addEventListener('pointermove', (e) => {
-        if (!dragMode) return;
         const rect = canvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
 
-        if (dragMode === 'pan') {
+        if (!dragMode && !isPeeking) {
+            hoveredFace = null;
+            let flatFaces = [...staticFaces, ...movingFaces].sort((a,b) => b.depth - a.depth); // Reverse for top-down hit test
+            for (let f of flatFaces) {
+                const v = getFaceVertices(f);
+                if (pointInQuad(mouseX, mouseY, v[0], v[1], v[2], v[3])) {
+                    hoveredFace = f;
+                    break;
+                }
+            }
+        } 
+        else if (dragMode === 'pan') {
             offsetX += mouseX - panLastX;
             offsetY += mouseY - panLastY;
-            panLastX = mouseX;
-            panLastY = mouseY;
-            render();
+            panLastX = mouseX; panLastY = mouseY;
         } 
         else if (dragMode === 'shift') {
-            const dx = mouseX - dragStartX;
-            const dy = mouseY - dragStartY;
-            
-            const lenV = Math.sqrt(tileW*tileW + tileH*tileH);
-            const nX = {x: tileW/lenV, y: tileH/lenV};
-            const nY = {x: -tileW/lenV, y: tileH/lenV};
-            const nZ = {x: 0, y: -1};
+            let dx = mouseX - dragStartX;
+            let dy = mouseY - dragStartY;
 
-            let dotX = dx * nX.x + dy * nX.y;
-            let dotY = dx * nY.x + dy * nY.y;
-            let dotZ = dx * nZ.x + dy * nZ.y;
+            if (!dragShiftAxis) {
+                // Determine Axis lock based on initial movement direction
+                let magX = Math.abs((dx * projX.cx + dy * projX.cy) / (tileW*tileW + tileH*tileH));
+                let magY = Math.abs((dx * projY.cx + dy * projY.cy) / (tileW*tileW + tileH*tileH));
+                let magZ = Math.abs((dx * projZ.cx + dy * projZ.cy) / (tileH*tileH * 4));
 
-            const thresh = tileW * 1.5; 
-
-            let shifted = false;
-            if (activeFace.type === 'top') { 
-                if (dotX > thresh) { shiftPlane('Z', activeFace.z, 'X', 1); shifted = true; }
-                else if (dotX < -thresh) { shiftPlane('Z', activeFace.z, 'X', -1); shifted = true; }
-                else if (dotY > thresh) { shiftPlane('Z', activeFace.z, 'Y', 1); shifted = true; }
-                else if (dotY < -thresh) { shiftPlane('Z', activeFace.z, 'Y', -1); shifted = true; }
-            } 
-            else if (activeFace.type === 'left') { 
-                if (dotX > thresh) { shiftPlane('Y', activeFace.y, 'X', 1); shifted = true; }
-                else if (dotX < -thresh) { shiftPlane('Y', activeFace.y, 'X', -1); shifted = true; }
-                else if (dotZ > thresh) { shiftPlane('Y', activeFace.y, 'Z', 1); shifted = true; }
-                else if (dotZ < -thresh) { shiftPlane('Y', activeFace.y, 'Z', -1); shifted = true; }
-            }
-            else if (activeFace.type === 'right') { 
-                if (dotY > thresh) { shiftPlane('X', activeFace.x, 'Y', 1); shifted = true; }
-                else if (dotY < -thresh) { shiftPlane('X', activeFace.x, 'Y', -1); shifted = true; }
-                else if (dotZ > thresh) { shiftPlane('X', activeFace.x, 'Z', 1); shifted = true; }
-                else if (dotZ < -thresh) { shiftPlane('X', activeFace.x, 'Z', -1); shifted = true; }
+                let thresh = 0.15; // Quick lock
+                if (activeAxis === 'Z') {
+                    if (magX > thresh && magX > magY) dragShiftAxis = 'X';
+                    else if (magY > thresh && magY > magX) dragShiftAxis = 'Y';
+                } else if (activeAxis === 'X') {
+                    if (magY > thresh && magY > magZ) dragShiftAxis = 'Y';
+                    else if (magZ > thresh && magZ > magY) dragShiftAxis = 'Z';
+                } else if (activeAxis === 'Y') {
+                    if (magX > thresh && magX > magZ) dragShiftAxis = 'X';
+                    else if (magZ > thresh && magZ > magX) dragShiftAxis = 'Z';
+                }
             }
 
-            if (shifted) {
-                dragStartX = mouseX;
-                dragStartY = mouseY;
+            if (dragShiftAxis) {
+                let proj = dragShiftAxis === 'X' ? projX : (dragShiftAxis === 'Y' ? projY : projZ);
+                let lenSq = proj.cx*proj.cx + proj.cy*proj.cy;
+                let amount = (dx * proj.cx + dy * proj.cy) / lenSq;
+
+                dragVisualShift = amount;
+
+                // Handle Logical Wrap continuously
+                if (dragVisualShift > 0.5) {
+                    shiftPlaneLogical(activeAxis, activeIndex, dragShiftAxis, 1);
+                    dragStartX += proj.cx; dragStartY += proj.cy;
+                    dragVisualShift -= 1.0;
+                    buildFacesForDrag();
+                } else if (dragVisualShift < -0.5) {
+                    shiftPlaneLogical(activeAxis, activeIndex, dragShiftAxis, -1);
+                    dragStartX -= proj.cx; dragStartY -= proj.cy;
+                    dragVisualShift += 1.0;
+                    buildFacesForDrag();
+                }
             }
         }
     });
 
     window.addEventListener('pointerup', () => {
-        dragMode = null;
-        activeFace = null;
+        if (dragMode === 'shift') {
+            dragMode = 'springBack'; // Trigger animation loop recovery
+            hoveredFace = null;
+        } else {
+            dragMode = null;
+        }
         canvas.style.cursor = 'default';
     });
 
@@ -676,17 +794,16 @@
         const rect = canvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
-        
         offsetX = mouseX - (mouseX - offsetX) * zoomDelta;
-        offsetY = mouseY - (mouseY - offsetY) * zoomDelta;
-        
-        tileW *= zoomDelta;
-        tileH *= zoomDelta;
-        render();
-    }, { passive: false });
+    offsetY = mouseY - (mouseY - offsetY) * zoomDelta;
+    tileW *= zoomDelta; tileH *= zoomDelta;
+    updateProjections();
+}, { passive: false });
 
-    resize();
-    generateNew();
+// Initialize
+generateNew();
+resize();
+requestAnimationFrame(animationLoop);
 
 </script>
 </body>
