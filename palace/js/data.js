@@ -1,13 +1,13 @@
 export const MAJOR_PEGS = [
-    "Tie", "Neo", "Moe", "Ray", "Owl", "Shoe", "Key", "Wave", "Bee", "Toes",
-    "Toad", "Tin", "Time", "Tire", "Towel", "Dish", "Dog", "Dove", "Tub", "Nose",
-    "Net", "Neon", "Nemo", "Noir", "Nail", "Nacho", "Neck", "Knife", "Nib", "Mice",
-    "Moto", "Moon", "Mummy", "Homer", "Mule", "Marge", "Mike", "Movie", "Map", "Rose",
-    "Rat", "Rain", "Ram", "Rory", "Rail", "Arch", "Rock", "Rifle", "Rope", "Lisa",
-    "Latte", "Lion", "Lime", "Lyre", "Leela", "Leech", "Lake", "Lava", "Lip", "Cheese",
-    "Shit", "Chain", "Jam", "Cherry", "Joel", "Judge", "Chalk", "Chef", "Ship", "Case",
+    "Mr T", "Neo", "Moe", "Ray", "Owl", "Shoe", "Q", "V", "Apu", "Toes",
+    "Toad", "Tintin", "Tom", "Tire", "Towel", "Dish", "Dog", "Dove", "Tub", "Nose",
+    "Net", "Neon", "Nemo", "Noir", "Niles", "Nacho", "Neck", "Knife", "Nib", "Maze",
+    "Moto", "Moon", "Mummy", "Homer", "Mule", "MJ", "Mickey", "Movie", "Map", "Rose",
+    "Rat", "Rain", "Ram", "Rory", "Rail", "Arch", "Rock", "Roger Federer", "Rope", "Lisa",
+    "Latte", "Lion", "Lime", "Lyre", "Leela", "LeBron James", "Lake", "Lava", "Lip", "Jesse (BrB)",
+    "Jedi", "Jon Snow", "James Bond", "Jerry", "Jules", "Jar Jar", "Chuck Norris", "Chef", "Jabba", "Case",
     "Cat", "Coin", "Comb", "Car", "Coal", "Cage", "Cake", "Coffee", "Cup", "Fez",
-    "Fat", "Phone", "Foam", "Fry", "Foil", "Fish", "Fog", "FIFA", "FBI", "Bus",
+    "Vito", "Phone", "Foam", "Fry", "Foil", "Fish", "Fog", "FIFA", "FBI", "Bus",
     "Bat", "Bone", "Boom", "Bear", "Bell", "Beach", "Book", "Beef", "Pipe", "Daisies"
 ];
 
