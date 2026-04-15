@@ -1,14 +1,14 @@
 export const MAJOR_PEGS = [
     "Mr T", "Neo", "Moe", "Ray", "Owl", "Shoe", "Q", "V", "Apu", "Toes",
-    "Toad", "Tintin", "Tom", "Tire", "Towel", "Dish", "Dog", "Dove", "Tub", "Nose",
-    "Net", "Neon", "Nemo", "Noir", "Niles", "Nacho", "Neck", "Knife", "Nib", "Maze",
-    "Moto", "Moon", "Mummy", "Homer", "Mule", "MJ", "Mickey", "Movie", "Map", "Rose",
+    "Toad", "Tintin", "Tom", "Tire", "Towel", "Dish", "Tim Cook", "Dove", "Tub", "Nose",
+    "Net", "Neon", "Nemo", "Noir", "Niles", "Nacho", "Nog", "Knife", "Nib", "Maze",
+    "Moto", "Moon", "Mummy", "Homer", "Meat Loaf", "MJ", "Mickey", "Movie", "Map", "Rose",
     "Rat", "Rain", "Ram", "Rory", "Rail", "Arch", "Rock", "Roger Federer", "Rope", "Lisa",
     "Latte", "Lion", "Lime", "Lyre", "Leela", "LeBron James", "Lake", "Lava", "Lip", "Jesse (BrB)",
     "Jedi", "Jon Snow", "James Bond", "Jerry", "Jules", "Jar Jar", "Chuck Norris", "Chef", "Jabba", "Case",
     "Cat", "Coin", "Comb", "Car", "Coal", "Cage", "Cake", "Coffee", "Cup", "Fez",
     "Vito", "Phone", "Foam", "Fry", "Foil", "Fish", "Fog", "FIFA", "FBI", "Bus",
-    "Bat", "Bone", "Boom", "Bear", "Bell", "Beach", "Book", "Beef", "Pipe", "Daisies"
+    "Bat", "Bone", "Boom", "Bear", "Bell", "Beach", "Book", "Beef", "Pope", "Daisies"
 ];
 
 // Consonant sounds for each digit in the Major System
