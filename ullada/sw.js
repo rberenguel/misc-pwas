@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ullada-v1.2.0';
+const CACHE_NAME = 'ullada-v1.4.0';
 const CACHE_FILES = [
     './index.html',
     './manifest.json',
@@ -7,6 +7,7 @@ const CACHE_FILES = [
     './lib/jszip.min.js',
     './lib/haptic.js',
     './lib/idb-keyval.js',
+    './lib/sentences.js',
     './fonts/inter.css',
     './fonts/InterDisplay-Regular.woff2',
     './fonts/InterDisplay-Bold.woff2',

@@ -204,6 +204,56 @@ h1 {
 
 .shrink-0 { flex-shrink: 0; }
 
+#translation-line {
+    opacity: 0;
+    font-size: 1.8rem;
+    color: #93a1a1;
+    text-align: center;
+    padding: 0 2.5rem;
+    max-height: 2.4em;
+    overflow: hidden;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+    line-height: 1.3;
+    letter-spacing: 0.01em;
+}
+
+#translation-line.visible { opacity: 0.3; }
+
+.has-translation .word-display-container {
+    transform: translateY(-1.4rem);
+}
+
+.translation-badge {
+    position: absolute;
+    top: 0.3rem;
+    right: 0.3rem;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.52rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    border-radius: 3px;
+    padding: 0.15rem 0.32rem;
+    cursor: pointer;
+    z-index: 10;
+    opacity: 0.85;
+    transition: opacity 0.15s;
+    user-select: none;
+}
+.translation-badge:hover { opacity: 1; }
+
+.translation-badge-empty {
+    background: none;
+    border: 1px solid rgba(131, 148, 150, 0.28);
+    color: rgba(131, 148, 150, 0.38);
+}
+.translation-badge-empty:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    opacity: 1;
+}
+
 #hint {
     position: absolute;
     bottom: 2rem;

@@ -1,10 +1,12 @@
 import { initHaptic, triggerHaptic } from '../lib/haptic.js';
 import { get, set, del } from '../lib/idb-keyval.js';
+import { splitSentences } from '../lib/sentences.js';
 
 initHaptic();
 
 // --- State ---
 let words        = [];
+let sentences    = [];   // [{ start, end }] word-index ranges per sentence
 let chapters     = [];
 let currentTitle = '';
 let currentCover = null; // data-URL or null
@@ -14,6 +16,9 @@ let activeSlot   = 0;
 let isPlaying    = false;
 let rsvpTimeout  = null;
 let wakeLock     = null;
+
+let translation        = null; // parsed .ullada object or null
+let currentSentenceIdx = -1;
 
 // Gesture state
 let isDragging = false;
@@ -33,18 +38,21 @@ const contextLeftEl  = document.getElementById('context-left');
 const contextRightEl = document.getElementById('context-right');
 const progressBar    = document.getElementById('progress-bar');
 const wpmIndicator   = document.getElementById('wpm-indicator');
-const hintEl         = document.getElementById('hint');
-const libraryModal   = document.getElementById('library-modal');
+const hintEl            = document.getElementById('hint');
+const translationLineEl = document.getElementById('translation-line');
+const libraryModal      = document.getElementById('library-modal');
+const libraryTUpload    = document.getElementById('library-t-upload');
 
 // --- Persistence ---
 
-const KEY_SLOT     = 'ullada/slot';
-const bookKey      = (s) => `ullada/book-${s}`;
-const progressKey  = (s) => `ullada/progress-${s}`;
+const KEY_SLOT       = 'ullada/slot';
+const bookKey        = (s) => `ullada/book-${s}`;
+const progressKey    = (s) => `ullada/progress-${s}`;
+const translationKey = (s) => `ullada/translation-${s}`;
 
 async function saveBook() {
     try {
-        await set(bookKey(activeSlot), { words, chapters, title: currentTitle, cover: currentCover });
+        await set(bookKey(activeSlot), { words, sentences, chapters, title: currentTitle, cover: currentCover });
     } catch (e) {}
 }
 
@@ -88,6 +96,7 @@ async function loadSaved() {
         chapters     = book.chapters;
         currentTitle = book.title || '';
         currentCover = book.cover || null;
+        sentences    = book.sentences?.length ? book.sentences : rebuildSentences(book.words);
 
         const progress = await get(progressKey(activeSlot));
         if (progress) {
@@ -95,11 +104,29 @@ async function loadSaved() {
             wpm          = progress.wpm          ?? 300;
         }
 
+        const trans = await get(translationKey(activeSlot));
+        translation = trans?.translations?.length ? trans : null;
+
         startReadingSession();
     } catch (e) {}
 }
 
 loadSaved();
+
+function rebuildSentences(ws) {
+    const text  = ws.join(' ');
+    const parts = splitSentences(text);
+    const result = [];
+    let pos = 0;
+    for (const part of parts) {
+        const len = part.split(/\s+/).filter(w => w.length > 0).length;
+        if (len > 0) {
+            result.push({ start: pos, end: pos + len - 1 });
+            pos += len;
+        }
+    }
+    return result;
+}
 
 // --- Helpers ---
 
@@ -123,23 +150,55 @@ async function blobToDataUrl(blob) {
 
 // --- File Loading ---
 
-epubUpload.addEventListener('change', handleFileUpload);
+epubUpload.addEventListener('change', () => routeFile(epubUpload.files[0]));
 
 window.addEventListener('dragover', (e) => e.preventDefault());
 window.addEventListener('drop', (e) => {
     e.preventDefault();
-    if (e.dataTransfer.files.length > 0) {
-        epubUpload.files = e.dataTransfer.files;
-        handleFileUpload();
-    }
+    const file = e.dataTransfer?.files?.[0];
+    if (file) routeFile(file);
 });
+
+function routeFile(file) {
+    if (!file) return;
+    if (file.name.toLowerCase().endsWith('.ullada')) handleTranslationUpload(file);
+    else handleFileUpload(file);
+}
+
+async function handleTranslationUpload(file) {
+    loadingSpinner.classList.remove('hidden');
+    try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (!Array.isArray(data.words) || !Array.isArray(data.sentences) || !Array.isArray(data.translations)) {
+            throw new Error('Invalid .ullada file (missing words, sentences, or translations)');
+        }
+        words        = data.words;
+        sentences    = data.sentences;
+        chapters     = data.chapters || [];
+        currentTitle = data.title    || file.name.replace(/\.ullada$/i, '');
+        currentCover = data.cover    || null;
+        translation        = data;
+        currentSentenceIdx = -1;
+        currentIndex = 0;
+        wpm          = 300;
+
+        await saveBook();
+        await saveProgress();
+        await set(translationKey(activeSlot), data);
+        startReadingSession();
+    } catch (err) {
+        alert(`Failed to load .ullada file: ${err.message}`);
+    } finally {
+        loadingSpinner.classList.add('hidden');
+    }
+}
 
 document.querySelector('.upload-box').addEventListener('click', () => {
     triggerHaptic();
 });
 
-async function handleFileUpload() {
-    const file = epubUpload.files[0];
+async function handleFileUpload(file) {
     if (!file) return;
 
     loadingSpinner.classList.remove('hidden');
@@ -149,9 +208,12 @@ async function handleFileUpload() {
     try {
         const result = await extractTextFromEpub(file);
         words        = result.words;
+        sentences    = result.sentences;
         chapters     = result.chapters;
         currentTitle = result.title;
         currentCover = result.cover;
+        translation        = null;
+        currentSentenceIdx = -1;
 
         if (words.length > 0) {
             currentIndex = 0;
@@ -214,7 +276,8 @@ async function extractTextFromEpub(file) {
     const spine = [];
     for (let i = 0; i < spineItems.length; i++) spine.push(spineItems[i].getAttribute("idref"));
 
-    let allWords    = [];
+    let allWords     = [];
+    let allSentences = [];
     let chaptersList = [];
 
     for (const idref of spine) {
@@ -228,10 +291,22 @@ async function extractTextFromEpub(file) {
             const htmlData = await fileEntry.async("string");
             const htmlDoc  = parser.parseFromString(htmlData, "text/html");
 
-            const rawText    = htmlDoc.body.innerText || htmlDoc.body.textContent + " ";
-            const sectionWords = rawText.trim().split(/\s+/).filter(w => w.length > 0);
+            const rawText = (htmlDoc.body.innerText || htmlDoc.body.textContent || '').trim();
+            if (!rawText) continue;
 
-            if (sectionWords.length > 0) {
+            const rawSentences  = splitSentences(rawText);
+            const sectionStart  = allWords.length;
+            let   sectionWords  = 0;
+
+            for (const sent of rawSentences) {
+                const sentWords = sent.split(/\s+/).filter(w => w.length > 0);
+                if (sentWords.length === 0) continue;
+                allSentences.push({ start: allWords.length, end: allWords.length + sentWords.length - 1 });
+                allWords = allWords.concat(sentWords);
+                sectionWords += sentWords.length;
+            }
+
+            if (sectionWords > 0) {
                 let title = htmlDoc.querySelector('title')?.textContent ||
                             htmlDoc.querySelector('h1')?.textContent ||
                             htmlDoc.querySelector('h2')?.textContent ||
@@ -240,13 +315,12 @@ async function extractTextFromEpub(file) {
                 title = title.trim().replace(/\s+/g, ' ');
                 if (title.length > 35) title = title.substring(0, 35) + '...';
 
-                chaptersList.push({ title, startIndex: allWords.length });
-                allWords = allWords.concat(sectionWords);
+                chaptersList.push({ title, startIndex: sectionStart });
             }
         }
     }
 
-    return { words: allWords, chapters: chaptersList, title: bookTitle, cover };
+    return { words: allWords, sentences: allSentences, chapters: chaptersList, title: bookTitle, cover };
 }
 
 async function extractCover(zip, opfDoc, opfFolder) {
@@ -343,6 +417,17 @@ function calculateORP(word) {
     return actualPivot;
 }
 
+function findSentenceIdx(wordIdx) {
+    let lo = 0, hi = sentences.length - 1;
+    while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if      (sentences[mid].end   < wordIdx) lo = mid + 1;
+        else if (sentences[mid].start > wordIdx) hi = mid - 1;
+        else return mid;
+    }
+    return -1;
+}
+
 function updateDisplay() {
     if (currentIndex >= words.length) {
         pauseRsvp();
@@ -377,6 +462,19 @@ function updateDisplay() {
     contextRightEl.innerHTML = rightHtml;
 
     progressBar.style.width = `${(currentIndex / words.length) * 100}%`;
+
+    const hasTranslation = !!(translation && sentences.length);
+    readerView.classList.toggle('has-translation', hasTranslation);
+
+    if (hasTranslation) {
+        const idx = findSentenceIdx(currentIndex);
+        if (idx !== currentSentenceIdx) {
+            currentSentenceIdx = idx;
+            const t = idx >= 0 ? (translation.translations[idx] || '') : '';
+            translationLineEl.textContent = t;
+            translationLineEl.classList.toggle('visible', t.length > 0);
+        }
+    }
 }
 
 function advanceWord() {
@@ -587,6 +685,7 @@ async function switchToSlot(slot) {
 
     const book = await get(bookKey(activeSlot));
     words        = book.words;
+    sentences    = book.sentences?.length ? book.sentences : rebuildSentences(book.words);
     chapters     = book.chapters;
     currentTitle = book.title || '';
     currentCover = book.cover || null;
@@ -594,6 +693,12 @@ async function switchToSlot(slot) {
     const progress = await get(progressKey(activeSlot));
     currentIndex = progress?.currentIndex ?? 0;
     wpm          = progress?.wpm          ?? 300;
+
+    const trans = await get(translationKey(activeSlot));
+    translation        = trans?.translations?.length ? trans : null;
+    currentSentenceIdx = -1;
+    translationLineEl.textContent = '';
+    translationLineEl.classList.remove('visible');
 
     updateDisplay();
 }
@@ -626,12 +731,37 @@ async function renderLibrary() {
 
             card.appendChild(coverDiv);
             card.appendChild(titleDiv);
+
+            // T badge — filled if translation exists, outline if not
+            const hasTrans = !!(await get(translationKey(slot)));
+            const badge = document.createElement('div');
+            badge.textContent = 'T';
+            badge.className   = hasTrans ? 'translation-badge' : 'translation-badge translation-badge-empty';
+            badge.title       = hasTrans ? 'Translation loaded — click to replace' : 'Load translation (.ullada)';
+            badge.addEventListener('click', e => {
+                e.stopPropagation();
+                loadTranslationForSlot(slot);
+            });
+            card.appendChild(badge);
         } else {
             card.classList.add('empty');
             card.innerHTML = `<div class="book-card-empty"><span>empty</span></div>`;
         }
     }
 }
+
+function loadTranslationForSlot(slot) {
+    libraryTUpload.dataset.slot = slot;
+    libraryTUpload.value = '';
+    libraryTUpload.click();
+}
+
+libraryTUpload.addEventListener('change', async () => {
+    const file = libraryTUpload.files[0];
+    if (!file) return;
+    closeLibrary();
+    await handleTranslationUpload(file);
+});
 
 function bookPlaceholderSVG() {
     return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40" aria-hidden="true">
