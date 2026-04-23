@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ullada-v1.4.0';
+const CACHE_NAME = 'ullada-v1.4.1';
 const CACHE_FILES = [
     './index.html',
     './manifest.json',

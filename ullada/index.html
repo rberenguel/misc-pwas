@@ -28,7 +28,7 @@
             <div class="upload-text-main">Tap to select an .epub or .ullada file</div>
             <div class="upload-text-sub">or drop it here</div>
         </label>
-        <input type="file" id="epub-upload" accept=".epub,.ullada" class="hidden" />
+        <input type="file" id="epub-upload" accept=".epub,.ullada,application/json" class="hidden" />
 
         <div id="loading-spinner" class="spinner hidden">
             Extracting &amp; parsing text...
@@ -68,7 +68,7 @@
         <div id="library-panel">
             <button id="library-info-btn" aria-label="Info"><i>i</i></button>
             <button id="library-close" aria-label="Close">&#x2715;</button>
-            <input type="file" id="library-t-upload" accept=".ullada,.json" style="display:none">
+            <input type="file" id="library-t-upload" accept=".ullada,application/json" style="display:none">
 
             <div id="library-grid">
                 <div class="book-card" id="slot-card-0" data-slot="0"></div>

@@ -1,7 +1,7 @@
 {
   "name": "Ullada",
   "short_name": "Ullada",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "RSVP epub reader",
   "start_url": "./index.html",
   "display": "standalone",
