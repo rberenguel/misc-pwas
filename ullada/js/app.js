@@ -390,7 +390,6 @@ async function startReadingSession() {
 
     try { await document.documentElement.requestFullscreen(); } catch (e) {}
     try { if (screen.orientation) await screen.orientation.lock('landscape'); } catch (e) {}
-    try { if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
 }
 
 function calculateORP(word) {
@@ -493,10 +492,13 @@ function advanceWord() {
     rsvpTimeout = setTimeout(advanceWord, delay);
 }
 
-function playRsvp() {
+async function playRsvp() {
     if (currentIndex >= words.length) currentIndex = 0;
     isPlaying = true;
     hintEl.style.opacity = '0';
+    if ('wakeLock' in navigator && wakeLock === null) {
+        try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+    }
     advanceWord();
 }
 
@@ -505,6 +507,7 @@ function pauseRsvp() {
     clearTimeout(rsvpTimeout);
     hintEl.style.opacity = '1';
     saveProgress();
+    if (wakeLock !== null) { wakeLock.release(); wakeLock = null; }
 }
 
 function togglePlay() {
@@ -652,11 +655,11 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-document.addEventListener('visibilitychange', () => {
+document.addEventListener('visibilitychange', async () => {
     if (document.hidden) {
-        pauseRsvp();
-        saveProgress();
-        if (wakeLock !== null) wakeLock.release().then(() => { wakeLock = null; });
+        wakeLock = null;
+    } else if (isPlaying && 'wakeLock' in navigator) {
+        try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
     }
 });
 
