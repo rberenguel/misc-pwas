@@ -51,9 +51,11 @@
 - Service worker bumped to `ullada-v1.2.0` after last set of changes
 
 ### Pending Issues (not yet fixed)
-- Cancelling file picker leaves loader view visible if user came from reader (no cancel detection)
 - Info panel may clip in landscape (`overflow: hidden` on panel, no scroll on `#library-info`)
-- `showWPM()` appends " WPM" to chapter titles when navigating (cosmetic, from original code)
+
+### Resolved / Intentional
+- **Loader view stays visible after cancelling file picker** — this is intentional. On iOS, custom file types (`.ullada`) are not selectable via the file picker, but files *are* drag-and-droppable onto the loader drop zone. Keeping the loader visible after a cancelled pick leaves the drop target available.
+- **`showWPM()` appended " WPM" to chapter titles** — fixed: suffix now only added when value is a number.
 
 ## Files Touched
 

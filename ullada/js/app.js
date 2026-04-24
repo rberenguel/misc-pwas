@@ -19,6 +19,7 @@ let wakeLock     = null;
 
 let translation        = null; // parsed .ullada object or null
 let currentSentenceIdx = -1;
+let pendingPunctuation = null; // sentence-ending char shown as its own frame
 
 // Gesture state
 let isDragging = false;
@@ -40,6 +41,7 @@ const progressBar    = document.getElementById('progress-bar');
 const wpmIndicator   = document.getElementById('wpm-indicator');
 const hintEl            = document.getElementById('hint');
 const translationLineEl = document.getElementById('translation-line');
+const sentencePulseEl  = document.getElementById('sentence-pulse');
 const libraryModal      = document.getElementById('library-modal');
 const libraryTUpload    = document.getElementById('library-t-upload');
 
@@ -438,12 +440,22 @@ function updateDisplay() {
         return;
     }
 
-    const word  = words[currentIndex];
-    const pivot = calculateORP(word);
+    const word = words[currentIndex];
 
-    prefixEl.textContent = word.substring(0, pivot);
-    pivotEl.textContent  = word.charAt(pivot);
-    suffixEl.textContent = word.substring(pivot + 1);
+    if (pendingPunctuation) {
+        prefixEl.textContent = '';
+        pivotEl.textContent  = pendingPunctuation;
+        suffixEl.textContent = '';
+        sentencePulseEl.classList.remove('pulsing');
+        void sentencePulseEl.offsetWidth;
+        sentencePulseEl.classList.add('pulsing');
+    } else {
+        const displayWord = /[.!?]$/.test(word) ? word.slice(0, -1) : word;
+        const pivot = calculateORP(displayWord || word);
+        prefixEl.textContent = displayWord.substring(0, pivot);
+        pivotEl.textContent  = displayWord.charAt(pivot);
+        suffixEl.textContent = displayWord.substring(pivot + 1);
+    }
 
     const ctx = 6;
     let leftHtml = "";
@@ -481,12 +493,26 @@ function advanceWord() {
 
     updateDisplay();
     const word = words[currentIndex];
+    const base = 60000 / wpm;
 
-    let delay = 60000 / wpm;
-    if      (word.endsWith('.') || word.endsWith('!') || word.endsWith('?')) delay *= 2.5;
-    else if (word.endsWith(',') || word.endsWith(';') || word.endsWith(':')) delay *= 1.5;
-    else if (word.length > 10)                                                delay *= 1.2;
+    if (pendingPunctuation) {
+        pendingPunctuation = null;
+        currentIndex++;
+        if (currentIndex % 50 === 0) saveProgress();
+        const sentenceDelay = base * 2.5 + (translation ? 300 : 0);
+        rsvpTimeout = setTimeout(advanceWord, sentenceDelay);
+        return;
+    }
 
+    if (/[.!?]$/.test(word)) {
+        pendingPunctuation = word.slice(-1);
+        rsvpTimeout = setTimeout(advanceWord, base);
+        return;
+    }
+
+    let delay = base;
+    if (word.endsWith(',') || word.endsWith(';') || word.endsWith(':')) delay *= 1.5;
+    else if (word.length > 10)                                           delay *= 1.2;
     currentIndex++;
     if (currentIndex % 50 === 0) saveProgress();
     rsvpTimeout = setTimeout(advanceWord, delay);
@@ -505,6 +531,7 @@ async function playRsvp() {
 function pauseRsvp() {
     isPlaying = false;
     clearTimeout(rsvpTimeout);
+    pendingPunctuation = null;
     hintEl.style.opacity = '1';
     saveProgress();
     if (wakeLock !== null) { wakeLock.release(); wakeLock = null; }
@@ -541,7 +568,7 @@ function jumpToPrevChapter() {
 
 let wpmTimeout;
 function showWPM(value) {
-    wpmIndicator.textContent = `${value} WPM`;
+    wpmIndicator.textContent = typeof value === 'number' ? `${value} WPM` : value;
     wpmIndicator.classList.remove('fade-out');
     wpmIndicator.classList.add('fade-in');
     clearTimeout(wpmTimeout);

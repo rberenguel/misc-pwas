@@ -43,21 +43,24 @@
 
         <div id="wpm-indicator" class="fade-out">300 WPM</div>
 
-        <div class="word-display-container">
-            <div class="side-container side-left">
-                <div id="context-left" class="context context-left"></div>
-                <div id="word-prefix" class="word-part"></div>
+        <div class="reading-area">
+            <div id="sentence-pulse"></div>
+            <div class="word-display-container">
+                <div class="side-container side-left">
+                    <div id="context-left" class="context context-left"></div>
+                    <div id="word-prefix" class="word-part"></div>
+                </div>
+
+                <div id="word-pivot"></div>
+
+                <div class="side-container side-right">
+                    <div id="word-suffix" class="word-part"></div>
+                    <div id="context-right" class="context context-right"></div>
+                </div>
             </div>
 
-            <div id="word-pivot"></div>
-
-            <div class="side-container side-right">
-                <div id="word-suffix" class="word-part"></div>
-                <div id="context-right" class="context context-right"></div>
-            </div>
+            <div id="translation-line" aria-live="polite"></div>
         </div>
-
-        <div id="translation-line" aria-live="polite"></div>
 
         <div id="hint">TAP: PLAY · DRAG: SPEED · EDGE DBL-TAP: CHAPTER · HINT: LIBRARY</div>
     </div>
