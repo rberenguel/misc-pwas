@@ -222,6 +222,7 @@ async function handleFileUpload(file) {
             wpm = 300;
             await saveBook();
             await saveProgress();
+            await del(translationKey(activeSlot));
             startReadingSession();
         } else {
             alert("Could not extract readable text from this file.");
