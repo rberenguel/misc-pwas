@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ordit</title>
+<style>
+    :root {
+        --bg: #111;
+        --fg: #eee;
+        --accent: #4ade80;
+        --error: #f87171;
+        --node-bg: #222;
+        --edge-fg: #888;
+    }
+    body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: system-ui, -apple-system, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        height: 100vh;
+        overflow: hidden;
+    }
+    header {
+        width: 100%;
+        max-width: 600px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        box-sizing: border-box;
+        font-family: monospace;
+        font-size: 1.2rem;
+    }
+    .help-toggle {
+        background: transparent;
+        color: var(--fg);
+        border: 1px solid #444;
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        font-family: monospace;
+        font-size: 1rem;
+        cursor: pointer;
+        margin-left: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .help-toggle:hover {
+        background: #333;
+    }
+    canvas {
+        flex: 1;
+        width: 100%;
+        max-width: 600px;
+        max-height: calc(70vh - 3rem);
+        background: var(--bg);
+        margin-bottom: 3rem;
+    }
+    #options {
+        width: 100%;
+        max-width: 600px;
+        padding: 1rem;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem;
+        box-sizing: border-box;
+        padding-bottom: 2rem;
+    }
+    button.option-btn {
+        background: var(--node-bg);
+        color: var(--fg);
+        border: 1px solid #444;
+        padding: 1rem;
+        font-size: 1.1rem;
+        font-family: monospace;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.1s;
+    }
+    button.option-btn:active {
+        background: #444;
+    }
+    button.option-btn.correct { background: var(--accent); color: #000; border-color: var(--accent); }
+    button.option-btn.incorrect { background: var(--error); color: #000; border-color: var(--error); }
+
+    .hidden { display: none !important; }
+    #helpModal {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center;
+        z-index: 10; padding: 1rem; box-sizing: border-box;
+    }
+    .modal-content {
+        background: var(--node-bg); padding: 2rem; border-radius: 8px; border: 1px solid #444;
+        max-width: 500px; line-height: 1.6;
+    }
+    .modal-content h2 { margin-top: 0; color: var(--accent); font-family: monospace; }
+    .modal-content ul { padding-left: 1.5rem; }
+    .modal-content li { margin-bottom: 0.75rem; }
+    code { background: #000; padding: 2px 6px; border-radius: 4px; color: var(--accent); }
+    #closeHelp { 
+        background: var(--fg); color: var(--bg); border: none; padding: 0.75rem; 
+        font-size: 1rem; font-weight: bold; border-radius: 4px; width: 100%; 
+        margin-top: 1rem; cursor: pointer; 
+    }
+    #closeHelp:hover { background: #fff; }
+</style>
+</head>
+<body>
+
+<header>
+    <div>
+        ordit
+        <button id="helpBtn" class="help-toggle">?</button>
+    </div>
+    <div id="score">Score: 0</div>
+</header>
+
+<div id="helpModal" class="hidden">
+    <div class="modal-content">
+        <h2>How to Play</h2>
+        <p>Trace the tensor dimensions through the computational graph. Find the missing piece to complete the flow.</p>
+        <p><strong>Standard Notation:</strong></p>
+        <ul>
+            <li><code>B</code> = Batch size</li>
+            <li><code>T</code> = Time (Sequence Length)</li>
+            <li><code>d</code> = Embedding Dimension</li>
+            <li><code>h</code> = Number of Attention Heads</li>
+            <li><code>k</code> = Head Dimension (usually d/h)</li>
+        </ul>
+        <button id="closeHelp">Let's Go</button>
+    </div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<div id="options">
+    <button id="btn0" class="option-btn"></button>
+    <button id="btn1" class="option-btn"></button>
+    <button id="btn2" class="option-btn"></button>
+    <button id="btn3" class="option-btn"></button>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const buttons = [0, 1, 2, 3].map(i => document.getElementById(`btn${i}`));
+
+const helpBtn = document.getElementById('helpBtn');
+const helpModal = document.getElementById('helpModal');
+const closeHelp = document.getElementById('closeHelp');
+
+helpBtn.onclick = () => helpModal.classList.remove('hidden');
+closeHelp.onclick = () => helpModal.classList.add('hidden');
+
+let score = 0;
+let currentLevelData = null;
+
+function resize() {
+    canvas.width = canvas.clientWidth * window.devicePixelRatio;
+    canvas.height = canvas.clientHeight * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    draw();
+}
+window.addEventListener('resize', resize);
+
+// Procedural Level Generator
+const LevelGenerator = {
+    // Standard vocab
+    TENSORS: {
+        trunk: '[B, T, d]',
+        qkv_proj: '[B, T, 3d]',
+        head: '[B, h, T, k]',
+        head_T: '[B, h, k, T]',
+        attn: '[B, h, T, T]',
+        ffn_up: '[B, T, 4d]',
+        heads_concat: '[B, T, h, k]'
+    },
+    
+    // Core templates
+    scenarios: [
+        function qkMatmul() {
+            const isK = Math.random() > 0.5;
+            const hiddenLabel = isK ? this.TENSORS.head_T : this.TENSORS.head;
+            return {
+                nodes: [
+                    { id: 'q', text: 'Query', x: 150, y: 50 },
+                    { id: 'k', text: 'Key', x: 450, y: 50 },
+                    { id: 'matmul', text: 'MatMul (@)', x: 300, y: 200 },
+                    { id: 'out', text: 'Scores', x: 300, y: 320 }
+                ],
+                edges: [
+                    { from: 'q', to: 'matmul', label: isK ? this.TENSORS.head : '???' },
+                    { from: 'k', to: 'matmul', label: isK ? '???' : this.TENSORS.head_T },
+                    { from: 'matmul', to: 'out', label: this.TENSORS.attn }
+                ],
+                answer: hiddenLabel,
+                distractors: [this.TENSORS.head, this.TENSORS.head_T, '[B, T, h, k]', '[k, T, B, h]']
+            };
+        },
+        function svMatmul() {
+            const hideScores = Math.random() > 0.5;
+            return {
+                nodes: [
+                    { id: 's', text: 'Scores', x: 150, y: 50 },
+                    { id: 'v', text: 'Value', x: 450, y: 50 },
+                    { id: 'matmul', text: 'MatMul (@)', x: 300, y: 200 },
+                    { id: 'out', text: 'Context', x: 300, y: 320 }
+                ],
+                edges: [
+                    { from: 's', to: 'matmul', label: hideScores ? '???' : this.TENSORS.attn },
+                    { from: 'v', to: 'matmul', label: hideScores ? this.TENSORS.head : '???' },
+                    { from: 'matmul', to: 'out', label: this.TENSORS.head }
+                ],
+                answer: hideScores ? this.TENSORS.attn : this.TENSORS.head,
+                distractors: [this.TENSORS.head_T, '[B, h, T, d]', '[B, T, d]', '[B, h, T, T]']
+            };
+        },
+        function residual() {
+            return {
+                nodes: [
+                    { id: 'in', text: 'Stream', x: 150, y: 50 },
+                    { id: 'sub', text: 'Sublayer', x: 450, y: 50 },
+                    { id: 'add', text: 'Add', x: 300, y: 200 }
+                ],
+                edges: [
+                    { from: 'in', to: 'add', label: this.TENSORS.trunk },
+                    { from: 'sub', to: 'add', label: '???' }
+                ],
+                answer: this.TENSORS.trunk,
+                distractors: [this.TENSORS.ffn_up, this.TENSORS.head, '[B, T, 1]', '[B, 1, d]']
+            };
+        },
+        function concat() {
+            return {
+                nodes: [
+                    { id: 'heads', text: 'All Heads', x: 300, y: 50 },
+                    { id: 'concat', text: 'Concat/Reshape', x: 300, y: 150 },
+                    { id: 'out', text: 'Output', x: 300, y: 250 }
+                ],
+                edges: [
+                    { from: 'heads', to: 'concat', label: this.TENSORS.heads_concat },
+                    { from: 'concat', to: 'out', label: '???' }
+                ],
+                answer: this.TENSORS.trunk,
+                distractors: [this.TENSORS.qkv_proj, '[B, h, T, d]', '[B, T, d/h]', '[B, T, h*k]']
+            };
+        }
+    ],
+
+    generate() {
+        const scenarioIndex = Math.floor(Math.random() * this.scenarios.length);
+        const data = this.scenarios[scenarioIndex].call(this);
+
+        // Filter out correct answer from distractors, take 3
+        const validDistractors = data.distractors.filter(d => d !== data.answer).slice(0, 3);
+        
+        // Build options and shuffle
+        const options = [...validDistractors, data.answer];
+        options.sort(() => Math.random() - 0.5);
+        
+        return {
+            nodes: data.nodes,
+            edges: data.edges,
+            options: options,
+            correct: options.indexOf(data.answer)
+        };
+    }
+};
+
+function drawNode(x, y, text) {
+    ctx.fillStyle = '#222';
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 2;
+    const w = 140;
+    const h = 40;
+    ctx.beginPath();
+    ctx.roundRect(x - w/2, y - h/2, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#eee';
+    ctx.font = '16px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x, y);
+}
+
+function drawEdge(x1, y1, x2, y2, label) {
+    ctx.strokeStyle = '#888';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 10 * Math.cos(angle - Math.PI / 6), y2 - 10 * Math.sin(angle - Math.PI / 6));
+    ctx.lineTo(x2 - 10 * Math.cos(angle + Math.PI / 6), y2 - 10 * Math.sin(angle + Math.PI / 6));
+    ctx.fillStyle = '#888';
+    ctx.fill();
+
+    if (label) {
+        const mx = (x1 + x2) / 2;
+        const my = (y1 + y2) / 2;
+        
+        ctx.font = 'bold 16px monospace';
+        const tw = ctx.measureText(label).width;
+        
+        ctx.fillStyle = '#111';
+        ctx.fillRect(mx - tw/2 - 4, my - 10, tw + 8, 20);
+        
+        ctx.fillStyle = label === '???' ? '#4ade80' : '#aaa';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, mx, my);
+    }
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+    if (!currentLevelData) return;
+    
+    const scaleX = canvas.clientWidth / 600;
+    const scaleY = canvas.clientHeight / 400;
+
+    currentLevelData.edges.forEach(e => {
+        const from = currentLevelData.nodes.find(n => n.id === e.from);
+        const to = currentLevelData.nodes.find(n => n.id === e.to);
+        if(from && to) {
+            drawEdge(from.x * scaleX, from.y * scaleY + 20, to.x * scaleX, to.y * scaleY - 20, e.label);
+        }
+    });
+
+    currentLevelData.nodes.forEach(n => drawNode(n.x * scaleX, n.y * scaleY, n.text));
+}
+
+function loadLevel() {
+    currentLevelData = LevelGenerator.generate();
+    buttons.forEach((btn, i) => {
+        btn.textContent = currentLevelData.options[i];
+        btn.className = 'option-btn';
+        btn.onclick = () => handleGuess(i, btn);
+    });
+    draw();
+}
+
+function handleGuess(guessIndex, btn) {
+    buttons.forEach(b => b.onclick = null); 
+    
+    if (guessIndex === currentLevelData.correct) {
+        btn.className = 'option-btn correct';
+        score += 100;
+    } else {
+        btn.className = 'option-btn incorrect';
+        buttons[currentLevelData.correct].className = 'option-btn correct';
+    }
+    
+    scoreEl.textContent = `Score: ${score}`;
+    
+    setTimeout(() => {
+        loadLevel();
+    }, 1000);
+}
+
+// Init
+setTimeout(() => {
+    resize();
+    loadLevel();
+    helpModal.classList.remove('hidden');
+}, 50);
+
+</script>
+</body>
+</html>
