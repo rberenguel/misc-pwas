@@ -486,6 +486,9 @@ function updateDisplay() {
             translationLineEl.textContent = t;
             translationLineEl.classList.toggle('visible', t.length > 0);
         }
+    } else {
+        translationLineEl.textContent = '';
+        translationLineEl.classList.remove('visible');
     }
 }
 
