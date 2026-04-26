@@ -447,9 +447,9 @@ function updateDisplay() {
         prefixEl.textContent = '';
         pivotEl.textContent  = pendingPunctuation;
         suffixEl.textContent = '';
-        sentencePulseEl.classList.remove('pulsing');
-        void sentencePulseEl.offsetWidth;
-        sentencePulseEl.classList.add('pulsing');
+        // sentencePulseEl.classList.remove('pulsing');
+        // void sentencePulseEl.offsetWidth;
+        // sentencePulseEl.classList.add('pulsing');
     } else {
         const displayWord = /[.!?]$/.test(word) ? word.slice(0, -1) : word;
         const pivot = calculateORP(displayWord || word);

@@ -157,8 +157,8 @@ h1 {
     font-weight: 500;
 }
 
-.side-left  { justify-content: flex-end; }
-.side-right { justify-content: flex-start; }
+.side-left  { justify-content: flex-end;   flex: 2 1 0%; }
+.side-right { justify-content: flex-start; flex: 3 1 0%; }
 
 .context {
     display: flex;
