@@ -479,12 +479,19 @@ function updateDisplay() {
     readerView.classList.toggle('has-translation', hasTranslation);
 
     if (hasTranslation) {
-        const idx = findSentenceIdx(currentIndex);
-        if (idx !== currentSentenceIdx) {
-            currentSentenceIdx = idx;
-            const t = idx >= 0 ? (translation.translations[idx] || '') : '';
+        if (pendingPunctuation) {
+            const nextIdx = findSentenceIdx(currentIndex + 1);
+            const t = nextIdx >= 0 ? (translation.translations[nextIdx] || '') : '';
             translationLineEl.textContent = t;
             translationLineEl.classList.toggle('visible', t.length > 0);
+        } else {
+            const idx = findSentenceIdx(currentIndex);
+            if (idx !== currentSentenceIdx) {
+                currentSentenceIdx = idx;
+                const t = idx >= 0 ? (translation.translations[idx] || '') : '';
+                translationLineEl.textContent = t;
+                translationLineEl.classList.toggle('visible', t.length > 0);
+            }
         }
     } else {
         translationLineEl.textContent = '';
