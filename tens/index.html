@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Axis Drill</title>
+<script>
+MathJax = {
+  tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]']] }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+<style>
+* { box-sizing: border-box; }
+body { background: #0d0d0d; color: #ccc; font-family: 'Courier New', monospace; padding: 16px; margin: 0; }
+h1 { font-size: 16px; color: #fff; margin: 0 0 3px; }
+.sub { font-size: 11px; color: #888; margin-bottom: 14px; }
+
+#legend {
+  background: #141414; border: 1px solid #222; border-radius: 6px;
+  padding: 10px 14px; margin-bottom: 14px;
+  font-size: 11px; color: #aaa;
+}
+.lgrow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-bottom: 5px; }
+.lgrow:last-child { margin-bottom: 0; }
+.lgrow strong { color: #ddd; flex-shrink: 0; min-width: 40px; }
+.lgpair { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.lgpair .lgdef { color: #999; font-size: 10px; }
+
+.ax { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: bold; }
+.ax.batch { background: #1e1e1e; color: #777; }
+.ax.seq   { background: #0c1f3a; color: #5599ee; }
+.ax.feat  { background: #0c280c; color: #44bb44; }
+.ax.head  { background: #1e0a2e; color: #cc88ff; }
+
+.op { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: bold; border: 1px solid; }
+.op.carry     { border-color: #4a7a4a; color: #88cc77; }
+.op.mix       { border-color: #995500; color: #ff9944; }
+.op.transform { border-color: #334488; color: #7799dd; }
+.op.contract  { border-color: #882222; color: #ff5555; }
+
+#card {
+  background: #141414; border: 1px solid #222; border-radius: 8px;
+  padding: 16px;
+}
+
+.qmeta { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+.qtitle { font-size: 14px; color: #ffc844; font-weight: bold; }
+.qnum { font-size: 11px; color: #888; flex-shrink: 0; margin-left: 8px; }
+
+.qdesc { font-size: 12px; color: #bbb; line-height: 1.6; margin-bottom: 10px; }
+
+.qformula {
+  background: #0a0a0a; border: 1px solid #1e1e1e; border-radius: 4px;
+  padding: 4px 10px 8px; margin-bottom: 16px;
+  text-align: center; overflow-x: auto;
+}
+
+.section-label {
+  font-size: 10px; color: #777; text-transform: uppercase;
+  letter-spacing: 1px; margin-bottom: 8px;
+}
+
+.axis-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.axis-name { line-height: 1; }
+
+.choice-btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+
+.cbtn {
+  padding: 7px 4px; border: 1px solid #2e2e2e; background: #181818;
+  color: #999; border-radius: 4px; cursor: pointer;
+  font-family: inherit; font-size: 11px; text-align: center;
+  transition: background 0.1s; -webkit-tap-highlight-color: transparent;
+}
+.cbtn:hover:not(:disabled) { background: #222; color: #aaa; }
+.cbtn:disabled { cursor: default; }
+.cbtn.sel.carry     { background: #0e1f0e; border-color: #4a7a4a; color: #88cc77; font-weight: bold; }
+.cbtn.sel.mix       { background: #1e1000; border-color: #995500; color: #ff9944; font-weight: bold; }
+.cbtn.sel.transform { background: #080f1e; border-color: #334488; color: #7799dd; font-weight: bold; }
+.cbtn.sel.contract  { background: #180808; border-color: #882222; color: #ff5555; font-weight: bold; }
+.cbtn.correct-hl    { box-shadow: 0 0 0 2px #44ff44; }
+
+.act-row { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+button.act {
+  background: #1a1a1a; border: 1px solid #444; color: #ccc;
+  padding: 9px 18px; border-radius: 5px; cursor: pointer;
+  font-family: inherit; font-size: 13px;
+  -webkit-tap-highlight-color: transparent;
+}
+button.act:hover:not(:disabled) { background: #2e2e2e; border-color: #aaa; }
+button.act:disabled { opacity: 0.25; cursor: default; }
+button.act#chk:not(:disabled) { background: #1e2e1e; border-color: #4a7a4a; color: #88cc77; }
+#score-txt { font-size: 12px; color: #888; }
+
+#feedback {
+  display: none; margin-top: 16px;
+  border-top: 1px solid #1e1e1e; padding-top: 14px;
+}
+.fb-axis { display: flex; gap: 8px; margin-bottom: 12px; align-items: flex-start; }
+.fb-tick { font-size: 15px; flex-shrink: 0; line-height: 1.4; }
+.fb-text { font-size: 12px; color: #aaa; line-height: 1.6; }
+.fb-text strong { color: #eee; }
+
+.out-shape {
+  font-size: 12px; color: #999; background: #0a0a0a;
+  border: 1px solid #1e1e1e; border-radius: 4px;
+  padding: 8px 12px; margin-top: 4px; line-height: 1.5;
+}
+.out-shape span { color: #ccc; }
+
+.done-msg { margin-top: 14px; font-size: 13px; color: #ffc844; font-weight: bold; }
+
+@media (min-width: 540px) {
+  body { padding: 24px; }
+  #card { padding: 22px; }
+  .axis-row { flex-direction: row; align-items: center; gap: 14px; }
+  .axis-name { min-width: 130px; }
+  .choice-btns { grid-template-columns: repeat(4, auto); }
+  .cbtn { padding: 4px 11px; }
+}
+</style>
+</head>
+<body>
+
+<h1>Axis Classification Drill</h1>
+<p class="sub">For every operation in any paper — what does it do to each axis?</p>
+
+<div id="legend">
+  <div class="lgrow">
+    <strong>Axes:</strong>
+    <span class="lgpair"><span class="ax batch">Batch</span> <span class="lgdef">independent copies</span></span>
+    <span class="lgpair"><span class="ax seq">Seq</span> <span class="lgdef">positions in a sequence</span></span>
+    <span class="lgpair"><span class="ax feat">Feature</span> <span class="lgdef">representation at each position</span></span>
+    <span class="lgpair"><span class="ax head">Head</span> <span class="lgdef">attention head</span></span>
+  </div>
+  <div class="lgrow">
+    <strong>Ops:</strong>
+    <span class="lgpair"><span class="op carry">Carry</span> <span class="lgdef">unchanged</span></span>
+    <span class="lgpair"><span class="op mix">Mix</span> <span class="lgdef">positions interact</span></span>
+    <span class="lgpair"><span class="op transform">Transform</span> <span class="lgdef">values recomputed</span></span>
+    <span class="lgpair"><span class="op contract">Contract</span> <span class="lgdef">axis disappears</span></span>
+  </div>
+</div>
+
+<div id="card"></div>
+
+<script>
+const QS = [
+  {
+    title: "Linear projection",
+    desc: "The same weight matrix W is applied to each token's vector independently. No token sees any other token.",
+    formula: `\\[ x_t \\mapsto x_t W, \\qquad W \\in \\mathbb{R}^{d_{\\mathrm{model}} \\times d_k} \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "carry", "transform"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>k</sub> ]",
+    why: [
+      "Batch is a free axis — one independent run per sample. Always <strong>Carry</strong>.",
+      "The same W is applied to every token in isolation. No token sees any other — Seq is <strong>Carried</strong>.",
+      "d<sub>model</sub> is projected to d<sub>k</sub>. Same axis role, different size — <strong>Transform</strong>.",
+    ]
+  },
+  {
+    title: "Position-wise FFN",
+    desc: "Two linear layers with a nonlinearity, applied to each position's vector independently. 'Position-wise' is the keyword — it tells you directly that Seq is untouched.",
+    formula: `\\[ \\mathrm{FFN}(x_t) = \\max(0,\\; x_t W_1 + b_1)\\, W_2 + b_2 \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "carry", "transform"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>model</sub> ]",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Each token's FFN output depends only on that token's vector. Seq is <strong>Carried</strong>.",
+      "d<sub>model</sub> expands to d<sub>ff</sub> then back — values recomputed, same output size. <strong>Transform</strong>.",
+    ]
+  },
+  {
+    title: "Self-attention",
+    desc: "The output at each position is a weighted average of all value vectors. The weights are computed from similarity between all pairs of positions — so every position can influence every other.",
+    formula: `\\[ \\mathrm{softmax}\\!\\left(\\frac{QK^\\top}{\\sqrt{d_k}}\\right) V \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "mix", "transform"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>model</sub> ]",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "The output at position t depends on ALL other positions. Positions interact — this is <strong>Mix</strong>. It is the defining property of attention.",
+      "d<sub>model</sub> is projected into Q, K, V subspaces and back out. <strong>Transform</strong>.",
+    ],
+    variants: [
+      {
+        axes: [
+          { label: "Batch", type: "batch" },
+          { label: "Head", type: "head" },
+          { label: "Seq", type: "seq" },
+        ],
+        answers: ["carry", "carry", "mix"],
+        outShape: "[ Batch &middot; Head &middot; Seq &middot; d<sub>k</sub> ] &mdash; d<sub>k</sub> carried",
+        why: [
+          "Batch: always <strong>Carry</strong>.",
+          "Each head operates on its own Q, K, V slices — no head reads another's values. Head is <strong>Carry</strong>.",
+          "Output at each position is still a weighted average over all other positions. Seq is <strong>Mix</strong>.",
+        ]
+      }
+    ]
+  },
+  {
+    title: "Layer normalization",
+    desc: "Normalize each position's feature vector over the feature dimension. The statistics (mean, variance) are computed within each token's own vector — it never looks at other positions.",
+    formula: `\\[ \\mathrm{LN}(x_t) = \\frac{x_t - \\mu}{\\sigma} \\cdot \\gamma + \\beta, \\qquad \\mu,\\,\\sigma \\text{ over } d_{\\mathrm{model}} \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "carry", "transform"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>model</sub> ]",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "LN is applied to each position's vector in isolation. Seq is <strong>Carried</strong>.",
+      "The feature vector is normalized — values change, size unchanged. <strong>Transform</strong>.",
+    ]
+  },
+  {
+    title: "Residual connection",
+    desc: "The input is added element-wise to the sublayer's output. Element-wise addition means no position interacts with another — but it enforces a hard shape constraint: input and output must be identical.",
+    formula: `\\[ x + \\mathrm{Sublayer}(x) \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "carry", "carry"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>model</sub> ] &mdash; shape is locked",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Element-wise addition never mixes positions. Seq is <strong>Carried</strong>.",
+      "Element-wise addition doesn't touch feature structure. d<sub>model</sub> is <strong>Carried</strong>. This is why d<sub>model</sub>=512 everywhere in the encoder: the residual forces every sublayer to preserve this exact shape.",
+    ]
+  },
+  {
+    title: "Attention scores QKᵀ",
+    desc: "Compute a similarity between every query position and every key position. The feature axis d_k is the dot-product dimension — it is summed over entirely. In its place, a second sequence axis (key positions) emerges.",
+    formula: `\\[ QK^\\top, \\quad Q,\\,K \\in \\mathbb{R}^{T \\times d_k} \\;\\longrightarrow\\; \\mathbb{R}^{T \\times T} \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq (queries)", type: "seq" },
+      { label: "d<sub>k</sub>", type: "feat" },
+    ],
+    answers: ["carry", "carry", "contract"],
+    outShape: "[ Batch &middot; Seq (queries) &middot; Seq (keys) ] &mdash; d<sub>k</sub> contracted; key Seq appears",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Each query position produces one row of scores. Query Seq is <strong>Carried</strong> as an output axis.",
+      "d<sub>k</sub> is summed over to produce one scalar per position pair. It <strong>Contracts</strong>. A new key-Seq axis appears in its place — this is why QK<sup>T</sup> is T&times;T.",
+    ],
+    variants: [
+      {
+        axes: [
+          { label: "Batch", type: "batch" },
+          { label: "Head", type: "head" },
+          { label: "d<sub>k</sub>", type: "feat" },
+        ],
+        answers: ["carry", "carry", "contract"],
+        outShape: "[ Batch &middot; Head &middot; Seq (q) &middot; Seq (k) ] &mdash; d<sub>k</sub> contracted; both Seq axes appear",
+        why: [
+          "Batch: always <strong>Carry</strong>.",
+          "Each head computes its own score matrix independently. Head is <strong>Carry</strong>.",
+          "d<sub>k</sub> is the dot-product dimension — summed over entirely to produce one scalar per query-key pair. <strong>Contract</strong>. Same contraction as in the non-head view.",
+        ]
+      }
+    ]
+  },
+  {
+    title: "Cross-attention (decoder → encoder)",
+    desc: "Queries come from the decoder sequence, but keys and values come from the encoder output. Two different sequences are involved. Ask: does the decoder Seq interact with encoder positions?",
+    formula: `\\[ \\mathrm{softmax}\\!\\left(\\frac{Q_{\\mathrm{dec}}\\, K_{\\mathrm{enc}}^\\top}{\\sqrt{d_k}}\\right) V_{\\mathrm{enc}} \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq (decoder)", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "mix", "transform"],
+    outShape: "[ Batch &middot; Seq (decoder) &middot; d<sub>model</sub> ] &mdash; encoder Seq contracted inside",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Each decoder position attends to all encoder positions. Decoder Seq is <strong>Mixed</strong> with encoder content. The encoder Seq is contracted inside; only decoder Seq survives as an output axis.",
+      "d<sub>model</sub> is projected to Q, K, V and back. <strong>Transform</strong>.",
+    ],
+    variants: [
+      {
+        axes: [
+          { label: "Batch", type: "batch" },
+          { label: "Head", type: "head" },
+          { label: "Seq (decoder)", type: "seq" },
+        ],
+        answers: ["carry", "carry", "mix"],
+        outShape: "[ Batch &middot; Head &middot; Seq (decoder) &middot; d<sub>k</sub> ] &mdash; encoder Seq contracted inside each head",
+        why: [
+          "Batch: always <strong>Carry</strong>.",
+          "Each head computes its own cross-attention independently. Head is <strong>Carry</strong>.",
+          "Each decoder position attends to all encoder positions. Decoder Seq is <strong>Mix</strong> — same reason as in the 3D view.",
+        ]
+      }
+    ]
+  },
+  {
+    title: "Softmax (over key positions)",
+    desc: "Normalize the attention scores so each query position's weights sum to 1. The normalization runs across the key-position axis — all key scores for a given query must be seen together.",
+    formula: `\\[ \\mathrm{softmax}(s)_{ij} = \\frac{e^{s_{ij}}}{\\sum_k e^{s_{ik}}}, \\qquad s \\in \\mathbb{R}^{T \\times T} \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq (queries)", type: "seq" },
+      { label: "Seq (keys)", type: "seq" },
+    ],
+    answers: ["carry", "carry", "transform"],
+    outShape: "[ Batch &middot; Seq (queries) &middot; Seq (keys) ] &mdash; same shape, values renormalized",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Each query row is normalized independently. Query Seq is <strong>Carried</strong>.",
+      "Key Seq values interact within each row (they must sum to 1) but the axis is not contracted — values recomputed. <strong>Transform</strong>, not Mix (no information crosses query rows).",
+    ],
+    variants: [
+      {
+        axes: [
+          { label: "Batch", type: "batch" },
+          { label: "Head", type: "head" },
+          { label: "Seq (keys)", type: "seq" },
+        ],
+        answers: ["carry", "carry", "transform"],
+        outShape: "[ Batch &middot; Head &middot; Seq (q) &middot; Seq (k) ] &mdash; shape unchanged",
+        why: [
+          "Batch: always <strong>Carry</strong>.",
+          "Each head normalizes its own score rows independently. Head is <strong>Carry</strong>.",
+          "Key scores within each query row must sum to 1 — values recomputed, axis size unchanged. <strong>Transform</strong>.",
+        ]
+      }
+    ]
+  },
+  {
+    title: "Multi-head split",
+    desc: "The feature dimension d_model is split into H heads of size d_k = d_model / H via reshape, then transposed. No weights, no computation — pure reorganisation. The d_model axis disappears and two new axes (Head, d_k) appear.",
+    formula: `\\[ [B,\\, T,\\, d_{\\mathrm{model}}] \\xrightarrow{\\text{reshape}} [B,\\, T,\\, H,\\, d_k] \\xrightarrow{\\top} [B,\\, H,\\, T,\\, d_k] \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "carry", "contract"],
+    outShape: "[ Batch &middot; Head &middot; Seq &middot; d<sub>k</sub> ] &mdash; Head axis born; d<sub>model</sub> gone",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Each token is reshaped independently. Seq is <strong>Carried</strong>.",
+      "d<sub>model</sub> is split into H &times; d<sub>k</sub> and disappears as a single axis — <strong>Contract</strong>. Unlike the contraction in QK<sup>T</sup> (values summed away), no information is lost here: the same values are re-indexed. The Head axis is born in this step.",
+    ]
+  },
+  {
+    title: "Multi-head merge",
+    desc: "The inverse of the split: H heads are transposed and reshaped back into a single d_model feature vector. Both the Head and d_k axes are consumed in a reshape — the inverse of what created them.",
+    formula: `\\[ [B,\\, H,\\, T,\\, d_k] \\xrightarrow{\\top} [B,\\, T,\\, H,\\, d_k] \\xrightarrow{\\text{reshape}} [B,\\, T,\\, d_{\\mathrm{model}}] \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Head", type: "head" },
+      { label: "d<sub>k</sub>", type: "feat" },
+    ],
+    answers: ["carry", "contract", "contract"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>model</sub> ] &mdash; Head and d<sub>k</sub> merged; Seq (carried) not shown",
+    why: [
+      "Batch: always <strong>Carry</strong>. Seq is also present and <strong>Carried</strong> (not shown here to focus on the interesting axes).",
+      "The Head axis is folded into the feature dimension — <strong>Contract</strong>. The Head axis disappears.",
+      "d<sub>k</sub> merges with Head to form d<sub>model</sub> — <strong>Contract</strong>. Exact inverse of the split.",
+    ]
+  },
+  {
+    title: "Causal (masked) self-attention",
+    desc: "Identical formula to self-attention, but before the softmax a causal mask sets future positions to −∞, preventing position t from attending to any position t+1, t+2, …",
+    formula: `\\[ \\mathrm{softmax}\\!\\left(\\frac{QK^\\top}{\\sqrt{d_k}} + M\\right) V, \\quad M_{ij} = \\begin{cases} 0 & j \\le i \\\\ -\\infty & j > i \\end{cases} \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "mix", "transform"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>model</sub> ]",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "The output at position t is a weighted average over positions 1…t. Those positions interact — Seq is <strong>Mix</strong>. The mask restricts <em>which</em> positions interact, not whether they interact at all. Mix says nothing about range.",
+      "d<sub>model</sub> is projected into Q, K, V and back. <strong>Transform</strong>.",
+    ],
+    variants: [
+      {
+        axes: [
+          { label: "Batch", type: "batch" },
+          { label: "Head", type: "head" },
+          { label: "Seq", type: "seq" },
+        ],
+        answers: ["carry", "carry", "mix"],
+        outShape: "[ Batch &middot; Head &middot; Seq &middot; d<sub>k</sub> ]",
+        why: [
+          "Batch: always <strong>Carry</strong>.",
+          "Each head applies its own mask and attends independently. Head is <strong>Carry</strong>.",
+          "Positions 1…t interact to produce the output at t. Seq is <strong>Mix</strong>. The causal mask limits range but doesn't remove the Mix.",
+        ]
+      }
+    ]
+  },
+  {
+    title: "GeLU activation",
+    desc: "A smooth activation used inside modern FFNs (GPT-2 onward). Applied element-wise: every value in every position's feature vector is independently scaled by a nonlinear factor. No token sees another; no feature dimension changes.",
+    formula: `\\[ \\mathrm{GeLU}(x) = x \\cdot \\Phi(x), \\qquad \\Phi = \\text{Gaussian CDF} \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>ff</sub>", type: "feat" },
+    ],
+    answers: ["carry", "carry", "transform"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>ff</sub> ] &mdash; same shape, values scaled nonlinearly",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Activation applied to each position independently. Seq is <strong>Carried</strong>.",
+      "Each feature value is scaled by its own &Phi;(x) factor — values change nonlinearly, size unchanged. <strong>Transform</strong>.",
+    ]
+  },
+  {
+    title: "SwiGLU gated FFN",
+    desc: "An FFN variant used in LLaMA, PaLM, and Gemma: two parallel projections are computed and multiplied element-wise (the gate). The gate modulates each feature independently — no positions interact, no feature mixing across dimensions.",
+    formula: `\\[ \\mathrm{FFN}(x) = (x W_1) \\odot \\sigma(x W_2) \\cdot W_3 \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "carry", "transform"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>model</sub> ] &mdash; d<sub>model</sub> &rarr; d<sub>ff</sub> &rarr; d<sub>model</sub> internally",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Each position's vector is processed in isolation. Seq is <strong>Carried</strong>.",
+      "d<sub>model</sub> expands to d<sub>ff</sub> via two parallel projections, is gated element-wise (&odot; is pointwise — no feature mixing), then projected back. <strong>Transform</strong>.",
+    ]
+  },
+  {
+    title: "RMSNorm",
+    desc: "Normalizes each position's feature vector by its root-mean-square — no mean subtraction, no bias. Used in LLaMA and GPT-NeoX. Statistics are computed within each token's own vector; no position crosses another.",
+    formula: `\\[ \\mathrm{RMSNorm}(x_t) = \\frac{x_t}{\\mathrm{RMS}(x_t)} \\cdot \\gamma, \\qquad \\mathrm{RMS}(x_t) = \\sqrt{\\tfrac{1}{d}\\sum_i x_{ti}^2} \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "carry", "transform"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>model</sub> ]",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Each token is normalised independently. Seq is <strong>Carried</strong>.",
+      "Feature values are rescaled by the per-token RMS. Values change, size unchanged — <strong>Transform</strong>. Identical classification to LayerNorm; different formula, same axis behaviour.",
+    ]
+  },
+  {
+    title: "CLS pooling",
+    desc: "Extract the [CLS] token's vector as a sequence-level representation (BERT, RoBERTa). The entire sequence collapses to a single position — the Seq axis disappears. The selected vector's values are taken as-is.",
+    formula: `\\[ [B,\\, T,\\, d] \\xrightarrow{\\text{select}\\; t{=}0} [B,\\, d] \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq (T)", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "contract", "carry"],
+    outShape: "[ Batch &middot; d<sub>model</sub> ] &mdash; Seq gone; feature values unchanged",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "T positions collapse to one selected position. Seq is <strong>Contract</strong>. All information from positions 1…T−1 is discarded.",
+      "The selected vector is taken verbatim — no computation applied. d<sub>model</sub> values are <strong>Carried</strong>. This distinguishes CLS from average pooling, where feature values are recomputed.",
+    ]
+  },
+  {
+    title: "Global average pooling",
+    desc: "Average all T position vectors into a single sequence-level representation (used in some ViT and non-BERT classifiers). Like CLS pooling, Seq collapses — but the feature values are recomputed as means, not selected.",
+    formula: `\\[ [B,\\, T,\\, d] \\xrightarrow{\\text{mean over}\\, T} [B,\\, d] \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq (T)", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "contract", "transform"],
+    outShape: "[ Batch &middot; d<sub>model</sub> ] &mdash; Seq gone; feature values averaged",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "T positions collapse to one. Seq is <strong>Contract</strong> — same as CLS pooling.",
+      "Each output feature is the mean of T input values. Values are recomputed — <strong>Transform</strong>. This is the key difference from CLS pooling, where d<sub>model</sub> was Carry.",
+    ]
+  },
+  {
+    title: "RoPE (Rotary Position Embedding)",
+    desc: "Applied to Q and K before attention. Each position t rotates its feature pairs by an angle proportional to t. The output at position t depends only on position t's input and index t — no other positions are read.",
+    formula: `\\[ q_t \\mapsto R_t\\, q_t, \\qquad R_t = \\text{block-diagonal rotation by } \\theta_t \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>k</sub>", type: "feat" },
+    ],
+    answers: ["carry", "carry", "transform"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>k</sub> ] &mdash; same shape, features rotated",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Each position is rotated using its own index t — no other position's values are read. Seq is <strong>Carried</strong>. Position-dependent &ne; Mix.",
+      "Feature pairs are rotated: (x<sub>2i</sub>, x<sub>2i+1</sub>) &rarr; rotated pair. Values change, size unchanged — <strong>Transform</strong>.",
+    ]
+  },
+  {
+    title: "Sinusoidal positional encoding",
+    desc: "A fixed (non-learned) offset added to each token's embedding. Position t receives a unique vector PE_t computed from sines and cosines of t. Each position is modified independently — no cross-position interaction.",
+    formula: `\\[ x_t \\mapsto x_t + \\mathrm{PE}_t, \\qquad \\mathrm{PE}_t[2i] = \\sin\\!\\left(\\tfrac{t}{10000^{2i/d}}\\right) \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "carry", "transform"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>model</sub> ]",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Each position gets its own fixed offset PE<sub>t</sub> computed from its index alone. No position reads another. Seq is <strong>Carried</strong>. Same insight as RoPE: position-dependent &ne; Mix.",
+      "Feature values shift by PE<sub>t</sub> — values change, size unchanged. <strong>Transform</strong>.",
+    ]
+  },
+  {
+    title: "Local (windowed) attention",
+    desc: "Each position attends only to the w nearest positions (Longformer, BigBird, Mistral). The window shrinks the attention range. Does restricting which positions interact change how the Seq axis is classified?",
+    formula: `\\[ \\mathrm{softmax}\\!\\left(\\frac{Q K^\\top_{|i-j|\\le w}}{\\sqrt{d_k}}\\right) V_{|i-j|\\le w} \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "mix", "transform"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>model</sub> ]",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Each output position still depends on up to w other positions. Cross-position information flows — Seq is <strong>Mix</strong>. Mix says nothing about how many positions interact. Full attention and local attention are both Mix for Seq.",
+      "d<sub>model</sub> projected into Q, K, V and back. <strong>Transform</strong>.",
+    ],
+    variants: [
+      {
+        axes: [
+          { label: "Batch", type: "batch" },
+          { label: "Head", type: "head" },
+          { label: "Seq", type: "seq" },
+        ],
+        answers: ["carry", "carry", "mix"],
+        outShape: "[ Batch &middot; Head &middot; Seq &middot; d<sub>k</sub> ]",
+        why: [
+          "Batch: always <strong>Carry</strong>.",
+          "Each head has its own window and attends independently. Head is <strong>Carry</strong>.",
+          "Positions within the window interact — Seq is <strong>Mix</strong>. The window size doesn't change the classification.",
+        ]
+      }
+    ]
+  },
+  {
+    title: "Flash Attention (trick question)",
+    desc: "An optimised CUDA implementation of standard attention (Dao et al. 2022) that avoids materialising the full T×T score matrix by tiling. Faster, more memory-efficient — but what is the mathematical operation?",
+    formula: `\\[ \\mathrm{softmax}\\!\\left(\\frac{QK^\\top}{\\sqrt{d_k}}\\right) V \\quad \\text{(same formula, different kernel)} \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "mix", "transform"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>model</sub> ] &mdash; identical to standard attention",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Seq is <strong>Mix</strong> — identical to standard attention. Flash Attention rewrites the kernel for memory efficiency but computes the exact same weighted average over all positions.",
+      "d<sub>model</sub>: <strong>Transform</strong>. Implementation optimisations never change axis classification. The axis classification describes the abstract mathematical operation, not the code.",
+    ],
+    variants: [
+      {
+        axes: [
+          { label: "Batch", type: "batch" },
+          { label: "Head", type: "head" },
+          { label: "Seq", type: "seq" },
+        ],
+        answers: ["carry", "carry", "mix"],
+        outShape: "[ Batch &middot; Head &middot; Seq &middot; d<sub>k</sub> ] &mdash; identical to standard attention in 4D",
+        why: [
+          "Batch: always <strong>Carry</strong>.",
+          "Each head's tiled computation is independent. Head is <strong>Carry</strong>.",
+          "The tiling is a memory layout trick — the weighted average over all positions is still computed. Seq is <strong>Mix</strong>.",
+        ]
+      }
+    ]
+  },
+  {
+    title: "Token embedding lookup",
+    desc: "Each integer token ID selects a row from the embedding matrix E ∈ ℝ^{V×d_model}. Framed as operating on a one-hot vector over vocabulary V, the V-dimensional input collapses to a dense d_model vector. This is where the Feature axis is born.",
+    formula: `\\[ E \\in \\mathbb{R}^{V \\times d_{\\mathrm{model}}}, \\qquad e_t = E[\\mathrm{id}_t] \\in \\mathbb{R}^{d_{\\mathrm{model}}} \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "Vocab (V)", type: "feat" },
+    ],
+    answers: ["carry", "carry", "contract"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>model</sub> ] &mdash; Vocab contracted; Feature axis born",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Each token is looked up independently. Seq is <strong>Carried</strong>.",
+      "One integer index selects one row out of V — the Vocab axis collapses to a point. <strong>Contract</strong>. In its place, the d<sub>model</sub> Feature axis is created. This is the origin of the Feature axis in every transformer.",
+    ]
+  },
+  {
+    title: "MoE router / gating",
+    desc: "In Mixture-of-Experts (Switch Transformer, Mixtral), a linear layer maps each token's feature vector to n_expert logits. These are softmax'd and top-k selected. The 'feature' axis becomes expert logits — a non-geometric quantity.",
+    formula: `\\[ g(x_t) = \\mathrm{softmax}(x_t W_r), \\qquad W_r \\in \\mathbb{R}^{d_{\\mathrm{model}} \\times n_{\\mathrm{experts}}} \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "carry", "transform"],
+    outShape: "[ Batch &middot; Seq &middot; n<sub>experts</sub> ] &mdash; same axis role, different meaning",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Each token is routed independently. Seq is <strong>Carried</strong>.",
+      "d<sub>model</sub> is linearly projected to n<sub>experts</sub>. Values recomputed, size changes — <strong>Transform</strong>. The classification doesn't change just because the output represents expert logits instead of a feature vector.",
+    ]
+  },
+  {
+    title: "Grouped Query Attention — KV head broadcast",
+    desc: "In GQA (Ainslie et al. 2023) and MQA, K and V have H_kv heads while Q has H_q > H_kv heads. Before attention, each KV head is repeated H_q/H_kv times so every Q head has its own K/V copy.",
+    formula: `\\[ K \\in [B,\\, H_{kv},\\, T,\\, d_k] \\xrightarrow{\\text{repeat}} K' \\in [B,\\, H_q,\\, T,\\, d_k] \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Head (H<sub>kv</sub>)", type: "head" },
+      { label: "d<sub>k</sub>", type: "feat" },
+    ],
+    answers: ["carry", "transform", "carry"],
+    outShape: "[ Batch &middot; Head (H<sub>q</sub>) &middot; Seq &middot; d<sub>k</sub> ] &mdash; Head expands; Seq and d<sub>k</sub> carried",
+    why: [
+      "Batch: always <strong>Carry</strong>. Seq is also present and <strong>Carried</strong> (not shown here).",
+      "H<sub>kv</sub> heads are repeated to H<sub>q</sub>. The Head axis changes size — <strong>Transform</strong>. In standard MHA the Head axis is always Carry; GQA breaks this. The Head axis for Q, K, and V is not required to be the same size.",
+      "Each head's feature vector is copied without modification — d<sub>k</sub> is <strong>Carry</strong>.",
+    ]
+  },
+  {
+    title: "ALiBi (Attention with Linear Biases)",
+    desc: "After computing QKᵀ, a position-dependent bias is added to each score: score_{ij} += m · (−|i−j|). The slope m is a fixed scalar per head. The score matrix shape is unchanged — only the values are shifted.",
+    formula: `\\[ \\text{scores}_{ij} \\mathrel{{+}{=}} m_h \\cdot (j - i), \\qquad \\text{scores} \\in \\mathbb{R}^{T_q \\times T_k} \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Head", type: "head" },
+      { label: "Seq (keys)", type: "seq" },
+    ],
+    answers: ["carry", "carry", "transform"],
+    outShape: "[ Batch &middot; Head &middot; Seq (queries) &middot; Seq (keys) ] &mdash; shape unchanged; both Seq axes Transform",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Each head receives a different slope m<sub>h</sub>, applied independently. Heads don't interact. Head is <strong>Carry</strong>.",
+      "Each key score is shifted by a position-dependent offset m &middot; (j&minus;i). The bias depends only on the index j — it does not read other positions' values. Values change, axis size unchanged — <strong>Transform</strong>. Seq (queries) is also Transform for the same reason.",
+    ]
+  },
+  {
+    title: "MLA: KV latent compression (DeepSeek-V2, 2024)",
+    desc: "Multi-head Latent Attention compresses K and V through a shared low-rank bottleneck. Each token's feature vector is projected to a latent dimension d_c ≪ d_model, reducing KV cache size by 8–13×. What axis operation is this?",
+    formula: `\\[ c_{KV,t} = x_t W_{DKV}, \\qquad W_{DKV} \\in \\mathbb{R}^{d_{\\mathrm{model}} \\times d_c}, \\quad d_c \\ll d_{\\mathrm{model}} \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "carry", "transform"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>c</sub> ] &mdash; d<sub>c</sub> &ll; d<sub>model</sub>; same axis roles",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Each token is projected independently. Seq is <strong>Carried</strong>.",
+      "d<sub>model</sub> is projected to d<sub>c</sub> via a learned matrix. Values recomputed, size changes — <strong>Transform</strong>. Despite the name 'compression', this is just a linear projection with a narrow output. The axis rules are identical to any other W application.",
+    ]
+  },
+  {
+    title: "Mamba selective SSM scan",
+    desc: "The core of Mamba (Gu & Dao 2023): a learned linear recurrence where A, B, C depend on the input. Each output y_t is a function of all previous inputs via a compressed hidden state — no pairwise scores, no attention matrix.",
+    formula: `\\[ h_t = \\bar{A}_t\\, h_{t-1} + \\bar{B}_t\\, x_t, \\qquad y_t = C_t\\, h_t \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>inner</sub>", type: "feat" },
+    ],
+    answers: ["carry", "mix", "transform"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>inner</sub> ]",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "y<sub>t</sub> depends on all x<sub>s&le;t</sub> through the recurrent state h<sub>t</sub>. Previous positions flow into the output — Seq is <strong>Mix</strong> (causal). SSMs and attention both Mix the Seq axis; they differ in mechanism (recurrent state vs. pairwise scores), not axis classification.",
+      "The SSM dynamics transform each channel's values through A/B/C. Values recomputed, size unchanged — <strong>Transform</strong>.",
+    ]
+  },
+  {
+    title: "Differential Attention (Microsoft, 2024)",
+    desc: "Compute two independent attention maps with Q, K split into two halves, then subtract them with a learned scalar λ. The subtraction is claimed to cancel attention noise. How does this change the axis classification?",
+    formula: `\\[ \\mathrm{DiffAttn}(X) = \\Bigl(\\mathrm{softmax}\\tfrac{Q_1 K_1^\\top}{\\sqrt{d}} - \\lambda\\,\\mathrm{softmax}\\tfrac{Q_2 K_2^\\top}{\\sqrt{d}}\\Bigr) V \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "mix", "transform"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>model</sub> ]",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Both attention maps aggregate over all key positions. The element-wise subtraction combines two Mix operations — the result is still <strong>Mix</strong>. Doubling the heads and subtracting does not change the Seq role.",
+      "d<sub>model</sub> is projected into Q<sub>1</sub>, K<sub>1</sub>, Q<sub>2</sub>, K<sub>2</sub>, V and back. <strong>Transform</strong>.",
+    ]
+  },
+  {
+    title: "Native Sparse Attention (DeepSeek, 2025)",
+    desc: "NSA learns which blocks of key positions each query should attend to: a router selects the top-k most relevant blocks per query, and attention is computed only over those. Does learned sparsity change how the Seq axis is classified?",
+    formula: `\\[ \\mathrm{softmax}\\!\\left(\\frac{Q\\, K_{\\text{top-}k}^\\top}{\\sqrt{d_k}}\\right) V_{\\text{top-}k} \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "mix", "transform"],
+    outShape: "[ Batch &middot; Seq &middot; d<sub>model</sub> ]",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "Each output position aggregates over a selected subset of key positions — cross-position information flows. Seq is <strong>Mix</strong>. Learned sparsity, like fixed sparsity (local attention), does not change the axis classification. Any cross-position flow = Mix.",
+      "d<sub>model</sub>: <strong>Transform</strong>.",
+    ]
+  },
+  {
+    title: "Mixture-of-Depths (MoD) routing",
+    desc: "MoD (Raposo et al. 2024) gives tokens a fixed compute budget: a learned router scores all T tokens and selects the top-k to pass through the expensive transformer block. The rest skip it. The Seq axis shrinks mid-network.",
+    formula: `\\[ [B,\\, T,\\, d] \\xrightarrow{\\text{top-}k\\text{ select}} [B,\\, k,\\, d], \\qquad k < T \\]`,
+    axes: [
+      { label: "Batch", type: "batch" },
+      { label: "Seq (T)", type: "seq" },
+      { label: "d<sub>model</sub>", type: "feat" },
+    ],
+    answers: ["carry", "contract", "carry"],
+    outShape: "[ Batch &middot; k &middot; d<sub>model</sub> ] &mdash; Seq shrinks T &rarr; k; feature values unchanged",
+    why: [
+      "Batch: always <strong>Carry</strong>.",
+      "T positions are reduced to k selected positions. Seq is <strong>Contract</strong>. This is the first case where Seq contracts in the middle of a network rather than at the final readout step — and the selection is learned, not fixed.",
+      "The selected tokens' vectors are taken as-is. No computation applied at selection time — d<sub>model</sub> is <strong>Carry</strong>. Same reasoning as CLS pooling: selection preserves values unchanged.",
+    ]
+  },
+];
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function typeset() {
+  if (window.MathJax && MathJax.typesetPromise) {
+    MathJax.typesetPromise([document.getElementById('card')]).catch(console.log);
+  }
+}
+
+let QSR = shuffle(QS);
+let qi = 0, userAns = [], checked = false, score = { c: 0, t: 0 };
+let currentQ = null;
+
+function pickVariant(rawQ) {
+  if (!rawQ.variants || rawQ.variants.length === 0) return rawQ;
+  const pool = [rawQ, ...rawQ.variants.map(v => ({ ...rawQ, ...v }))];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+const CHOICES = ['carry', 'mix', 'transform', 'contract'];
+function cap(s) { return s[0].toUpperCase() + s.slice(1); }
+
+function render() {
+  const q = pickVariant(QSR[qi]);
+  const perm = shuffle(q.axes.map((_, i) => i));
+  currentQ = {
+    ...q,
+    axes:    perm.map(i => q.axes[i]),
+    answers: perm.map(i => q.answers[i]),
+    why:     perm.map(i => q.why[i]),
+  };
+  userAns = currentQ.axes.map(() => null);
+  checked = false;
+
+  const rows = currentQ.axes.map((ax, i) => `
+    <div class="axis-row">
+      <div class="axis-name"><span class="ax ${ax.type}">${ax.label}</span></div>
+      <div class="choice-btns">
+        ${CHOICES.map(ch =>
+          `<button class="cbtn" id="b${i}${ch}" onclick="pick(${i},'${ch}')">${cap(ch)}</button>`
+        ).join('')}
+      </div>
+    </div>`).join('');
+
+  document.getElementById('card').innerHTML = `
+    <div class="qmeta">
+      <div class="qtitle">${currentQ.title}</div>
+      <div class="qnum">${qi + 1} / ${QSR.length}</div>
+    </div>
+    <div class="qdesc">${currentQ.desc}</div>
+    <div class="qformula">${currentQ.formula}</div>
+    <div class="section-label">Input axes — classify each:</div>
+    ${rows}
+    <div class="act-row">
+      <button class="act" id="chk" onclick="doCheck()" disabled>Check</button>
+      <button class="act" id="nxt" onclick="next()" style="display:none">Next &rarr;</button>
+      <span id="score-txt">${score.t > 0 ? score.c + '/' + score.t : ''}</span>
+    </div>
+    <div id="feedback"></div>
+  `;
+  typeset();
+}
+
+function pick(i, ch) {
+  if (checked) return;
+  userAns[i] = ch;
+  CHOICES.forEach(c => {
+    const b = document.getElementById(`b${i}${c}`);
+    b.className = 'cbtn' + (c === ch ? ` sel ${c}` : '');
+  });
+  document.getElementById('chk').disabled = userAns.some(a => a === null);
+}
+
+function doCheck() {
+  if (checked) return;
+  checked = true;
+  const q = currentQ;
+  const allOk = q.answers.every((a, i) => userAns[i] === a);
+  score.t++;
+  if (allOk) score.c++;
+
+  q.axes.forEach((ax, i) => {
+    CHOICES.forEach(c => { document.getElementById(`b${i}${c}`).disabled = true; });
+    const corrBtn = document.getElementById(`b${i}${q.answers[i]}`);
+    corrBtn.className = `cbtn sel ${q.answers[i]}`;
+    if (userAns[i] !== q.answers[i]) corrBtn.classList.add('correct-hl');
+  });
+
+  const fbItems = q.axes.map((ax, i) => {
+    const ok = userAns[i] === q.answers[i];
+    return `<div class="fb-axis">
+      <div class="fb-tick">${ok ? '<span style="color:#44ff44">&#10003;</span>' : '<span style="color:#ff4444">&#10007;</span>'}</div>
+      <div class="fb-text">
+        <span class="ax ${ax.type}">${ax.label}</span> &rarr; <span class="op ${q.answers[i]}">${cap(q.answers[i])}</span><br>
+        ${q.why[i]}
+      </div>
+    </div>`;
+  }).join('');
+
+  const isLast = qi === QSR.length - 1;
+  const doneHtml = isLast
+    ? `<div class="done-msg">Done &mdash; ${score.c}/${score.t} fully correct.
+         <button class="act" style="margin-left:0;margin-top:10px" onclick="restart()">Shuffle &amp; restart</button></div>`
+    : '';
+
+  document.getElementById('feedback').innerHTML = `
+    ${fbItems}
+    <div class="out-shape">Output: <span>${q.outShape}</span></div>
+    ${doneHtml}
+  `;
+  document.getElementById('feedback').style.display = 'block';
+  document.getElementById('chk').style.display = 'none';
+  if (!isLast) document.getElementById('nxt').style.display = 'inline-block';
+  document.getElementById('score-txt').innerText = `${score.c}/${score.t}`;
+}
+
+function next() { qi++; render(); }
+function restart() { QSR = shuffle(QS); qi = 0; score = { c: 0, t: 0 }; render(); }
+
+render();
+</script>
+</body>
+</html>
