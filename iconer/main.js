@@ -78,90 +78,156 @@ loadIconoirMap("./fonts/iconoir/iconoir-font.css");
 loadPhosphorMap("./fonts/phosphor/phosphor.css");
 function updatePreview() {
   const inputValue = letterInput.value;
-  const letter = getCharacterFromInput(inputValue);
+  const glyphs = parseGlyphs(inputValue);
 
   const fontName = fontInput.value.trim();
   const customCss = cssInput.value;
   const containerSize = parseInt(sizeInput.value, 10) || 256;
   const fontSizePercent = parseInt(fontSizeInput.value, 10) || 75;
+  const fontSize = `${containerSize * (fontSizePercent / 100)}px`;
 
-  letterWrapper.style.width = `${containerSize}px`;
-  letterWrapper.style.height = `${containerSize}px`;
-  letterWrapper.style.textAlign = "center";
-  letterWrapper.style.lineHeight = `${containerSize}px`;
-  letterDisplay.textAlign = "center";
-  letterDisplay.width = "95%";
-  letterDisplay.style.display = "inline-block";
-  letterDisplay.style.verticalAlign = "middle";
-  letterDisplay.style.lineHeight = "normal";
-
-  letterDisplay.style.fontSize = `${containerSize * (fontSizePercent / 100)}px`;
-  letterDisplay.textContent = letter;
-
-  // Detect if we're using an icon font
-  const isIconoir = /^:([a-zA-Z0-9_-]+):$/.test(inputValue);
-  const isPhosphor = /^\{([a-zA-Z0-9_-]+)\}$/.test(inputValue);
-
-  if (isIconoir) {
-    // Use Iconoir font
-    letterDisplay.style.fontFamily = "iconoir";
-  } else if (isPhosphor) {
-    // Use Phosphor font
-    letterDisplay.style.fontFamily = "Phosphor-Light";
-  } else {
-    // Use the user-specified font
+  // Load Google Font if any text glyph is present
+  const hasTextGlyph = glyphs.some((g) => g.source === "text");
+  if (hasTextGlyph && fontName) {
     const fontUrl = `https://fonts.googleapis.com/css2?family=${fontName.replace(/ /g, "+")}:ital,wght@0,400;0,700;1,400;1,700&display=swap`;
     if (googleFontLink.href !== fontUrl) {
       googleFontLink.href = fontUrl;
     }
-    letterDisplay.style.fontFamily = `'${fontName}', sans-serif`;
+  }
+
+  letterWrapper.style.width = `${containerSize}px`;
+  letterWrapper.style.height = `${containerSize}px`;
+  letterWrapper.style.position = "relative";
+
+  letterDisplay.innerHTML = "";
+  letterDisplay.removeAttribute("style");
+
+  if (glyphs.length === 0) {
+    letterWrapper.style.textAlign = "center";
+    letterWrapper.style.lineHeight = `${containerSize}px`;
+    letterDisplay.className = "select-none";
+    customCssStyle.textContent = customCss;
+    return;
+  }
+
+  if (glyphs.length === 1) {
+    // Backward-compatible single glyph rendering
+    letterWrapper.style.textAlign = "center";
+    letterWrapper.style.lineHeight = `${containerSize}px`;
+
+    letterDisplay.textContent = glyphs[0].char;
+    letterDisplay.style.fontFamily = glyphs[0].fontFamily;
+    letterDisplay.style.fontSize = fontSize;
+    letterDisplay.style.display = "inline-block";
+    letterDisplay.style.verticalAlign = "middle";
+    letterDisplay.style.width = "95%";
+    letterDisplay.style.lineHeight = "normal";
+    letterDisplay.className = "glyph glyph-0 select-none";
+  } else {
+    // Multiple glyphs: stack as overlays
+    letterWrapper.style.textAlign = "";
+    letterWrapper.style.lineHeight = "";
+
+    letterDisplay.style.display = "block";
+    letterDisplay.style.position = "relative";
+    letterDisplay.style.width = "100%";
+    letterDisplay.style.height = "100%";
+    letterDisplay.className = "select-none";
+
+    glyphs.forEach((glyph, i) => {
+      const span = document.createElement("span");
+      span.className = `glyph glyph-${i} glyph-overlay select-none`;
+      span.textContent = glyph.char;
+      span.style.fontFamily = glyph.fontFamily;
+      span.style.fontSize = fontSize;
+      letterDisplay.appendChild(span);
+    });
   }
 
   customCssStyle.textContent = customCss;
 }
 
-function getCharacterFromInput(value) {
-  if (!value) return "";
+function parseGlyphs(value) {
+  if (!value) return [];
 
-  // Check for the :icon-name: format (Iconoir).
-  const iconoirMatch = value.match(/^:([a-zA-Z0-9_-]+):$/);
-  if (iconoirMatch) {
-    const iconName = iconoirMatch[1];
-    if (iconoirMap.has(iconName)) {
-      const hexCode = iconoirMap.get(iconName);
-      return String.fromCodePoint(parseInt(hexCode, 16));
-    } else {
-      // Return a question mark if the name isn't found in our map.
-      return "?";
+  const segments = value.split(/, */);
+  const glyphs = [];
+  const fontName = fontInput.value.trim();
+
+  for (const segment of segments) {
+    const trimmed = segment.trim();
+    if (!trimmed) continue;
+
+    // Check for the :icon-name: format (Iconoir).
+    const iconoirMatch = trimmed.match(/^:([a-zA-Z0-9_-]+):$/);
+    if (iconoirMatch) {
+      const iconName = iconoirMatch[1];
+      if (iconoirMap.has(iconName)) {
+        const hexCode = iconoirMap.get(iconName);
+        glyphs.push({
+          char: String.fromCodePoint(parseInt(hexCode, 16)),
+          fontFamily: "iconoir",
+          source: "iconoir",
+        });
+      } else {
+        glyphs.push({ char: "?", fontFamily: "iconoir", source: "iconoir" });
+      }
+      continue;
     }
+
+    // Check for the {icon-name} format (Phosphor).
+    const phosphorMatch = trimmed.match(/^\{([a-zA-Z0-9_-]+)\}$/);
+    if (phosphorMatch) {
+      const iconName = phosphorMatch[1];
+      if (phosphorMap.has(iconName)) {
+        const hexCode = phosphorMap.get(iconName);
+        glyphs.push({
+          char: String.fromCodePoint(parseInt(hexCode, 16)),
+          fontFamily: "Phosphor-Light",
+          source: "phosphor",
+        });
+      } else {
+        glyphs.push({
+          char: "?",
+          fontFamily: "Phosphor-Light",
+          source: "phosphor",
+        });
+      }
+      continue;
+    }
+
+    // Fallback to previous logic for single characters or raw hex codes.
+    if (trimmed.length === 1) {
+      glyphs.push({
+        char: trimmed,
+        fontFamily: `'${fontName}', sans-serif`,
+        source: "text",
+      });
+      continue;
+    }
+    try {
+      const hex = trimmed.replace(/\\|u|0x/g, "");
+      const charCode = parseInt(hex, 16);
+      if (!isNaN(charCode)) {
+        glyphs.push({
+          char: String.fromCodePoint(charCode),
+          fontFamily: `'${fontName}', sans-serif`,
+          source: "text",
+        });
+        continue;
+      }
+    } catch (e) {
+      console.error("Invalid character code:", trimmed);
+    }
+
+    glyphs.push({
+      char: trimmed.charAt(0),
+      fontFamily: `'${fontName}', sans-serif`,
+      source: "text",
+    });
   }
 
-  // Check for the {icon-name} format (Phosphor).
-  const phosphorMatch = value.match(/^\{([a-zA-Z0-9_-]+)\}$/);
-  if (phosphorMatch) {
-    const iconName = phosphorMatch[1];
-    if (phosphorMap.has(iconName)) {
-      const hexCode = phosphorMap.get(iconName);
-      return String.fromCodePoint(parseInt(hexCode, 16));
-    } else {
-      // Return a question mark if the name isn't found in our map.
-      return "?";
-    }
-  }
-
-  // Fallback to previous logic for single characters or raw hex codes.
-  if (value.length === 1) return value;
-  try {
-    const hex = value.replace(/\\|u|0x/g, "");
-    const charCode = parseInt(hex, 16);
-    if (!isNaN(charCode)) {
-      return String.fromCodePoint(charCode);
-    }
-  } catch (e) {
-    console.error("Invalid character code:", value);
-  }
-
-  return value.charAt(0);
+  return glyphs;
 }
 
 async function downloadImage() {
@@ -169,25 +235,31 @@ async function downloadImage() {
   loader.classList.remove("hidden");
 
   try {
-    const displayStyles = window.getComputedStyle(letterDisplay);
-    const font = `${displayStyles.fontStyle} ${displayStyles.fontWeight} ${displayStyles.fontSize} ${displayStyles.fontFamily}`;
-
-    await document.fonts.load(font);
-    await new Promise((resolve) => setTimeout(resolve, 150));
-
+    const glyphs = parseGlyphs(letterInput.value);
     const containerSize = parseInt(sizeInput.value, 10) || 256;
+    const fontSizePercent = parseInt(fontSizeInput.value, 10) || 75;
+    const fontSize = `${containerSize * (fontSizePercent / 100)}px`;
+
+    // Load all fonts used by the glyphs
+    const fontsToLoad = new Set();
+    for (const glyph of glyphs) {
+      const font = `normal 400 ${fontSize} ${glyph.fontFamily}`;
+      fontsToLoad.add(font);
+    }
+    await Promise.all([...fontsToLoad].map((f) => document.fonts.load(f)));
+    await new Promise((resolve) => setTimeout(resolve, 150));
 
     const canvas = await html2canvas(letterWrapper, {
       backgroundColor: null,
       useCORS: true,
       scale: 2,
       onclone: (clonedDoc) => {
-        const letterDisplayClone = clonedDoc.getElementById("letter-display");
         const letterWrapperClone = clonedDoc.getElementById("letter-wrapper");
-        if (letterDisplayClone) {
+        const glyphClones = clonedDoc.querySelectorAll(".glyph");
+        glyphClones.forEach((g) => {
           // Apply your transform fix ONLY during capture.
-          letterDisplayClone.style.transform = "translateY(-0.3em)";
-        }
+          g.style.transform = "translateY(-0.3em)";
+        });
         if (letterWrapperClone) {
           letterWrapperClone.style.lineHeight = containerSize + "px";
         }
@@ -305,7 +377,10 @@ function hideAutocomplete() {
 function selectIcon(icon) {
   const wrapper = icon.type === "iconoir" ? ":" : "{";
   const closingWrapper = icon.type === "iconoir" ? ":" : "}";
-  letterInput.value = `${wrapper}${icon.name}${closingWrapper}`;
+  const value = letterInput.value;
+  const segments = value.split(/, */);
+  segments[segments.length - 1] = `${wrapper}${icon.name}${closingWrapper}`;
+  letterInput.value = segments.join(", ");
   hideAutocomplete();
   updatePreview();
 }
@@ -324,16 +399,18 @@ function updateSelection() {
 
 letterInput.addEventListener("input", (e) => {
   const value = e.target.value;
+  const segments = value.split(/, */);
+  const lastSegment = segments[segments.length - 1].trim();
 
   // Check for iconoir pattern
-  const iconoirMatch = value.match(/^:([a-zA-Z0-9_-]*)$/);
+  const iconoirMatch = lastSegment.match(/^:([a-zA-Z0-9_-]*)$/);
   if (iconoirMatch) {
     showAutocomplete(iconoirMatch[1], "iconoir");
     return;
   }
 
   // Check for phosphor pattern
-  const phosphorMatch = value.match(/^\{([a-zA-Z0-9_-]*)$/);
+  const phosphorMatch = lastSegment.match(/^\{([a-zA-Z0-9_-]*)$/);
   if (phosphorMatch) {
     showAutocomplete(phosphorMatch[1], "phosphor");
     return;
