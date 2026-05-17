@@ -6,7 +6,7 @@ export const MAJOR_PEGS = [
     "Rat", "Rain", "Ram", "Rory", "Rail", "Arch", "Rick (Astley)", "Rafa (Nadal)", "Rope", "Lisa",
     "Latte", "Lion", "Lime", "Loro", "Leela", "LeBron James", "Lucky (Luke)", "Leaf", "Lip", "Jesse (BrB)",
     "Jedi", "Jon (Snow)", "James (Bond)", "Jerry", "(Billy) Joel", "Jar Jar", "Chuck (Norris)", "Chef", "Jabba", "Case",
-    "Cat", "Coin", "Comb", "Car", "Coal", "Cage", "Cake", "Coffee", "Cup", "Fez",
+    "Cat", "Coin", "Comb", "Car", "Coal", "Cage", "Cake", "Coffee", "Kobe (Bryant)", "Fez",
     "Vito", "Phone", "Foam", "Fry", "Foil", "Fish", "Fog", "FIFA", "FBI", "Bus",
     "Bat", "Bone", "Boom", "Bear", "Bell", "Beach", "Book", "Beef", "Pope", "Daisies"
 ];
