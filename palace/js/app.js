@@ -102,7 +102,7 @@ function revealMode1Card() {
     document.getElementById('mode1-controls').classList.add('active');
 }
 
-function scoreMode1(correct) {
+async function scoreMode1(correct) {
     triggerHaptic();
     const num = state.targetSequence[state.currentIndex];
     state.m1Cards.push({ num, revealMs: state.m1RevealTime, correct });
@@ -111,7 +111,7 @@ function scoreMode1(correct) {
 
     if (state.currentIndex >= state.drillLength) {
         const totalMs = Date.now() - state.sessionStartTime;
-        recordSession({ mode: 1, drillLength: state.drillLength, totalMs, cards: state.m1Cards });
+        await recordSession({ mode: 1, drillLength: state.drillLength, totalMs, cards: state.m1Cards });
         showResult(`${state.mode1Score} / ${state.drillLength}`, () => navTo('screen-menu'));
     } else {
         renderMode1Card();

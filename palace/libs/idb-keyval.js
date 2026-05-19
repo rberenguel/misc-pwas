@@ -28,9 +28,8 @@ function t(t, n) {
   const o = e(r);
   return (e, t) => o.then((r) => t(r.transaction(n, e).objectStore(n)));
 }
-let n;
 function r() {
-  return n || (n = t("keyval-store", "keyval")), n;
+  return t("keyval-store", "keyval");
 }
 function o(t, n = r()) {
   return n("readonly", (n) => e(n.get(t)));
