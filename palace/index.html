@@ -45,7 +45,17 @@
     <div id="screen-mode1-drill" class="screen">
         <div id="flashcard" class="big-display">
             <div id="flashcard-number" class="number">42</div>
-            <div id="flashcard-word" class="word">Rain</div>
+            <div id="flashcard-pao-prompt" class="pao-prompt" style="display:none">
+                <span id="flashcard-prompt-value" class="pao-prompt-value">—</span>
+            </div>
+            <div id="flashcard-pao" class="pao-fields">
+                <div id="flashcard-row-num" class="pao-row" style="display:none">
+                    <span id="flashcard-answer-num" class="answer-num">—</span>
+                </div>
+                <div id="flashcard-row-p" class="pao-row"><span id="flashcard-person" class="pao-value">—</span></div>
+                <div id="flashcard-row-a" class="pao-row"><span id="flashcard-action" class="pao-value">—</span></div>
+                <div id="flashcard-row-o" class="pao-row"><span id="flashcard-object" class="pao-value">—</span></div>
+            </div>
             <div id="flashcard-hint" class="hint"></div>
         </div>
         <div id="mode1-controls" class="grade-controls">
@@ -112,6 +122,7 @@
         <div class="stats-footer">
             <button id="btn-export" class="secondary">Export</button>
             <button id="btn-import" class="secondary">Import</button>
+            <button id="btn-clear" class="secondary danger">Clear</button>
         </div>
         <input type="file" id="import-file-input" accept=".json" style="display:none">
     </div>

@@ -1,4 +1,4 @@
-import { MAJOR_PEGS, PHOSPHOR_ICONS, majorHintDigits } from './data.js';
+import { PAO_PEGS, PHOSPHOR_ICONS, majorHintDigits } from './data.js';
 import { recordSession } from './stats.js';
 import { renderStats, initStatsWiring } from './ui-stats.js';
 import { initHaptic, triggerHaptic, triggerHapticError } from '../libs/haptic.js';
@@ -35,6 +35,7 @@ const state = {
     // Mode 1
     m1Cards: [],
     m1RevealTime: 0,
+    m1CurrentQType: 'number',
     // Mode 2
     iconDurations: [],
     // Mode 3
@@ -74,22 +75,56 @@ function startMode1(length) {
     state.mode1Score = 0;
     state.m1Cards = [];
     state.sessionStartTime = Date.now();
-    const nums = Array.from({ length: 100 }, (_, i) => i + 1);
+    const nums = Array.from({ length: 100 }, (_, i) => i);
     state.targetSequence = shuffle(nums).slice(0, length);
     renderMode1Card();
     navTo('screen-mode1-drill');
 }
+
+const M1_QTYPES = ['number', 'person', 'action', 'object'];
 
 function renderMode1Card() {
     const step = state.currentIndex;
     const num = state.targetSequence[step];
     document.getElementById('mode1-progress-fill').style.width = `${(step / state.drillLength) * 100}%`;
     document.getElementById('mode1-progress-label').textContent = `${step + 1} / ${state.drillLength}`;
-    document.getElementById('flashcard-number').textContent = num;
-    document.getElementById('flashcard-word').textContent = MAJOR_PEGS[num - 1];
+
+    const pao = PAO_PEGS[num];
+    const qtype = M1_QTYPES[Math.floor(Math.random() * 4)];
+    state.m1CurrentQType = qtype;
+
+    document.getElementById('flashcard-person').textContent = pao.person || '—';
+    document.getElementById('flashcard-action').textContent = pao.action || '—';
+    document.getElementById('flashcard-object').textContent = pao.object || '—';
+    document.getElementById('flashcard-answer-num').textContent = num;
     document.getElementById('flashcard-hint').innerHTML = majorHintDigits(num)
         .map(c => `<span class="hint-badge">${c}</span>`)
         .join('');
+
+    const show = el => { el.style.display = ''; };
+    const hide = el => { el.style.display = 'none'; };
+
+    const elNum    = document.getElementById('flashcard-number');
+    const elPrompt = document.getElementById('flashcard-pao-prompt');
+    const elRowNum = document.getElementById('flashcard-row-num');
+    const elRowP   = document.getElementById('flashcard-row-p');
+    const elRowA   = document.getElementById('flashcard-row-a');
+    const elRowO   = document.getElementById('flashcard-row-o');
+    const elHint   = document.getElementById('flashcard-hint');
+
+    if (qtype === 'number') {
+        elNum.textContent = num;
+        show(elNum); hide(elPrompt); hide(elRowNum);
+        show(elRowP); show(elRowA); show(elRowO);
+        show(elHint);
+    } else {
+        hide(elNum); show(elPrompt); show(elRowNum);
+        hide(elRowP); hide(elRowA); hide(elRowO);
+        hide(elHint);
+        const vals = { person: pao.person, action: pao.action, object: pao.object };
+        document.getElementById('flashcard-prompt-value').textContent = vals[qtype] || '—';
+    }
+
     document.getElementById('flashcard').classList.remove('revealed');
     document.getElementById('mode1-controls').classList.remove('active');
     state.stepStartTime = Date.now();
@@ -105,7 +140,7 @@ function revealMode1Card() {
 async function scoreMode1(correct) {
     triggerHaptic();
     const num = state.targetSequence[state.currentIndex];
-    state.m1Cards.push({ num, revealMs: state.m1RevealTime, correct });
+    state.m1Cards.push({ num, revealMs: state.m1RevealTime, correct, questionType: state.m1CurrentQType });
     if (correct) state.mode1Score++;
     state.currentIndex++;
 
@@ -140,13 +175,13 @@ function startMode3(length) {
     state.m3Encoded = [];
     state.sessionStartTime = Date.now();
 
-    const allPegs = shuffle(Array.from({ length: 100 }, (_, i) => i + 1));
+    const allPegs = shuffle(Array.from({ length: 100 }, (_, i) => i));
     const encodedPegs = allPegs.slice(0, length);
     const shuffledIcons = shuffle([...PHOSPHOR_ICONS]).slice(0, length);
 
     state.targetSequence = encodedPegs.map((pegNum, idx) => ({
         pegNum,
-        pegWord: MAJOR_PEGS[pegNum - 1],
+        pegPerson: PAO_PEGS[pegNum].person,
         icon: shuffledIcons[idx]
     }));
 
@@ -154,7 +189,7 @@ function startMode3(length) {
     const unencodedPegs = allPegs.slice(length, length + unencodedCount);
     const unencodedItems = unencodedPegs.map(pegNum => ({
         pegNum,
-        pegWord: MAJOR_PEGS[pegNum - 1],
+        pegPerson: PAO_PEGS[pegNum].person,
         icon: 'EMPTY'
     }));
 
@@ -178,7 +213,7 @@ function renderEncodingStep() {
         document.getElementById('big-icon-view').innerHTML = icon(state.targetSequence[step]);
     } else {
         const cur = state.targetSequence[step];
-        document.getElementById('m3-peg-text').textContent = `${cur.pegNum} — ${cur.pegWord}`;
+        document.getElementById('m3-peg-text').textContent = `${cur.pegNum} — ${cur.pegPerson || '—'}`;
         document.getElementById('big-icon-view').innerHTML = icon(cur.icon);
     }
 }
@@ -235,7 +270,7 @@ function updateDecodingPrompt() {
     } else {
         const t = state.testSequence[step];
         document.getElementById('decoding-prompt').innerHTML =
-            `What was at<br><span class="prompt-peg">${t.pegNum} — ${t.pegWord}</span>?`;
+            `What was at<br><span class="prompt-peg">${t.pegNum} — ${t.pegPerson || '—'}</span>?`;
     }
 }
 

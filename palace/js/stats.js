@@ -26,18 +26,27 @@ export async function getSessions(mode = null) {
 // --- Per-peg aggregates (computed on demand) ---
 
 export function computePegStatsM1(sessions) {
-    // Returns { [pegNum]: { attempts, correct, revealMsSum } }
-    const stats = {};
+    // Returns { pegStats: { [pegNum]: { attempts, correct, revealMsSum } }, byType: { [qtype]: { attempts, correct } } }
+    const pegStats = {};
+    const byType = {
+        number: { attempts: 0, correct: 0 },
+        person: { attempts: 0, correct: 0 },
+        action: { attempts: 0, correct: 0 },
+        object: { attempts: 0, correct: 0 },
+    };
     for (const s of sessions) {
         if (s.mode !== 1) continue;
         for (const c of s.cards) {
-            if (!stats[c.num]) stats[c.num] = { attempts: 0, correct: 0, revealMsSum: 0 };
-            stats[c.num].attempts++;
-            if (c.correct) stats[c.num].correct++;
-            stats[c.num].revealMsSum += c.revealMs;
+            if (!pegStats[c.num]) pegStats[c.num] = { attempts: 0, correct: 0, revealMsSum: 0 };
+            pegStats[c.num].attempts++;
+            if (c.correct) pegStats[c.num].correct++;
+            pegStats[c.num].revealMsSum += c.revealMs || 0;
+            const qt = c.questionType || 'number';
+            byType[qt].attempts++;
+            if (c.correct) byType[qt].correct++;
         }
     }
-    return stats;
+    return { pegStats, byType };
 }
 
 export function computePegStatsM3(sessions) {

@@ -1,6 +1,6 @@
-import { getSessions, computePegStatsM1, computePegStatsM3, exportStats, importStats } from './stats.js';
+import { getSessions, computePegStatsM1, computePegStatsM3, exportStats, importStats, clearStats } from './stats.js';
 import { buildRadar } from './radar.js';
-import { MAJOR_PEGS } from './data.js';
+import { PAO_PEGS } from './data.js';
 import { triggerHaptic, triggerHapticError } from '../libs/haptic.js';
 
 function fmt(ms) {
@@ -41,10 +41,11 @@ function renderHeatmap(container, pegStats, mode) {
     const grid = document.createElement('div');
     grid.className = 'heatmap-grid';
 
-    for (let i = 1; i <= 100; i++) {
+    for (let i = 0; i < 100; i++) {
         const cell = document.createElement('div');
         cell.className = 'heatmap-cell';
         const s = pegStats[i];
+        const personName = PAO_PEGS[i]?.person || '—';
 
         if (!s || s.attempts === 0) {
             cell.style.background = '#1e1e1e';
@@ -52,11 +53,11 @@ function renderHeatmap(container, pegStats, mode) {
         } else if (mode === 'accuracy') {
             const acc = s.correct / s.attempts;
             cell.style.background = hslForAccuracy(acc);
-            cell.title = `${i} (${MAJOR_PEGS[i-1]}) — ${Math.round(acc*100)}% (${s.attempts} tries)`;
+            cell.title = `${i} (${personName}) — ${Math.round(acc*100)}% (${s.attempts} tries)`;
         } else {
             const avgMs = s.revealMsSum / s.attempts;
             cell.style.background = hslForSpeed(avgMs, minMs, maxMs);
-            cell.title = `${i} (${MAJOR_PEGS[i-1]}) — avg ${Math.round(avgMs)}ms (${s.attempts} tries)`;
+            cell.title = `${i} (${personName}) — avg ${Math.round(avgMs)}ms (${s.attempts} tries)`;
         }
 
         const label = document.createElement('span');
@@ -72,10 +73,11 @@ function renderM3Heatmap(container, pegStats) {
     const grid = document.createElement('div');
     grid.className = 'heatmap-grid';
 
-    for (let i = 1; i <= 100; i++) {
+    for (let i = 0; i < 100; i++) {
         const cell = document.createElement('div');
         cell.className = 'heatmap-cell';
         const s = pegStats[i];
+        const personName = PAO_PEGS[i]?.person || '—';
 
         if (!s || s.tested === 0) {
             cell.style.background = '#1e1e1e';
@@ -83,7 +85,7 @@ function renderM3Heatmap(container, pegStats) {
         } else {
             const acc = s.correct / s.tested;
             cell.style.background = hslForAccuracy(acc);
-            cell.title = `${i} (${MAJOR_PEGS[i-1]}) — ${Math.round(acc*100)}% (${s.tested} tested)`;
+            cell.title = `${i} (${personName}) — ${Math.round(acc*100)}% (${s.tested} tested)`;
         }
 
         const label = document.createElement('span');
@@ -116,7 +118,7 @@ function renderOverview(el, sessions) {
 }
 
 function renderMode1Tab(el, sessions) {
-    const pegStats = computePegStatsM1(sessions);
+    const { pegStats, byType } = computePegStatsM1(sessions);
     const totalCards = sessions.reduce((n, s) => n + s.cards.length, 0);
     const totalCorrect = sessions.reduce((n, s) => n + s.cards.filter(c => c.correct).length, 0);
 
@@ -127,10 +129,20 @@ function renderMode1Tab(el, sessions) {
         .sort((a, b) => a.acc - b.acc)
         .slice(0, 5);
 
+    const qtLabels = { number: '# → PAO', person: 'P → #', action: 'A → #', object: 'O → #' };
+
     el.innerHTML = `
         <div class="stat-row" style="margin-bottom:12px">
             <div class="stat-card"><div class="stat-num">${sessions.length}</div><div class="stat-label">Sessions</div></div>
             <div class="stat-card"><div class="stat-num">${totalCards > 0 ? Math.round(totalCorrect/totalCards*100) : '—'}%</div><div class="stat-label">Overall accuracy</div></div>
+        </div>
+        <h3 class="section-title">By question type</h3>
+        <div class="qtype-grid">
+            ${['number', 'person', 'action', 'object'].map(qt => {
+                const s = byType[qt];
+                const acc = s.attempts > 0 ? Math.round(s.correct / s.attempts * 100) + '%' : '—';
+                return `<div class="stat-card"><div class="stat-num">${acc}</div><div class="stat-label">${qtLabels[qt]}</div><div class="ml-def">${s.attempts} tries</div></div>`;
+            }).join('')}
         </div>
         <div class="heatmap-toggle">
             <button id="btn-acc-toggle" class="toggle-btn active">Accuracy</button>
@@ -140,7 +152,7 @@ function renderMode1Tab(el, sessions) {
         ${weak.length ? `
         <h3 class="section-title">Weakest pegs</h3>
         <ul class="weak-list">
-            ${weak.map(w => `<li><span class="peg-num">${w.num}</span> <span class="peg-word">${MAJOR_PEGS[w.num-1]}</span> <span class="peg-acc">${Math.round(w.acc*100)}%</span> <span class="peg-tries">(${w.attempts}×)</span></li>`).join('')}
+            ${weak.map(w => `<li><span class="peg-num">${w.num}</span> <span class="peg-word">${PAO_PEGS[w.num]?.person || '—'}</span> <span class="peg-acc">${Math.round(w.acc*100)}%</span> <span class="peg-tries">(${w.attempts}×)</span></li>`).join('')}
         </ul>` : ''}
         <h3 class="section-title">Recent sessions</h3>
         <ul class="session-list">
@@ -312,6 +324,15 @@ export function initStatsWiring(onRerender) {
             alert('Import failed: invalid file.');
         }
         e.target.value = '';
+    });
+
+    document.getElementById('btn-clear').addEventListener('click', async () => {
+        triggerHaptic();
+        const typed = prompt('Type DELETE to permanently erase all session history:');
+        if (typed !== 'DELETE') return;
+        await clearStats();
+        alert('All history cleared.');
+        onRerender();
     });
 
 }
