@@ -8,9 +8,9 @@ export const PAO_PEGS = [
     p("Moe",              "pours",                    "beer"),                              //  3
     p("Ray",              "plays",                    "piano"),                             //  4
     p("Eugenio",          "standup comedy",           "owl joke"),                          //  5
-    p("Shaq",             "dunks violently",          "basketball backboard, shattered glass"), //  6
+    p("Dr J",             "dunks violently",          "basketball backboard, shattered glass"), //  6
     p("Q",                "stops the Enterprise",     "weird regal robe"),                  //  7
-    p("V",                "puts on",                  "mask"),                              //  8
+    p("V",                "puts on its face",                  "mask"),                              //  8
     p("Apu",              "thanks you for coming",    "squishee"),                          //  9
     p("Dizzy Gillespie",  "blows",                    "trumpet"),                           // 10
     p("Data",             "calculates",               "circuit board"),                     // 11
@@ -21,7 +21,7 @@ export const PAO_PEGS = [
     p("Tchaikovsky",      "conducts",                 "cannon"),                            // 16
     p("Tim Cook",         "unveils",                  "iPhone"),                            // 17
     p("Dave Grohl",       "drums",                    "drumsticks"),                        // 18
-    p("David Bowie",      "wears",                    "lightning bolt"),                    // 19
+    p("David Bowie",      "floats away",                    "lightning bolt"),                    // 19
     p("Nancy Sinatra",    "stomps",                   "boots"),                             // 20
     p("Nikola Tesla",     "zaps",                     "coil"),                              // 21
     p("Nino Bravo",       "closes the door",          "stone"),                             // 22
