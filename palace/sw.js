@@ -1,11 +1,12 @@
 // Generated with get_cache.go — run `go run get_cache.go` to regenerate.
-const CACHE_NAME = "palace-v0.3.1";
+const CACHE_NAME = "palace-v0.3.2";
 const CACHE_FILES = [
   './css/style.css',
   './icon.png',
   './fonts/phosphor/Phosphor-Light.woff2',
   './fonts/phosphor/phosphor.css',
   './index.html',
+  './loci-editor.html',
   './js/app.js',
   './js/data.js',
   './js/radar.js',
