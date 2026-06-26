@@ -41,10 +41,10 @@ export const PAO_PEGS = [
     p("Michael Jordan",   "soars",                    "sneakers"),                          // 36
     p("Michael Caine",    "fidgets",                  "stress balls"),                      // 37
     p("Morgan Freeman",   "narrates",                 "globe"),                             // 38
-    p("Moby",             "shaves",                   "head"),                              // 39
+    p("Mary Poppins",             "flies",                   "umbrella"),                              // 39
     p("Roz (Frasier)",    "answers",                  "phone"),                             // 40
     p("Rudy Fernández",   "alley-oop",                "number 5 Club Joventut shirt"),      // 41
-    p("Richard Nixon",    "frowns",                   "head jar from Futurama"),            // 42
+    p("Ron (Swanson)",    "frowns",                   "meat"),            // 42
     p("Rambo",            "fires",                    "machine gun"),                       // 43
     p("Rory",             "talks fast",               "coffee cup"),                        // 44
     p("Ralph Wiggum",     "rolls",                    "banana"),                            // 45
