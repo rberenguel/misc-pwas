@@ -102,9 +102,17 @@
         .palace-item.exported .p-name    { color: #3a3a3a; }
         .palace-item.active .p-name      { color: #888; }
 
+        .p-count {
+            font-size: 11px;
+            color: #555;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+        .palace-item.active .p-count { color: #888; }
+
         .p-badge {
             font-size: 11px;
-            margin-left: auto;
+            margin-left: 6px;
             padding: 1px 5px;
             border-radius: 3px;
             flex-shrink: 0;
@@ -266,6 +274,7 @@
     </div>
     <div class="header-buttons">
         <button class="action" id="btn-export" onclick="exportCSV()" disabled>Export</button>
+        <button class="action" id="btn-export-md" onclick="exportMarkdown()" disabled>MD</button>
         <button class="action" id="btn-clear" onclick="clearCurrent()" disabled>Clear</button>
         <label class="action">
             Load
@@ -324,6 +333,7 @@ function applyPalaces(palaces) {
     if (palaces.length === 0) { alert('No palaces found — check file format.'); return; }
     PALACES = palaces;
     document.getElementById('btn-export').disabled = false;
+    document.getElementById('btn-export-md').disabled = false;
     activeLetter = null;
     renderSidebar();
     document.getElementById('editor').innerHTML = '<div class="no-selection">Select a palace →</div>';
@@ -362,11 +372,13 @@ function renderSidebar() {
         const badge = cls === 'finished' ? '<span class="p-badge">done</span>'
                     : cls === 'exported' ? '<span class="p-badge">exported</span>'
                     : '';
+        const count = loadData(p.letter).length;
+        const countBadge = count > 0 ? `<span class="p-count">${count}</span>` : '';
         return `<div class="palace-item ${cls}${isActive ? ' active' : ''}"
                      onclick="selectPalace('${p.letter}')">
             <span class="p-letter">${p.letter}</span>
             <span class="p-name">${p.name}</span>
-            ${badge}
+            ${countBadge}${badge}
         </div>`;
     }).join('');
 }
@@ -522,22 +534,30 @@ function generateCards(letter, data) {
         const curr = data[i];
         const next = data[i + 1];
         const front = `${letter}: After ${curr.room} — ${curr.item}?`;
-        const back = next.position ? `${next.position}, ${next.item}` : next.item;
+        const roomChange = curr.room !== next.room;
+        const pos = next.position ? `${next.position}, ` : '';
+        const back = roomChange ? `${next.room} — ${pos}${next.item}` : (next.position ? `${next.position}, ${next.item}` : next.item);
         cards.push(`${esc(front)},${esc(back)}`);
     }
     if (data.length > 0) {
         const last = data[data.length - 1];
         const front = `${letter}: After ${last.room} — ${last.item}?`;
-        cards.push(`${esc(front)},${esc('Next room')}`);
+        cards.push(`${esc(front)},${esc(`End of ${letter}`)}`);
     }
     return cards;
 }
 
 function exportCSV() {
-    const toExport = PALACES.filter(p => getStatus(p.letter) === 'finished');
+    let toExport = PALACES.filter(p => getStatus(p.letter) === 'finished');
     if (toExport.length === 0) {
-        alert('No finished (non-exported) palaces to export.');
-        return;
+        const nonEmpty = PALACES.filter(p => loadData(p.letter).length > 0);
+        const allExported = nonEmpty.length > 0 && nonEmpty.every(p => getStatus(p.letter) === 'exported');
+        if (allExported) {
+            toExport = nonEmpty;
+        } else {
+            alert('No finished (non-exported) palaces to export.');
+            return;
+        }
     }
     const rows = [];
     for (const p of toExport) {
@@ -551,6 +571,34 @@ function exportCSV() {
     for (const p of toExport) setStatus(p.letter, 'exported');
     renderSidebar();
     if (activeLetter && toExport.find(p => p.letter === activeLetter)) renderEditor();
+}
+
+// ── Markdown export ──
+
+function exportMarkdown() {
+    const lines = [];
+    for (const p of PALACES) {
+        const data = loadData(p.letter);
+        if (data.length === 0) continue;
+        lines.push(`## ${p.letter} — ${p.name}`);
+        lines.push('');
+        let currentRoom = null;
+        for (const locus of data) {
+            if (locus.room !== currentRoom) {
+                currentRoom = locus.room;
+                lines.push(`- **${currentRoom}**`);
+            }
+            const pos = locus.position ? `${locus.position}: ` : '';
+            lines.push(`  - ${pos}${locus.item}`);
+        }
+        lines.push('');
+    }
+    if (lines.length === 0) { alert('No loci entered yet.'); return; }
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'palace-loci.md';
+    a.click();
 }
 
 // ── Clear ──
