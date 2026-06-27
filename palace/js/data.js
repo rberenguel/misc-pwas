@@ -92,7 +92,7 @@ export const PAO_PEGS = [
     p("Viggo (Aragorn)",  "screams For Frodo",        "orc horde"),                         // 87
     p("Johnny Five",      "reads",                    "book"),                              // 88
     p("Vincent Price",    "cackles",                  "cape"),                              // 89
-    p("Buzz Lightyear",   "flies",                    "wings"),                             // 90
+    p("Buzz Aldrin",   "steps on",                    "flag"),                             // 90
     p("Peter Pan",        "sprinkles",                "fairy dust"),                        // 91
     p("Mr. Bean",         "hides",                    "steak tartare"),                     // 92
     p("Pam (The Office)", "doodles",                  "post-it"),                           // 93

@@ -1,5 +1,5 @@
 // Generated with get_cache.go — run `go run get_cache.go` to regenerate.
-const CACHE_NAME = "palace-v0.3.3";
+const CACHE_NAME = "palace-v0.3.4";
 const CACHE_FILES = [
   './css/style.css',
   './icon.png',
