@@ -6,7 +6,7 @@ export const PAO_PEGS = [
     p("Mr T",             "fall asleep",              "black and red van"),                 //  1
     p("Neo",              "dodges",                   "bullet"),                            //  2
     p("Moe",              "pours",                    "beer"),                              //  3
-    p("Ray",              "plays",                    "piano"),                             //  4
+    p("Roy",              "rained on",                    "dove"),                             //  4
     p("Eugenio",          "standup comedy",           "owl joke"),                          //  5
     p("Dr J",             "dunks violently",          "basketball backboard, shattered glass"), //  6
     p("Q",                "stops the Enterprise",     "weird regal robe"),                  //  7
@@ -73,7 +73,7 @@ export const PAO_PEGS = [
     p("JFK",              "waves",                    "sniper rifle"),                      // 68
     p("Jabba",            "oozes",                    "pizza"),                             // 69
     p("Gus",              "straightens",              "tie"),                               // 70
-    p("George Takei",     "steers",                   "helm"),                              // 71
+    p("Godzilla",     "demolishes",                   "Tokyo scale model"),                              // 71
     p("Commander Keen",   "jumps",                    "pogo stick"),                        // 72
     p("Groucho Marx",     "wiggles",                  "cigar"),                             // 73
     p("Gordon Ramsay",    "shouts angrily",           "white chef dress"),                  // 74
