@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>img</title>
+  <title>Virar</title>
+  <link rel="icon" href="favicon.ico">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#000000">
   <style>
@@ -146,7 +147,7 @@
 <body>
 
 <header>
-  <h1>img</h1>
+  <h1>Virar</h1>
   <div class="hbtns">
     <button class="btn btn-split" id="btn-split">Split</button>
     <button class="btn btn-reset" id="btn-reset">Defaults</button>
@@ -264,6 +265,31 @@
 </div><!-- /controls -->
 
 <input type="file" id="file-input" accept="image/*" style="display:none">
+<div id="update-banner" hidden style="position:fixed;bottom:0;left:0;right:0;background:#222;color:#ccc;text-align:center;padding:.5rem;font-size:.85rem;z-index:999">
+  Update available — <a href="#" id="update-link" style="color:#fff">reload</a>
+</div>
 <script type="module" src="js/ui.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => {
+        reg.addEventListener('updatefound', () => {
+          const w = reg.installing;
+          if (!w) return;
+          w.addEventListener('statechange', () => {
+            if (w.state === 'activated' && navigator.serviceWorker.controller)
+              document.getElementById('update-banner').hidden = false;
+          });
+        });
+      })
+      .catch(err => console.error('SW registration failed:', err));
+  });
+  document.getElementById('update-link').addEventListener('click', e => {
+    e.preventDefault();
+    window.location.reload();
+  });
+}
+</script>
 </body>
 </html>

@@ -211,14 +211,22 @@ document.getElementById('btn-seed-add').addEventListener('click',()=>{enterPickM
 document.getElementById('btn-open').addEventListener('click',()=>document.getElementById('file-input').click());
 document.getElementById('file-input').addEventListener('change',e=>{if(e.target.files[0])loadImage(e.target.files[0]);});
 
-document.getElementById('btn-save').addEventListener('click',()=>{
+document.getElementById('btn-save').addEventListener('click',async()=>{
   if(!lastDst)return;
   const toSave=postDst||lastDst;
   const tmp=document.createElement('canvas');tmp.width=procW;tmp.height=procH;
   tmp.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(toSave),procW,procH),0,0);
-  tmp.toBlob(blob=>{
-    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='img-out.png';a.click();
-    setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  tmp.toBlob(async blob=>{
+    const fname=`img-${Date.now()}.png`;
+    const file=new File([blob],fname,{type:'image/png'});
+    try{
+      if(navigator.share&&navigator.canShare({files:[file]})){
+        await navigator.share({files:[file],title:'img'});
+      }else{
+        const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click();
+        setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+      }
+    }catch(err){if(err.name!=='AbortError')console.error('Share/download failed:',err);}
   },'image/png');
 });
 
