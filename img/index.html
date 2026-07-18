@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>img</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#000000">
+  <style>
+    :root {
+      --base03:#000000;--base02:#111111;--base01:#444444;
+      --base00:#666666;--base0:#999999;--base1:#bbbbbb;
+      --yellow:#b58900;--orange:#cb4b16;--blue:#268bd2;
+      --cyan:#2aa198;--green:#859900;--violet:#6c71c4;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+      background:var(--base03);color:var(--base0);
+      height:100dvh;display:flex;flex-direction:column;overflow:hidden;
+    }
+    header{
+      background:var(--base02);padding:0.45rem 0.7rem;
+      display:flex;align-items:center;justify-content:space-between;
+      border-bottom:1px solid var(--base01);flex-shrink:0;gap:0.4rem;
+    }
+    h1{font-size:0.85rem;font-weight:700;color:var(--base1);letter-spacing:.06em;white-space:nowrap;}
+    .hbtns{display:flex;gap:0.35rem;flex-wrap:wrap;}
+    .btn{
+      font-size:0.68rem;padding:0.3rem 0.6rem;cursor:pointer;
+      border:none;border-radius:3px;font-weight:700;
+      text-transform:uppercase;letter-spacing:.04em;color:#fff;transition:background .15s;
+      min-height:32px;
+    }
+    .btn-open{background:var(--blue);}.btn-open:hover{background:var(--cyan);}
+    .btn-save{background:var(--green);}.btn-save:hover{background:var(--cyan);}
+    .btn-reset{background:var(--base01);}.btn-reset:hover{background:var(--base00);}
+    .btn-fit{background:var(--cyan);color:var(--base03);}.btn-fit:hover{background:var(--blue);color:#fff;}
+    .btn-dice{background:var(--violet);}.btn-dice:hover{background:var(--blue);}
+    .btn-split{background:var(--base01);}.btn-split.on{background:var(--orange);}
+    .btn-split:hover{background:var(--base00);}
+
+    /* Canvas area */
+    #canvas-area{
+      flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
+      background:var(--base03);position:relative;overflow:hidden;
+    }
+    #canvas-area.drag-over{background:var(--base02);outline:2px dashed var(--cyan);outline-offset:-4px;}
+    #canvas-main{max-width:100%;max-height:100%;display:none;touch-action:none;}
+    #drop-hint{
+      color:var(--base01);text-align:center;pointer-events:none;
+      font-size:0.95rem;line-height:2;
+    }
+    #drop-hint small{font-size:.72rem;opacity:.7;}
+    #overlay{
+      position:absolute;inset:0;background:rgba(0,43,54,.85);
+      align-items:center;justify-content:center;
+      color:var(--cyan);font-size:.85rem;display:none;pointer-events:none;
+      text-align:center;padding:1rem;white-space:pre-line;
+    }
+    #proc-dot{
+      position:absolute;top:6px;right:8px;width:8px;height:8px;
+      border-radius:50%;background:var(--yellow);display:none;
+    }
+    #proc-dot.on{display:block;animation:blink .7s infinite alternate;}
+    @keyframes blink{from{opacity:1}to{opacity:.2}}
+
+    /* Controls */
+    #controls{
+      background:var(--base02);border-top:1px solid var(--base01);
+      flex-shrink:0;display:flex;flex-direction:column;max-height:52vh;
+    }
+    /* Tab bar */
+    #tab-bar{
+      display:flex;background:var(--base03);border-bottom:1px solid var(--base01);
+      flex-shrink:0;overflow-x:auto;scrollbar-width:none;
+    }
+    #tab-bar::-webkit-scrollbar{display:none;}
+    .tab-btn{
+      flex:1;min-width:4rem;padding:0.55rem 0.4rem;
+      font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+      border:none;background:transparent;color:var(--base01);cursor:pointer;
+      border-bottom:2px solid transparent;transition:color .15s,border-color .15s;
+      white-space:nowrap;
+    }
+    .tab-btn.active{color:var(--cyan);border-bottom-color:var(--cyan);}
+    /* Tab content — grid-stack keeps height fixed to tallest pane */
+    #tab-content{flex:1;display:grid;overflow:hidden;}
+    .tab-pane{grid-area:1/1;padding:.7rem .75rem .9rem;overflow-y:auto;visibility:hidden;}
+    .tab-pane.active{visibility:visible;}
+
+    /* Slider rows — touch-friendly */
+    .sr{display:flex;align-items:center;gap:.45rem;margin-bottom:.45rem;}
+    .sl{color:var(--base00);min-width:5.5em;flex-shrink:0;font-size:.78rem;}
+    .sr input[type=range]{
+      flex:1;min-width:0;cursor:pointer;accent-color:var(--cyan);
+      height:4px;border-radius:2px;
+    }
+    .sv{
+      color:var(--base1);min-width:3.3em;text-align:right;
+      font-variant-numeric:tabular-nums;font-size:.72rem;
+    }
+    @media(pointer:coarse){
+      .sr{margin-bottom:.6rem;}
+      .sl{font-size:.85rem;}
+      .sr input[type=range]{height:6px;}
+      .sv{font-size:.8rem;}
+    }
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:0 .9rem;}
+    .three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 .6rem;}
+    .col-head{font-size:.65rem;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.3rem;}
+    .col-head.v{color:var(--violet);}
+    .col-head.y{color:var(--yellow);}
+    .fit-row{margin:.3rem 0 .5rem;}
+    .subsec-title{
+      font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;
+      color:var(--base1);border-bottom:1px solid var(--base01);
+      padding-bottom:.2rem;margin:.6rem 0 .4rem;
+    }
+    .subsec-title:first-child{margin-top:0;}
+    select.sel{
+      background:var(--base03);color:var(--base0);border:1px solid var(--base01);
+      border-radius:3px;padding:.3rem .5rem;font-size:.75rem;cursor:pointer;
+      width:100%;margin-bottom:.4rem;
+    }
+    .radio-row{display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:.4rem;}
+    .radio-row label{
+      display:flex;align-items:center;gap:.25rem;
+      font-size:.75rem;color:var(--base0);cursor:pointer;
+    }
+    .radio-row label input{accent-color:var(--cyan);}
+    .seed-row{display:flex;gap:.35rem;flex-wrap:wrap;align-items:center;margin-bottom:.4rem;}
+    .seed-swatch{position:relative;width:1.9rem;height:1.9rem;}
+    .seed-swatch input[type=color]{width:100%;height:100%;border:none;padding:0;cursor:pointer;border-radius:3px;background:none;}
+    .seed-swatch .rm{
+      position:absolute;top:-5px;right:-5px;background:var(--base01);color:var(--base1);
+      border:none;border-radius:50%;width:14px;height:14px;font-size:10px;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;line-height:1;padding:0;
+    }
+    .btn-seed{background:var(--base01);font-size:.62rem;padding:.2rem .45rem;min-height:0;margin-bottom:.4rem;}
+    .btn-seed:hover{background:var(--base00);}
+    .btn-seed.on{background:var(--orange);}
+    #canvas-main.picking{cursor:crosshair!important;}
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>img</h1>
+  <div class="hbtns">
+    <button class="btn btn-split" id="btn-split">Split</button>
+    <button class="btn btn-reset" id="btn-reset">Defaults</button>
+    <button class="btn btn-dice" id="btn-dice">Dice</button>
+    <button class="btn btn-open" id="btn-open">Open</button>
+    <button class="btn btn-save" id="btn-save">Save</button>
+  </div>
+</header>
+
+<div id="canvas-area">
+  <div id="drop-hint">Drop an image here or click Open<br><small>JPEG, PNG, WebP — convert HEIC in Safari</small></div>
+  <canvas id="canvas-main"></canvas>
+  <div id="overlay"></div>
+  <div id="proc-dot"></div>
+</div>
+
+<div id="controls">
+  <div id="tab-bar">
+    <button class="tab-btn active" data-tab="luma">Luma</button>
+    <button class="tab-btn" data-tab="chroma">Chroma</button>
+    <button class="tab-btn" data-tab="zones">Zones</button>
+    <button class="tab-btn" data-tab="fx">FX</button>
+    <button class="tab-btn" data-tab="output">Output</button>
+  </div>
+  <div id="tab-content">
+
+    <!-- LUMA TAB -->
+    <div class="tab-pane active" id="tab-luma">
+      <div class="sr"><span class="sl">cap</span><input type="range" id="capL" min="0" max="1" step=".005" value="1"><span class="sv" id="v-capL">1.000</span></div>
+      <div class="sr"><span class="sl">toe</span><input type="range" id="tL" min=".01" max="1.37" step=".005" value=".7854"><span class="sv" id="v-tL">0.785</span></div>
+      <div class="sr"><span class="sl">shoulder</span><input type="range" id="sL" min=".20" max="1.56" step=".005" value=".7854"><span class="sv" id="v-sL">0.785</span></div>
+      <div class="sr"><span class="sl">balance</span><input type="range" id="cL" min=".01" max=".99" step=".005" value=".5"><span class="sv" id="v-cL">0.500</span></div>
+      <div class="sr"><span class="sl">gamma</span><input type="range" id="gL" min=".10" max="1.25" step=".005" value=".7854"><span class="sv" id="v-gL">0.785</span></div>
+      <div class="sr"><span class="sl">black</span><input type="range" id="blackL" min="-.2" max="1.0" step=".005" value="0"><span class="sv" id="v-blackL">0.000</span></div>
+      <div class="sr"><span class="sl">white</span><input type="range" id="whiteL" min="-1.0" max=".2" step=".005" value="0"><span class="sv" id="v-whiteL">0.000</span></div>
+      <div class="fit-row"><button class="btn btn-fit" id="btn-fitL">Auto-fit L</button></div>
+    </div>
+
+    <!-- CHROMA TAB -->
+    <div class="tab-pane" id="tab-chroma">
+      <div class="sr"><span class="sl">cap</span><input type="range" id="capC" min="0" max="1" step=".005" value="1"><span class="sv" id="v-capC">1.000</span></div>
+      <div class="sr"><span class="sl">toe</span><input type="range" id="tC" min=".01" max="1.37" step=".005" value=".7854"><span class="sv" id="v-tC">0.785</span></div>
+      <div class="sr"><span class="sl">shoulder</span><input type="range" id="sC" min=".20" max="1.56" step=".005" value=".7854"><span class="sv" id="v-sC">0.785</span></div>
+      <div class="sr"><span class="sl">balance</span><input type="range" id="cC" min=".01" max=".99" step=".005" value=".5"><span class="sv" id="v-cC">0.500</span></div>
+      <div class="sr"><span class="sl">gamma</span><input type="range" id="gC" min=".10" max="1.25" step=".005" value=".7854"><span class="sv" id="v-gC">0.785</span></div>
+      <div class="sr"><span class="sl">black</span><input type="range" id="blackC" min="-.2" max="1.0" step=".005" value="0"><span class="sv" id="v-blackC">0.000</span></div>
+      <div class="sr"><span class="sl">white</span><input type="range" id="whiteC" min="-1.0" max=".2" step=".005" value="0"><span class="sv" id="v-whiteC">0.000</span></div>
+      <div class="fit-row"><button class="btn btn-fit" id="btn-fitC">Auto-fit C</button></div>
+    </div>
+
+    <!-- ZONES TAB -->
+    <div class="tab-pane" id="tab-zones">
+      <div class="three-col">
+        <div>
+          <div class="col-head">Shadows</div>
+          <div class="sr"><span class="sl">angle°</span><input type="range" id="shAngle" min="0" max="360" step="1" value="0"><span class="sv" id="v-shAngle">0</span></div>
+          <div class="sr"><span class="sl">str</span><input type="range" id="shStr" min="0" max=".25" step=".002" value="0"><span class="sv" id="v-shStr">0.000</span></div>
+        </div>
+        <div>
+          <div class="col-head v">Midtones</div>
+          <div class="sr"><span class="sl">angle°</span><input type="range" id="midAngle" min="0" max="360" step="1" value="0"><span class="sv" id="v-midAngle">0</span></div>
+          <div class="sr"><span class="sl">str</span><input type="range" id="midStr" min="0" max=".25" step=".002" value="0"><span class="sv" id="v-midStr">0.000</span></div>
+        </div>
+        <div>
+          <div class="col-head y">Highlights</div>
+          <div class="sr"><span class="sl">angle°</span><input type="range" id="hiAngle" min="0" max="360" step="1" value="0"><span class="sv" id="v-hiAngle">0</span></div>
+          <div class="sr"><span class="sl">str</span><input type="range" id="hiStr" min="0" max=".25" step=".002" value="0"><span class="sv" id="v-hiStr">0.000</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FX TAB -->
+    <div class="tab-pane" id="tab-fx">
+      <div class="subsec-title">Grain</div>
+      <div class="sr"><span class="sl">amount</span><input type="range" id="grainAmt" min="0" max=".06" step=".001" value="0"><span class="sv" id="v-grainAmt">0.000</span></div>
+      <div class="subsec-title">Vignette</div>
+      <div class="sr"><span class="sl">amount</span><input type="range" id="vigAmt" min="0" max="4" step=".05" value="0"><span class="sv" id="v-vigAmt">0.00</span></div>
+      <div class="sr"><span class="sl">falloff</span><input type="range" id="vigFall" min=".5" max="4" step=".05" value="2"><span class="sv" id="v-vigFall">2.00</span></div>
+    </div>
+
+    <!-- OUTPUT TAB -->
+    <div class="tab-pane" id="tab-output">
+      <div class="subsec-title">Mode</div>
+      <div class="radio-row">
+        <label><input type="radio" name="outmode" value="none" checked> None</label>
+        <label><input type="radio" name="outmode" value="dither"> B&amp;W Dither</label>
+        <label><input type="radio" name="outmode" value="quantize"> Quantize</label>
+      </div>
+      <div id="out-dither" hidden>
+        <div class="subsec-title">Algorithm</div>
+        <select class="sel" id="dither-algo">
+          <option value="floyd">Floyd-Steinberg</option>
+          <option value="atkinson">Atkinson</option>
+          <option value="bayer">Bayer 4×4</option>
+          <option value="bluenoise">Blue noise</option>
+          <option value="threshold">Threshold</option>
+        </select>
+      </div>
+      <div id="out-quantize" hidden>
+        <div class="subsec-title">Colors</div>
+        <div class="sr"><span class="sl">count</span><input type="range" id="qColors" min="2" max="16" step="1" value="8"><span class="sv" id="v-qColors">8</span></div>
+        <div class="subsec-title">Dither</div>
+        <div class="radio-row">
+          <label><input type="radio" name="qdither" value="none" checked> None</label>
+          <label><input type="radio" name="qdither" value="bayer"> Bayer</label>
+          <label><input type="radio" name="qdither" value="floyd"> Floyd</label>
+        </div>
+        <div class="subsec-title">Seed colors</div>
+        <div id="seed-row" class="seed-row"></div>
+        <button id="btn-seed-add" class="btn btn-seed">+ Color</button>
+      </div>
+    </div>
+
+  </div><!-- /tab-content -->
+</div><!-- /controls -->
+
+<input type="file" id="file-input" accept="image/*" style="display:none">
+<script type="module" src="js/ui.js"></script>
+</body>
+</html>
