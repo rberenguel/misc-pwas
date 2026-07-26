@@ -21,7 +21,7 @@ export const PAO_PEGS = [
     p("Tchaikovsky",      "conducts",                 "cannon"),                            // 16
     p("Tim Cook",         "unveils",                  "iPhone"),                            // 17
     p("Dave Grohl",       "drums",                    "drumsticks"),                        // 18
-    p("David Bowie",      "floats away",                    "lightning bolt"),                    // 19
+    p("David Bowie",      "floats away",                    "tin can"),                    // 19
     p("Nancy Sinatra",    "stomps",                   "boots"),                             // 20
     p("Nikola Tesla",     "zaps",                     "coil"),                              // 21
     p("Nino Bravo",       "closes the door",          "stone"),                             // 22
