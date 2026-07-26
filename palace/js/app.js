@@ -133,6 +133,13 @@ function renderMode1Card() {
 function revealMode1Card() {
     triggerHaptic();
     state.m1RevealTime = Date.now() - state.stepStartTime;
+    if (state.m1CurrentQType !== 'number') {
+        const show = el => { el.style.display = ''; };
+        show(document.getElementById('flashcard-row-p'));
+        show(document.getElementById('flashcard-row-a'));
+        show(document.getElementById('flashcard-row-o'));
+        show(document.getElementById('flashcard-hint'));
+    }
     document.getElementById('flashcard').classList.add('revealed');
     document.getElementById('mode1-controls').classList.add('active');
 }
