@@ -97,18 +97,18 @@ placeOnGrid(player, 0);
 
 // AI opponents
 const aiDefs = [
-    { start: 50,  color: 0xFF00FF, name: 'Magenta' },
-    { start: 150, color: 0x00FF00, name: 'Green'   },
-    { start: 300, color: 0xFF8000, name: 'Orange'  },
-    { start: 200, color: 0xFFFF00, name: 'Yellow'  },
-    { start: 250, color: 0x8000FF, name: 'Purple'  },
+    { color: 0xFF00FF, name: 'Magenta' },
+    { color: 0x00FF00, name: 'Green'   },
+    { color: 0xFF8000, name: 'Orange'  },
+    { color: 0xFFFF00, name: 'Yellow'  },
+    { color: 0x8000FF, name: 'Purple'  },
 ];
 
 const aiCars = [];
 const aiSprites = [];
 for (let i = 0; i < aiDefs.length; i++) {
     const def = aiDefs[i];
-    const ai = createWaypointAI(trackCenterline, def.start, def.color);
+    const ai = createWaypointAI(trackCenterline, def.color);
     placeOnGrid(ai, i + 1);
     const sprite = createCarSprite(def.color, false);
     world.addChild(sprite);
@@ -412,7 +412,7 @@ function advanceToNextTrack() {
         aiCars[i].prevPos = 0;
         aiCars[i]._trackIdx = 0;
         aiCars[i].vx = 0; aiCars[i].vy = 0;
-        aiCars[i].waypointIndex = aiDefs[i].start + 20;
+        aiCars[i]._steerInertia = 0;
     }
     player.lap = 0;
     player.prevPos = 0;

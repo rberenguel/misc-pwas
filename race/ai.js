@@ -2,24 +2,36 @@
 
 import { createCar, updateCarPhysics } from './car.js';
 
-export function createWaypointAI(trackCenterline, startIndex, color) {
-    const pt = trackCenterline[startIndex];
-    const next = trackCenterline[(startIndex + 1) % trackCenterline.length];
+export function createWaypointAI(trackCenterline, color) {
+    const pt = trackCenterline[0];
+    const next = trackCenterline[1];
     const tangent = Math.atan2(next.y - pt.y, next.x - pt.x);
     const ai = createCar(pt.x, pt.y, tangent + Math.PI / 2, color);
-    ai.waypointIndex = (startIndex + 20) % trackCenterline.length;
     ai.aiType = 'waypoint';
-    ai.maxSpeed = 10;
+    ai.maxSpeed = 9.5 + Math.random() * 1.0;   // 9.5–10.5: slight spread
     ai.acceleration = 0.45;
     ai.turnSpeed = 0.12;
-    ai.grip = 0.04;
+    ai.grip = 0.03 + Math.random() * 0.02;     // 0.03–0.05: low grip = more slide/skids
     ai._steerInertia = 0;
+    ai._lookAhead = 25 + Math.floor(Math.random() * 25); // 25–50 track points ahead
     return ai;
 }
 
 export function updateWaypointAI(ai, dt, trackCenterline) {
     const speed = Math.hypot(ai.vx, ai.vy);
-    const target = trackCenterline[ai.waypointIndex];
+
+    // Find nearest point on track to car's current position
+    let nearestIdx = 0, nearestDist = Infinity;
+    for (let i = 0; i < trackCenterline.length; i++) {
+        const d = Math.hypot(trackCenterline[i].x - ai.x, trackCenterline[i].y - ai.y);
+        if (d < nearestDist) { nearestDist = d; nearestIdx = i; }
+    }
+
+    // Speed-dependent lookahead: faster cars look further ahead (min 25 pts)
+    const dynamicLook = Math.max(ai._lookAhead, Math.floor(speed * 2.5));
+    const targetIdx = (nearestIdx + dynamicLook) % trackCenterline.length;
+    const target = trackCenterline[targetIdx];
+
     const dx = target.x - ai.x;
     const dy = target.y - ai.y;
     const dist = Math.hypot(dx, dy);
@@ -33,12 +45,12 @@ export function updateWaypointAI(ai, dt, trackCenterline) {
     const idealSteer = Math.abs(angleDiff) < 0.1 ? 0 : (angleDiff > 0 ? 1 : -1);
     ai._steerInertia += (idealSteer - ai._steerInertia) * 0.06;
     const steer = ai._steerInertia;
-    const gas = Math.abs(angleDiff) < Math.PI / 3 && dist > 50;
-    const brake = Math.abs(angleDiff) > Math.PI / 2 || (dist < 30 && speed > 3);
 
-    if (dist < 60) {
-        ai.waypointIndex = (ai.waypointIndex + 8) % trackCenterline.length;
-    }
+    // Stuck/backwards recovery: if nearly stopped and facing very wrong, floor it to spin around
+    const backward = Math.abs(angleDiff) > Math.PI * 0.7;
+    const stuck = speed < 1.5 && backward;
+    const gas = (!backward && Math.abs(angleDiff) < Math.PI / 3 && dist > 50) || stuck;
+    const brake = Math.abs(angleDiff) > Math.PI / 2 && !stuck;
 
     return { steer, gas, brake };
 }
