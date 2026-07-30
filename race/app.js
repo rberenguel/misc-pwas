@@ -14,6 +14,9 @@ const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: f
 window.addEventListener('keydown', (e) => { if (keys[e.code] !== undefined) keys[e.code] = true; });
 window.addEventListener('keyup', (e) => { if (keys[e.code] !== undefined) keys[e.code] = false; });
 
+// Parse URL hash for shared track BEFORE first rebuild
+const hashTrack = window.location.hash.match(/track=([A-Za-z0-9]+)/);
+
 window.addEventListener('hashchange', () => {
     const m = window.location.hash.match(/track=([A-Za-z0-9]+)/);
     if (m) {
@@ -147,7 +150,7 @@ function positionAllCars() {
     placeOnGrid(player, 5);
 }
 
-rebuildTrack(0.6);
+rebuildTrack(0.6, hashTrack ? hashTrack[1] : null);
 
 // --- 2. CARS ---
 startPt = trackCenterline[0];
