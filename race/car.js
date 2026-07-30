@@ -3,11 +3,13 @@
 export function createCar(x, y, rotation, color = 0x00FFFF) {
     return {
         x, y, vx: 0, vy: 0, rotation, z: 0, vz: 0,
-        acceleration: 0.45,
+        acceleration: 0.30,
         maxSpeed: 10,
-        turnSpeed: 0.12,
+        turnSpeed: 0.07,
         friction: 0.995,
         grip: 0.06,
+        offTrackGrip: 1.0,    // multiplies grass grip: >1 = better steering recovery
+        offTrackDecay: 0.965, // velocity decay on grass: closer to 1 = less speed loss
         color,
         sprite: null,
     };
@@ -29,10 +31,21 @@ export function updateCarPhysics(car, dt, steer, gas, brake, isOnTrackFn, arena)
 
     // Acceleration
     if (gas) {
-        car.vx += forwardX * car.acceleration * dt;
-        car.vy += forwardY * car.acceleration * dt;
+        let accel = car.acceleration;
+        // Player only: quadratic taper — the last ~1.0 speed is a crawl
+        if (car.isPlayer) {
+            const headroom = car.maxSpeed - speed;
+            const taper = headroom < 1.0 ? Math.max(0.08, headroom * headroom) : 1.0;
+            accel *= taper;
+        }
+        // Launch stiction: sluggish only from true standstill
+        const launch = speed < 0.3 ? 0.4 : 1.0;
+        car.vx += forwardX * accel * launch * dt;
+        car.vy += forwardY * accel * launch * dt;
     }
-    if (brake) {
+    // Brake only when moving forward — prevents backward creep at standstill
+    const fwdDot = car.vx * forwardX + car.vy * forwardY;
+    if (brake && fwdDot > 0) {
         car.vx -= forwardX * (car.acceleration * 0.5) * dt;
         car.vy -= forwardY * (car.acceleration * 0.5) * dt;
     }
@@ -42,7 +55,12 @@ export function updateCarPhysics(car, dt, steer, gas, brake, isOnTrackFn, arena)
         const idealVx = forwardX * speed;
         const idealVy = forwardY * speed;
         let surfaceGrip = car.grip * Math.max(0.15, 1 - speedFactor * 0.85);
-        if (!onTrack) surfaceGrip *= 0.2;
+        if (!onTrack) surfaceGrip *= 0.75 * car.offTrackGrip;
+        // Hard steering at speed = understeer/drift — player only, AI can't adapt to this
+        if (car.isPlayer) {
+            const steerFactor = Math.max(0.2, 1 - Math.abs(steer) * speedFactor);
+            surfaceGrip *= steerFactor;
+        }
         car.vx += (idealVx - car.vx) * surfaceGrip * dt;
         car.vy += (idealVy - car.vy) * surfaceGrip * dt;
     }
@@ -52,13 +70,14 @@ export function updateCarPhysics(car, dt, steer, gas, brake, isOnTrackFn, arena)
     car.vx *= Math.pow(surfaceFriction, dt);
     car.vy *= Math.pow(surfaceFriction, dt);
     if (!onTrack) {
-        car.vx *= 0.97;
-        car.vy *= 0.97;
+        car.vx *= car.offTrackDecay;
+        car.vy *= car.offTrackDecay;
     }
 
-    // Speed cap
-    if (speed > car.maxSpeed) {
-        const ratio = car.maxSpeed / speed;
+    // Speed cap (draft boost raises effective ceiling)
+    const effectiveMax = car.maxSpeed + (car._draftBoost || 0);
+    if (speed > effectiveMax) {
+        const ratio = effectiveMax / speed;
         car.vx *= ratio;
         car.vy *= ratio;
     }
