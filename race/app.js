@@ -1,58 +1,29 @@
 import { Application, Container, Graphics } from 'pixi.js';
 import GUI from 'lil-gui';
-
-/**
- * PLAN & ARCHITECTURE
- * 
- * 1. GAME LOOP & STATE
- *    - Setup PixiJS Application.
- *    - Maintain an active keys state object for input (Up, Down, Left, Right).
- *    - Bind a main update loop using PixiJS Ticker.
- * 
- * 2. THE KINEMATIC CAR ENTITY
- *    - Position: {x, y}
- *    - Velocity: {x, y} (The actual direction the car is moving)
- *    - Rotation: Float (The direction the car's nose is pointing)
- *    - Z-Axis: Float (Fake height for jumps)
- *    - Z-Velocity: Float (Upward momentum)
- * 
- * 3. PHYSICS PIPELINE (Executed per frame)
- *    - a. Input to Rotation: If Left/Right pressed, modify rotation (center-of-mass steering).
- *    - b. Input to Acceleration: If Up pressed, add thrust vector based on current rotation.
- *    - c. Slide Assist (The Drift Math): Interpolate the actual Velocity vector towards the 
- *         Car's Forward vector based on a "grip" coefficient. 
- *    - d. Friction/Drag: Multiply Velocity by a decay factor (e.g., 0.98) so it stops when coasting.
- *    - e. Update Position: Add Velocity to Position.
- *    - f. Fake 3D Suspension: Apply gravity to Z-Velocity. Add Z-Velocity to Z. Stop at Z=0.
- * 
- * 4. RENDERING & NEON VIBES
- *    - Use PixiJS 8 Graphics API.
- *    - Chain moveTo/lineTo, followed by stroke() at the end.
- *    - Apply glow filters (optional, for later).
- *    - Scale sprite based on Z height to fake jumps.
- */
+import { TRACK_WIDTH, TRACK_HALF, generateTrack, drawTrackPath, isOnTrack, getTrackProgress } from './track.js';
+import { createCar, updateCarPhysics } from './car.js';
+import { createCarSprite, updateCarSprite, initParticles, initSkids, updateCamera } from './renderer.js';
+import { createWaypointAI, updateWaypointAI, resolveCollisions } from './ai.js';
 
 // --- 1. SETUP ---
-
 const app = new Application();
-await app.init({ 
-    resizeTo: window,
-    backgroundColor: 0x050510, // Dark background for neon vibes
-    antialias: true 
-});
+await app.init({ resizeTo: window, backgroundColor: 0x050510, antialias: true });
 document.body.appendChild(app.canvas);
 
-// Input state
 const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
-window.addEventListener('keydown', (e) => { if(keys[e.code] !== undefined) keys[e.code] = true; });
-window.addEventListener('keyup', (e) => { if(keys[e.code] !== undefined) keys[e.code] = false; });
+window.addEventListener('keydown', (e) => { if (keys[e.code] !== undefined) keys[e.code] = true; });
+window.addEventListener('keyup', (e) => { if (keys[e.code] !== undefined) keys[e.code] = false; });
 
-// --- ARENA ---
 const arena = { x: 0, y: 0, width: 4000, height: 4000 };
 
+const world = new Container();
+app.stage.addChild(world);
+
+// Arena visuals
 const arenaBorder = new Graphics()
     .rect(arena.x, arena.y, arena.width, arena.height)
     .stroke({ color: 0xFF00FF, width: 2, alpha: 0.15 });
+world.addChild(arenaBorder);
 
 const arenaGrid = new Graphics();
 for (let gx = arena.x + 100; gx < arena.x + arena.width; gx += 200) {
@@ -61,269 +32,396 @@ for (let gx = arena.x + 100; gx < arena.x + arena.width; gx += 200) {
         arenaGrid.fill({ color: 0x7777AA, alpha: 0.6 });
     }
 }
-
-const world = new Container();
-app.stage.addChild(world);
-world.addChild(arenaBorder);
 world.addChild(arenaGrid);
 
-// --- TRACK ---
-function traceTrack(g) {
-    const cx = 2000, cy = 2000;
-    const w = 1400, h = 1000;
-    const r = 300;
+// Skids layer
+const skids = initSkids();
 
-    g.moveTo(cx - w + r, cy - h);
-    g.lineTo(cx + w - r, cy - h);
-    g.arc(cx + w - r, cy - h + r, r, -Math.PI/2, 0);
-    g.lineTo(cx + w, cy + h - r);
-    g.arc(cx + w - r, cy + h - r, r, 0, Math.PI/2);
-    g.lineTo(cx - w + r, cy + h);
-    g.arc(cx - w + r, cy + h - r, r, Math.PI/2, Math.PI);
-    g.lineTo(cx - w, cy - h + r);
-    g.arc(cx - w + r, cy - h + r, r, Math.PI, -Math.PI/2, true);
-}
-
+// Track layers
 const trackSurf = new Graphics();
-traceTrack(trackSurf);
-trackSurf.stroke({ width: 150, color: 0x001122 });
-world.addChild(trackSurf);
-
 const trackGlow = new Graphics();
-traceTrack(trackGlow);
-trackGlow.stroke({ width: 154, color: 0x00FFFF, alpha: 0.15 });
-world.addChild(trackGlow);
-
 const trackLine = new Graphics();
-traceTrack(trackLine);
-trackLine.stroke({ width: 2, color: 0x00FFFF, alpha: 0.6 });
+world.addChild(trackSurf);
+world.addChild(trackGlow);
 world.addChild(trackLine);
+world.addChild(skids.graphics);
 
-// --- TRACK SURFACE CHECK ---
-function isOnTrack(x, y) {
-    const px = Math.abs(x - 2000);
-    const py = Math.abs(y - 2000);
-    const dx = Math.max(px - 1100, 0);   // core rect half-width
-    const dy = Math.max(py - 700, 0);    // core rect half-height
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    // track is a 150px-wide band around the rounded-rect centerline
-    return dist <= 375 && dist >= 225;
+let trackCenterline = [];
+let trackSpikiness = 0;
+
+function rebuildTrack(difficulty) {
+    const data = generateTrack(difficulty);
+    trackCenterline = data.points;
+    trackSpikiness = data.spikiness;
+    trackSurf.clear();
+    trackGlow.clear();
+    trackLine.clear();
+    drawTrackPath(trackSurf, trackCenterline, TRACK_WIDTH, 0x001122);
+    drawTrackPath(trackGlow, trackCenterline, TRACK_WIDTH + 4, 0x00FFFF, 0.15);
+    drawTrackPath(trackLine, trackCenterline, 2, 0x00FFFF, 0.6);
+    skids.clear();
 }
 
-// --- DRIFT PARTICLES (inspired by destrier fireworks overlay) ---
-const particleCanvas = document.createElement('canvas');
-particleCanvas.style.position = 'absolute';
-particleCanvas.style.top = '0';
-particleCanvas.style.left = '0';
-particleCanvas.style.pointerEvents = 'none';
-particleCanvas.style.zIndex = '10';
-document.body.appendChild(particleCanvas);
-const pCtx = particleCanvas.getContext('2d');
+rebuildTrack(0.6);
 
-function resizeParticles() {
-    const dpr = window.devicePixelRatio;
-    particleCanvas.width = window.innerWidth * dpr;
-    particleCanvas.height = window.innerHeight * dpr;
-    particleCanvas.style.width = window.innerWidth + 'px';
-    particleCanvas.style.height = window.innerHeight + 'px';
-}
-resizeParticles();
-window.addEventListener('resize', resizeParticles);
+// --- 2. CARS ---
+const startPt = trackCenterline[0];
+const nextPt = trackCenterline[1];
+const tangent = Math.atan2(nextPt.y - startPt.y, nextPt.x - startPt.x);
 
-let driftParticles = [];
+const player = createCar(startPt.x, startPt.y, tangent + Math.PI / 2, 0x00FFFF);
+player.invertControls = true;
+player.trackDifficulty = 0.6;
+player.isPlayer = true;
 
-function emitDriftParticle(wx, wy, carVx, carVy) {
-    const angle = Math.atan2(carVy, carVx) + Math.PI + (Math.random() - 0.5) * 1.5;
-    const spd = 1 + Math.random() * 3;
-    const colors = [
-        '255,255,255,',   // white spark
-        '0,255,255,',     // cyan
-        '255,0,255,',     // magenta
-        '255,120,0,',     // orange fire
-    ];
-    driftParticles.push({
-        wx, wy,
-        vx: Math.cos(angle) * spd,
-        vy: Math.sin(angle) * spd,
-        alpha: 0.6 + Math.random() * 0.4,
-        decay: 0.02 + Math.random() * 0.03,
-        radius: 1 + Math.random() * 3,
-        color: colors[Math.floor(Math.random() * colors.length)],
-    });
+const playerSprite = createCarSprite(0x00FFFF, true);
+world.addChild(playerSprite);
+player.sprite = playerSprite;
+
+// --- STARTING GRID ---
+const perpAngle = tangent + Math.PI / 2;
+const perpX = Math.cos(perpAngle);
+const perpY = Math.sin(perpAngle);
+const backX = -Math.cos(tangent);
+const backY = -Math.sin(tangent);
+
+function placeOnGrid(car, index) {
+    const row = Math.floor(index / 2);
+    const side = (index % 2 === 0) ? -1 : 1;
+    car.x = startPt.x + perpX * side * 35 + backX * row * 50;
+    car.y = startPt.y + perpY * side * 35 + backY * row * 50;
+    car.rotation = tangent + Math.PI / 2;
 }
 
-function drawDriftParticles(ctx, canvas, camX, camY) {
-    const dpr = window.devicePixelRatio;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (let i = driftParticles.length - 1; i >= 0; i--) {
-        const p = driftParticles[i];
-        p.wx += p.vx;
-        p.wy += p.vy;
-        p.vx *= 0.94;
-        p.vy *= 0.94;
-        p.alpha -= p.decay;
-        if (p.alpha <= 0) {
-            driftParticles.splice(i, 1);
-            continue;
-        }
-        const sx = (p.wx + camX) * dpr;
-        const sy = (p.wy + camY) * dpr;
-        ctx.beginPath();
-        ctx.arc(sx, sy, p.radius * dpr, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${p.color} ${p.alpha})`;
-        ctx.fill();
+placeOnGrid(player, 0);
+
+// AI opponents
+const aiDefs = [
+    { start: 50,  color: 0xFF00FF, name: 'Magenta' },
+    { start: 150, color: 0x00FF00, name: 'Green'   },
+    { start: 300, color: 0xFF8000, name: 'Orange'  },
+    { start: 200, color: 0xFFFF00, name: 'Yellow'  },
+    { start: 250, color: 0x8000FF, name: 'Purple'  },
+];
+
+const aiCars = [];
+const aiSprites = [];
+for (let i = 0; i < aiDefs.length; i++) {
+    const def = aiDefs[i];
+    const ai = createWaypointAI(trackCenterline, def.start, def.color);
+    placeOnGrid(ai, i + 1);
+    const sprite = createCarSprite(def.color, false);
+    world.addChild(sprite);
+    ai.sprite = sprite;
+    ai.def = def;
+    ai.lap = 0;
+    ai.prevPos = 0;
+    ai._trackIdx = 0;
+    aiCars.push(ai);
+    aiSprites.push(sprite);
+}
+
+player.lap = 0;
+player.prevPos = 0;
+player._trackIdx = 0;
+player._hasPassedMidtrack = true; // player starts at front of grid, already "past" start
+for (const ai of aiCars) { ai.prevPos = 0; ai._trackIdx = 0; ai._hasPassedMidtrack = false; }
+
+// --- START-FINISH LINE ---
+const finishLine = new Graphics();
+finishLine.moveTo(startPt.x - perpX * TRACK_HALF, startPt.y - perpY * TRACK_HALF);
+finishLine.lineTo(startPt.x + perpX * TRACK_HALF, startPt.y + perpY * TRACK_HALF);
+finishLine.stroke({ width: 3, color: 0xFFFFFF, alpha: 0.7 });
+world.addChild(finishLine);
+
+// --- LAP UI ---
+const lapDiv = document.createElement('div');
+lapDiv.style.position = 'absolute';
+lapDiv.style.top = '10px';
+lapDiv.style.left = '10px';
+lapDiv.style.color = '#00FFFF';
+lapDiv.style.fontFamily = 'monospace';
+lapDiv.style.fontSize = '18px';
+lapDiv.style.zIndex = '1000';
+lapDiv.style.pointerEvents = 'none';
+document.body.appendChild(lapDiv);
+
+const allCars = [player, ...aiCars];
+let raceStarted = false;
+let raceFinished = false;
+let raceFrame = 0;
+let paused = false;
+const TOTAL_LAPS = 3;
+
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'Escape' || e.code === 'Space') {
+        paused = !paused;
+        e.preventDefault();
     }
+});
+
+// --- DEBUG PANEL ---
+const debugDiv = document.createElement('div');
+debugDiv.style.position = 'absolute';
+debugDiv.style.bottom = '10px';
+debugDiv.style.left = '10px';
+debugDiv.style.color = '#00FF00';
+debugDiv.style.background = 'rgba(0,0,0,0.9)';
+debugDiv.style.fontFamily = 'monospace';
+debugDiv.style.fontSize = '12px';
+debugDiv.style.zIndex = '99999';
+debugDiv.style.pointerEvents = 'none';
+debugDiv.style.padding = '8px';
+debugDiv.style.lineHeight = '1.4';
+document.body.appendChild(debugDiv);
+
+// --- POSITION LABELS ---
+const labelDivs = [];
+for (let i = 0; i < allCars.length; i++) {
+    const div = document.createElement('div');
+    div.style.position = 'absolute';
+    div.style.color = '#FFFFFF';
+    div.style.fontFamily = 'monospace';
+    div.style.fontSize = '14px';
+    div.style.fontWeight = 'bold';
+    div.style.textAlign = 'center';
+    div.style.width = '30px';
+    div.style.pointerEvents = 'none';
+    div.style.transition = 'opacity 1s';
+    div.style.opacity = '0';
+    div.textContent = String(i + 1);
+    document.body.appendChild(div);
+    labelDivs.push(div);
 }
 
-// --- 2. THE CAR ENTITY ---
+function showLabels() {
+    labelDivs.forEach(d => { d.style.opacity = '1'; });
+    setTimeout(() => {
+        labelDivs.forEach(d => { d.style.opacity = '0'; });
+    }, 4000);
+}
+showLabels();
 
-const car = {
-    x: 1500,
-    y: 1000,
-    vx: 0,
-    vy: 0,
-    rotation: Math.PI / 2, // Radians — facing right, aligned with the top straight
-    z: 0,
-    vz: 0,
-    
-    // Tuning parameters — Gene Rally style: savage, weight-shifting drift
-    acceleration: 0.45,
-    maxSpeed: 10,
-    turnSpeed: 0.10,
-    friction: 0.995,  // Momentum preserved — speed bleeds very slowly
-    grip: 0.06,       // Base lateral grip; drops with speed & off-track
-    invertControls: true  // true = Down accelerates, Up brakes (weird mode)
-};
+function getRaceProgress(car) {
+    return car.lap + car._trackIdx / 1000;
+}
 
-// Create the visual representation (Neon Triangle)
-const carSprite = new Graphics()
-    .moveTo(0, -15)  // Nose
-    .lineTo(10, 10)  // Right rear
-    .lineTo(-10, 10) // Left rear
-    .lineTo(0, -15)  // Close path
-    // PixiJS 8 requirement: stroke comes AFTER drawing primitives
-    .stroke({ color: 0x00FFFF, width: 2 });
+function getLeader() {
+    let best = -1, leader = player;
+    for (const c of allCars) {
+        const prog = getRaceProgress(c);
+        if (prog > best) { best = prog; leader = c; }
+    }
+    return leader;
+}
 
-// Center pivot for center-of-mass rotation
-carSprite.pivot.set(0, 0);
-carSprite.position.set(car.x, car.y);
-world.addChild(carSprite);
+function getColorName(hex) {
+    if (hex === 0x00FFFF) return 'Cyan';
+    if (hex === 0xFF00FF) return 'Magenta';
+    if (hex === 0x00FF00) return 'Green';
+    if (hex === 0xFF8000) return 'Orange';
+    if (hex === 0xFFFF00) return 'Yellow';
+    if (hex === 0x8000FF) return 'Purple';
+    return 'Unknown';
+}
 
-// --- LIVE TWEAKING UI ---
+// --- 3. OVERLAYS ---
+const particles = initParticles();
+
+// --- 4. GUI ---
 const gui = new GUI({ title: 'Physics Tuning' });
-gui.add(car, 'acceleration', 0.01, 2.0);
-gui.add(car, 'maxSpeed', 1, 40);
-gui.add(car, 'turnSpeed', 0.01, 0.5);
-gui.add(car, 'friction', 0.9, 0.999);
-gui.add(car, 'grip', 0.001, 1.0);
-gui.add(car, 'invertControls').name('Invert Controls');
+gui.add(player, 'acceleration', 0.01, 2.0);
+gui.add(player, 'maxSpeed', 1, 40);
+gui.add(player, 'turnSpeed', 0.01, 0.5);
+gui.add(player, 'friction', 0.9, 0.999);
+gui.add(player, 'grip', 0.001, 1.0);
+gui.add(player, 'invertControls').name('Invert Controls');
+gui.add(player, 'trackDifficulty', 0.1, 1.0).name('Track Difficulty').onChange(v => rebuildTrack(v));
 
-// --- 3. PHYSICS & GAME LOOP ---
-
+// --- 5. GAME LOOP ---
 app.ticker.add((ticker) => {
     const dt = ticker.deltaTime;
 
-    // Pre-compute speed & surface
-    const speed = Math.sqrt(car.vx * car.vx + car.vy * car.vy);
-    const speedFactor = Math.min(speed / car.maxSpeed, 1);
-    const onTrack = isOnTrack(car.x, car.y);
+    if (paused) return;
 
-    // A. Steering — speed-dependent (front wheels bite less at speed)
-    const effectiveTurnSpeed = car.turnSpeed * (1 - speedFactor * 0.5);
-    if (keys.ArrowLeft)  car.rotation -= effectiveTurnSpeed * dt;
-    if (keys.ArrowRight) car.rotation += effectiveTurnSpeed * dt;
-
-    // Forward vector
-    const forwardX = Math.cos(car.rotation - Math.PI / 2);
-    const forwardY = Math.sin(car.rotation - Math.PI / 2);
-
-    // B. Acceleration — full power always available (Gene Rally arcade style)
-    const gasKey  = car.invertControls ? keys.ArrowDown  : keys.ArrowUp;
-    const brakeKey = car.invertControls ? keys.ArrowUp    : keys.ArrowDown;
-    if (gasKey) {
-        car.vx += forwardX * car.acceleration * dt;
-        car.vy += forwardY * car.acceleration * dt;
+    // --- RACE START ---
+    const gas = player.invertControls ? keys.ArrowDown : keys.ArrowUp;
+    if (!raceStarted && gas) {
+        raceStarted = true;
+        raceFrame = 0;
+        showLabels();
     }
-    if (brakeKey) { // Braking / Reverse
-        car.vx -= forwardX * (car.acceleration * 0.5) * dt;
-        car.vy -= forwardY * (car.acceleration * 0.5) * dt;
-    }
+    if (raceStarted) raceFrame++;
 
-    // C. Slide Assist (Momentum Redirection) — Gene Rally style
-    // The velocity vector is slowly pulled toward the car's heading.
-    // This preserves total kinetic energy (no speed scrubbing), only changes direction.
-    // At high speed or off-track the redirection is very weak, so momentum carries sideways.
-    if (speed > 0.1) {
-        const idealVx = forwardX * speed;
-        const idealVy = forwardY * speed;
+    // --- PLAYER ---
+    const steer = (keys.ArrowLeft ? -1 : 0) + (keys.ArrowRight ? 1 : 0);
+    const brake = player.invertControls ? keys.ArrowUp : keys.ArrowDown;
+    const pState = updateCarPhysics(player, dt, steer, gas, brake,
+        (x, y) => isOnTrack(x, y, trackCenterline), arena);
 
-        // Grip drops off as speed builds: at maxSpeed effective grip is ~15% of base
-        let surfaceGrip = car.grip * Math.max(0.15, 1 - speedFactor * 0.85);
-        if (!onTrack) surfaceGrip *= 0.2; // Grass: even harder to redirect momentum
-
-        car.vx += (idealVx - car.vx) * surfaceGrip * dt;
-        car.vy += (idealVy - car.vy) * surfaceGrip * dt;
+    // --- AI ---
+    const aiStates = [];
+    for (const ai of aiCars) {
+        let aiInput, aiState;
+        if (raceStarted && ai.lap < TOTAL_LAPS) {
+            aiInput = updateWaypointAI(ai, dt, trackCenterline);
+            aiState = updateCarPhysics(ai, dt, aiInput.steer, aiInput.gas, aiInput.brake,
+                (x, y) => isOnTrack(x, y, trackCenterline), arena);
+        } else if (ai.lap >= TOTAL_LAPS) {
+            // Finished: hard brake to stop
+            aiState = updateCarPhysics(ai, dt, 0, false, true,
+                (x, y) => isOnTrack(x, y, trackCenterline), arena);
+        } else {
+            // Race not started: frozen, zero velocity
+            aiState = { speed: 0, speedFactor: 0, onTrack: true, forwardX: 0, forwardY: 1, dot: 0, cross: 0, slip: 0, turnSign: 0, movingForward: true };
+        }
+        aiStates.push(aiState);
+        updateCarSprite(ai.sprite, ai, aiState.slip, aiState.turnSign, aiState.movingForward);
     }
 
-    // D. Friction — track vs off-track
-    const surfaceFriction = onTrack ? car.friction : 0.98;
-    car.vx *= Math.pow(surfaceFriction, dt);
-    car.vy *= Math.pow(surfaceFriction, dt);
-
-    // Hard speed cap
-    if (speed > car.maxSpeed) {
-        const ratio = car.maxSpeed / speed;
-        car.vx *= ratio;
-        car.vy *= ratio;
+    // --- LAPS ---
+    // Gate lap counting for 2 seconds so cars clear the start zone and establish correct indices
+    if (raceStarted && raceFrame > 120) {
+        for (const c of allCars) {
+            const idx = Math.floor(getTrackProgress(c.x, c.y, trackCenterline) * 1000);
+            if (idx > 500) c._hasPassedMidtrack = true;
+            if (c._trackIdx !== undefined && c._trackIdx > 800 && idx < 200 && c.lap < TOTAL_LAPS && c._hasPassedMidtrack) {
+                c.lap++;
+                c._hasPassedMidtrack = false;
+            }
+            c._trackIdx = idx;
+        }
+        const leaderCar = getLeader();
+        const leaderName = getColorName(leaderCar.color);
+        // leader name already set above
+        if (!raceFinished && player.lap >= TOTAL_LAPS) {
+            raceFinished = true;
+            const rank = allCars.filter(c => getRaceProgress(c) > getRaceProgress(player)).length + 1;
+            lapDiv.innerHTML = `<b>RACE FINISHED — ${rank}${rank===1?'st':rank===2?'nd':rank===3?'rd':'th'} place</b><br>Press any key for next track`;
+            window.addEventListener('keydown', advanceToNextTrack, { once: true });
+        } else {
+            lapDiv.textContent = `Lap ${Math.min(player.lap + 1, TOTAL_LAPS)}/${TOTAL_LAPS}  |  Leader: ${leaderName}`;
+        }
+    } else {
+        lapDiv.textContent = 'Press gas to start race';
     }
 
-    // E. Update Position (clamped to arena)
-    car.x += car.vx * dt;
-    car.y += car.vy * dt;
-
-    const margin = 12;
-    if (car.x < arena.x + margin) { car.x = arena.x + margin; car.vx = Math.abs(car.vx) * 0.3; }
-    if (car.x > arena.x + arena.width - margin) { car.x = arena.x + arena.width - margin; car.vx = -Math.abs(car.vx) * 0.3; }
-    if (car.y < arena.y + margin) { car.y = arena.y + margin; car.vy = Math.abs(car.vy) * 0.3; }
-    if (car.y > arena.y + arena.height - margin) { car.y = arena.y + arena.height - margin; car.vy = -Math.abs(car.vy) * 0.3; }
-
-    // F. Fake 3D Z-Axis (For future ramps)
-    car.vz -= 0.5 * dt;
-    car.z += car.vz * dt;
-    if (car.z < 0) {
-        car.z = 0;
-        car.vz = 0;
-    }
-
-    // --- 4. RENDER UPDATES ---
-    carSprite.position.set(car.x, car.y);
-    carSprite.rotation = car.rotation;
-    
-    const scale = 1 + (car.z * 0.01);
-    carSprite.scale.set(scale);
-
-    // G. Drift particles — emit from rear tires when sliding sideways
-    const dot = car.vx * forwardX + car.vy * forwardY;
-    const cross = car.vx * forwardY - car.vy * forwardX;
-    const slip = Math.abs(Math.atan2(cross, dot));
-    if (speed > 3 && slip > 0.5 && slip < Math.PI - 0.5) {
-        const rearX = -forwardX;
-        const rearY = -forwardY;
-        const rightX = Math.cos(car.rotation);
-        const rightY = Math.sin(car.rotation);
-        const leftRearX = car.x + rearX * 10 - rightX * 8;
-        const leftRearY = car.y + rearY * 10 - rightY * 8;
-        const rightRearX = car.x + rearX * 10 + rightX * 8;
-        const rightRearY = car.y + rearY * 10 + rightY * 8;
-        const intensity = Math.min(Math.floor((slip - 0.5) * 4), 4);
-        for (let i = 0; i < intensity; i++) {
-            emitDriftParticle(leftRearX, leftRearY, car.vx, car.vy);
-            emitDriftParticle(rightRearX, rightRearY, car.vx, car.vy);
+    // --- POSITION TRACKING ---
+    if (raceStarted && raceFrame > 60) {
+        const scores = allCars.map((c, i) => ({
+            index: i,
+            score: c.lap + c._trackIdx / 1000
+        }));
+        scores.sort((a, b) => b.score - a.score);
+        for (let rank = 0; rank < scores.length; rank++) {
+            const carIdx = scores[rank].index;
+            const car = allCars[carIdx];
+            const newPos = rank + 1;
+            const div = labelDivs[carIdx];
+            if (car.prevPos !== 0 && car.prevPos !== newPos) {
+                div.style.opacity = '1';
+                div.textContent = String(newPos);
+                div.style.fontSize = car.isPlayer ? '22px' : '16px';
+                div.style.color = car.isPlayer ? '#00FFFF' : '#FFFFFF';
+                div._flashTimer = 120;
+            }
+            car.prevPos = newPos;
         }
     }
-    // Camera — compute first so particles and PixiJS use the same offset
-    world.x = app.screen.width / 2 - car.x;
-    world.y = app.screen.height / 2 - car.y;
 
-    drawDriftParticles(pCtx, particleCanvas, world.x, world.y);
+    // --- COLLISIONS ---
+    resolveCollisions(allCars);
+
+    // --- CAMERA ---
+    const cam = updateCamera(world, player.x, player.y, app.screen.width, app.screen.height);
+
+    // Update floating labels
+    const dpr = window.devicePixelRatio;
+    for (let i = 0; i < allCars.length; i++) {
+        const c = allCars[i];
+        const screenX = (c.x + cam.x) * dpr;
+        const screenY = (c.y + cam.y - 25) * dpr;
+        const div = labelDivs[i];
+        div.style.left = (screenX / dpr - 15) + 'px';
+        div.style.top = (screenY / dpr) + 'px';
+        if (div._flashTimer > 0) {
+            div._flashTimer--;
+            if (div._flashTimer <= 0) {
+                div.style.opacity = '0';
+                div.style.fontSize = '14px';
+            }
+        }
+    }
+
+    // --- SPRITES ---
+    updateCarSprite(playerSprite, player, pState.slip, pState.turnSign, pState.movingForward);
+
+    // --- SKID MARKS & PARTICLES (all cars) ---
+    function emitCarEffects(car, state, slipThreshold = 0.4) {
+        const rearX = -state.forwardX;
+        const rearY = -state.forwardY;
+        const rightX = Math.cos(car.rotation);
+        const rightY = Math.sin(car.rotation);
+        const lrx = car.x + rearX * 10 - rightX * 8;
+        const lry = car.y + rearY * 10 - rightY * 8;
+        const rrx = car.x + rearX * 10 + rightX * 8;
+        const rry = car.y + rearY * 10 + rightY * 8;
+
+        if (state.speed > 2 && state.slip > slipThreshold && car._prevLrx !== undefined) {
+            skids.emitSeg(car._prevLrx, car._prevLry, lrx, lry);
+            skids.emitSeg(car._prevRrx, car._prevRry, rrx, rry);
+        }
+        car._prevLrx = lrx; car._prevLry = lry;
+        car._prevRrx = rrx; car._prevRry = rry;
+
+        if (state.speed > 3 && state.slip > 0.5 && state.slip < Math.PI - 0.5) {
+            const intensity = Math.min(Math.floor((state.slip - 0.5) * 4), 4);
+            for (let i = 0; i < intensity; i++) {
+                particles.emit(lrx, lry, car.vx, car.vy);
+                particles.emit(rrx, rry, car.vx, car.vy);
+            }
+        }
+    }
+    emitCarEffects(player, pState, 0.5);    // only real drifts leave marks
+    for (let i = 0; i < aiCars.length; i++) {
+        emitCarEffects(aiCars[i], aiStates[i], 0.5); // AI marks when they oversteer
+    }
+    skids.draw((x, y) => isOnTrack(x, y, trackCenterline));
+    particles.draw(cam.x, cam.y);
+
+    // --- DEBUG LOG ---
+    let dbg = '<b>RACE DEBUG</b><br>';
+    for (const c of allCars) {
+        const name = c === player ? 'PLAYER' : getColorName(c.color);
+        const on = isOnTrack(c.x, c.y, trackCenterline) ? 'ON' : 'OFF';
+        const idx = c._trackIdx !== undefined ? c._trackIdx : '?';
+        const prog = (c.lap + (c._trackIdx || 0) / 1000).toFixed(3);
+        dbg += `${name}: lap=${c.lap} idx=${idx} prog=${prog} ${on}<br>`;
+    }
+    debugDiv.innerHTML = dbg;
 });
+
+function advanceToNextTrack() {
+    player.trackDifficulty = Math.min(1.0, player.trackDifficulty + 0.1);
+    rebuildTrack(player.trackDifficulty);
+    // Reset cars to grid
+    placeOnGrid(player, 0);
+    for (let i = 0; i < aiCars.length; i++) {
+        placeOnGrid(aiCars[i], i + 1);
+        aiCars[i].lap = 0;
+        aiCars[i].prevPos = 0;
+        aiCars[i]._trackIdx = 0;
+        aiCars[i].vx = 0; aiCars[i].vy = 0;
+        aiCars[i].waypointIndex = aiDefs[i].start + 20;
+    }
+    player.lap = 0;
+    player.prevPos = 0;
+    player._trackIdx = 0;
+    player.vx = 0; player.vy = 0;
+    for (const ai of aiCars) { ai.prevPos = 0; ai._trackIdx = 0; ai.lap = 0; ai._hasPassedMidtrack = false; }
+    player._hasPassedMidtrack = true;
+    raceStarted = false;
+    raceFinished = false;
+    raceFrame = 0;
+    showLabels();
+}
