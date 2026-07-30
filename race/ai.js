@@ -14,6 +14,8 @@ export function createWaypointAI(trackCenterline, color) {
     ai.grip = 0.03 + Math.random() * 0.02;     // 0.03–0.05: low grip = more slide/skids
     ai._steerInertia = 0;
     ai._lookAhead = 25 + Math.floor(Math.random() * 25); // 25–50 track points ahead
+    ai._lineOffset = (Math.random() - 0.5) * 50;        // -25 to +25: inside ↔ outside line
+    ai._brakeAngle = Math.PI / 2 + (Math.random() - 0.5) * 0.35; // 80°–100° brake threshold
     return ai;
 }
 
@@ -32,8 +34,19 @@ export function updateWaypointAI(ai, dt, trackCenterline) {
     const targetIdx = (nearestIdx + dynamicLook) % trackCenterline.length;
     const target = trackCenterline[targetIdx];
 
-    const dx = target.x - ai.x;
-    const dy = target.y - ai.y;
+    // Offset target perpendicular to track direction for different racing lines
+    const prevIdx = (targetIdx - 1 + trackCenterline.length) % trackCenterline.length;
+    const nextIdx = (targetIdx + 1) % trackCenterline.length;
+    const tx = trackCenterline[nextIdx].x - trackCenterline[prevIdx].x;
+    const ty = trackCenterline[nextIdx].y - trackCenterline[prevIdx].y;
+    const tlen = Math.hypot(tx, ty) || 1;
+    const nx = -ty / tlen;   // normal (perpendicular to track)
+    const ny =  tx / tlen;
+    const ox = target.x + nx * ai._lineOffset;
+    const oy = target.y + ny * ai._lineOffset;
+
+    const dx = ox - ai.x;
+    const dy = oy - ai.y;
     const dist = Math.hypot(dx, dy);
 
     const desiredAngle = Math.atan2(dy, dx);
@@ -50,7 +63,7 @@ export function updateWaypointAI(ai, dt, trackCenterline) {
     const backward = Math.abs(angleDiff) > Math.PI * 0.7;
     const stuck = speed < 1.5 && backward;
     const gas = (!backward && Math.abs(angleDiff) < Math.PI / 3 && dist > 50) || stuck;
-    const brake = Math.abs(angleDiff) > Math.PI / 2 && !stuck;
+    const brake = Math.abs(angleDiff) > ai._brakeAngle && !stuck;
 
     return { steer, gas, brake };
 }
