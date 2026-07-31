@@ -2,17 +2,22 @@ import { Application, Container, Graphics } from 'pixi.js';
 import GUI from 'lil-gui';
 import { TRACK_WIDTH, TRACK_HALF, generateTrack, drawTrackPath, isOnTrack, getTrackProgress, seedToTrackId, trackIdToSeed, computeSpeedProfile } from './track.js';
 import { createCar, updateCarPhysics } from './car.js';
-import { createCarSprite, updateCarSprite, initParticles, initSkids, updateCamera } from './renderer.js';
+import { createCarSprite, updateCarSprite, initParticles, initSkids, updateCamera, shakeOnBump, updateShake } from './renderer.js';
 import { createWaypointAI, updateWaypointAI, createSplineAI, updateSplineAI, pretrainAI, recordOffTrackEpisode, resolveCollisions, computeDraftBoost } from './ai.js';
+import { initEngineSound, updateEngineSound, updateDriftSound } from './audio.js';
+import { makeControlHandler, presentKeyMap, commandNames, keyMap, buttonMap, rmap } from './controls.js';
+import { createPowerupLayer, spawnPowerup, clearPowerups, updatePowerups, activatePowerup, tickBoosts } from './powerups.js';
 
 // --- 1. SETUP ---
 const app = new Application();
 await app.init({ resizeTo: window, backgroundColor: 0x050510, antialias: true });
 document.body.appendChild(app.canvas);
+initEngineSound();
 
-const keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
-window.addEventListener('keydown', (e) => { if (keys[e.code] !== undefined) keys[e.code] = true; });
-window.addEventListener('keyup', (e) => { if (keys[e.code] !== undefined) keys[e.code] = false; });
+const input = { steerLeft: false, steerRight: false, gas: false, brake: false, activate: false, pause: false };
+const pollControls = makeControlHandler(input);
+let _pauseCooldown = 0;
+let _activateCooldown = 0;
 
 // Parse URL hash for shared track BEFORE first rebuild
 const hashTrack = window.location.hash.match(/track=([A-Za-z0-9]+)/);
@@ -30,6 +35,7 @@ const arena = { x: 0, y: 0, width: 4000, height: 4000 };
 
 const world = new Container();
 app.stage.addChild(world);
+const finishLine = new Graphics();
 
 // Arena visuals
 const arenaBorder = new Graphics()
@@ -56,7 +62,12 @@ const trackLine = new Graphics();
 world.addChild(trackSurf);
 world.addChild(trackGlow);
 world.addChild(trackLine);
+world.addChild(finishLine);
 world.addChild(skids.graphics);
+
+const powerupLayer = createPowerupLayer(world);
+let _powerupSpawnTimer = 0;
+const POWERUP_SPAWN_INTERVAL = 600; // frames (~10s)
 
 // --- MINIMAP ---
 const MAP_W = 220, MAP_H = 220;
@@ -82,6 +93,10 @@ function updateMinimap() {
     minimap.x = app.screen.width - MAP_W - 16;
     minimap.y = app.screen.height - MAP_H - 16;
     minimapDots.clear();
+    for (const p of powerupLayer.powerups) {
+        minimapDots.circle(p.x * MINIMAP_SCALE, p.y * MINIMAP_SCALE, 2);
+        minimapDots.fill({ color: p.type === 'S' ? 0x00FF88 : 0xFF8800, alpha: 0.8 });
+    }
     for (const c of allCars) {
         const mx = c.x * MINIMAP_SCALE;
         const my = c.y * MINIMAP_SCALE;
@@ -91,6 +106,8 @@ function updateMinimap() {
     }
 }
 
+const TRACK_PALETTE = [0x00FFFF, 0xFF00FF, 0x00FF00, 0xFF8000, 0xFFFF00, 0x8000FF];
+let trackColor = 0x00FFFF;
 let trackCenterline = [];
 let trackSpeedProfile = null;
 let trackSpikiness = 0;
@@ -99,10 +116,8 @@ let startPt, nextPt, tangent, perpAngle, perpX, perpY, backX, backY;
 const trackIdDisplay = { current: '-' };
 let trackIdController;
 
-// Finish line declared here so rebuildTrack can reference it
-const finishLine = new Graphics();
-
 function rebuildTrack(difficulty, seedOrId = null) {
+    trackColor = TRACK_PALETTE[Math.floor(Math.random() * TRACK_PALETTE.length)];
     const data = generateTrack(difficulty, 0, seedOrId);
     trackCenterline = data.points;
     trackSpeedProfile = computeSpeedProfile(trackCenterline);
@@ -115,9 +130,10 @@ function rebuildTrack(difficulty, seedOrId = null) {
     trackGlow.clear();
     trackLine.clear();
     drawTrackPath(trackSurf, trackCenterline, TRACK_WIDTH, 0x001122);
-    drawTrackPath(trackGlow, trackCenterline, TRACK_WIDTH + 4, 0x00FFFF, 0.15);
-    drawTrackPath(trackLine, trackCenterline, 2, 0x00FFFF, 0.6);
+    drawTrackPath(trackGlow, trackCenterline, TRACK_WIDTH + 4, trackColor, 0.15);
+    drawTrackPath(trackLine, trackCenterline, 2, trackColor, 0.6);
     skids.clear();
+    clearPowerups(powerupLayer);
 
     // Draw minimap track
     minimapTrack.clear();
@@ -127,7 +143,7 @@ function rebuildTrack(difficulty, seedOrId = null) {
             minimapTrack.lineTo(trackCenterline[i].x * MINIMAP_SCALE, trackCenterline[i].y * MINIMAP_SCALE);
         }
         minimapTrack.lineTo(trackCenterline[0].x * MINIMAP_SCALE, trackCenterline[0].y * MINIMAP_SCALE);
-        minimapTrack.stroke({ width: 1.5, color: 0x00FFFF, alpha: 0.5 });
+        minimapTrack.stroke({ width: 1.5, color: trackColor, alpha: 0.5 });
     }
 
     // Recalculate start line & grid
@@ -166,6 +182,7 @@ player.trackDifficulty = 0.6;
 player.isPlayer = true;
 player.maxSpeed = 8.8;
 player.acceleration = 0.14;
+player.grip = 0.025;
 
 const playerSprite = createCarSprite(0x00FFFF, true);
 world.addChild(playerSprite);
@@ -242,8 +259,6 @@ player._trackIdx = 0;
 player._hasPassedMidtrack = true; // player starts at front of grid, already "past" start
 for (const ai of aiCars) { ai.prevPos = 0; ai._trackIdx = 0; ai._hasPassedMidtrack = false; }
 
-// Finish line already created & drawn by rebuildTrack; just ensure it's in the world
-world.addChild(finishLine);
 
 // --- CONTROLS OVERLAY ---
 let controlsAcknowledged = false;
@@ -262,19 +277,60 @@ controlsDiv.style.fontSize = '16px';
 controlsDiv.style.textAlign = 'center';
 controlsDiv.style.zIndex = '5000';
 controlsDiv.style.lineHeight = '1.6';
-controlsDiv.innerHTML = `
-    <h2 style="margin:0 0 12px 0;color:#FFFFFF;">Controls</h2>
-    <div>↑ / ↓ &nbsp;—&nbsp; Gas / Brake</div>
-    <div>← / → &nbsp;—&nbsp; Steer</div>
-    <div>Space / Esc &nbsp;—&nbsp; Pause</div>
-    <div>D &nbsp;—&nbsp; Toggle Debug</div>
-    <br>
-    <button id="ctrl-ok" style="background:#00FFFF;color:#000;border:none;padding:8px 24px;font-family:monospace;font-size:16px;cursor:pointer;border-radius:4px;">OK — Press Gas to Start</button>
-`;
+const mainPanel = document.createElement('div');
+{
+    const h = document.createElement('h2');
+    h.textContent = 'Controls';
+    h.style.cssText = 'margin:0 0 12px 0;color:#fff';
+    mainPanel.appendChild(h);
+
+    const rkeymap = rmap(keyMap);
+    const rbuttonmap = rmap(buttonMap);
+    const table = document.createElement('table');
+    table.style.cssText = 'border-collapse:collapse;margin:0 auto 12px auto;text-align:left';
+    for (const action in commandNames) {
+        const tr = document.createElement('tr');
+        const tdName = document.createElement('td');
+        tdName.textContent = commandNames[action];
+        tdName.style.cssText = 'padding:2px 12px 2px 0;color:#aaa';
+        const tdKey = document.createElement('td');
+        tdKey.textContent = rkeymap[action] ?? '—';
+        tdKey.style.cssText = 'padding:2px 8px;color:#0FF';
+        const tdBtn = document.createElement('td');
+        tdBtn.textContent = rbuttonmap[action] ?? '—';
+        tdBtn.style.cssText = 'padding:2px 0;color:#0FF';
+        tr.append(tdName, tdKey, tdBtn);
+        table.appendChild(tr);
+    }
+    mainPanel.appendChild(table);
+
+    const btns = document.createElement('div');
+    btns.innerHTML = `
+        <button id="ctrl-remap" style="background:transparent;color:#00FFFF;border:1px solid #00FFFF;padding:6px 18px;font-family:monospace;font-size:14px;cursor:pointer;border-radius:4px;margin-right:8px;">Remap Controls</button>
+        <button id="ctrl-ok" style="background:#00FFFF;color:#000;border:none;padding:8px 24px;font-family:monospace;font-size:16px;cursor:pointer;border-radius:4px;">OK — Press Gas to Start</button>
+    `;
+    mainPanel.appendChild(btns);
+}
+controlsDiv.appendChild(mainPanel);
+
+const remapPanel = document.createElement('div');
+remapPanel.style.display = 'none';
+controlsDiv.appendChild(remapPanel);
+
 document.body.appendChild(controlsDiv);
+
 document.getElementById('ctrl-ok').addEventListener('click', () => {
     controlsDiv.style.display = 'none';
     controlsAcknowledged = true;
+});
+document.getElementById('ctrl-remap').addEventListener('click', () => {
+    mainPanel.style.display = 'none';
+    remapPanel.style.display = 'block';
+    presentKeyMap(remapPanel, () => {
+        remapPanel.style.display = 'none';
+        remapPanel.innerHTML = '';
+        mainPanel.style.display = 'block';
+    });
 });
 
 // --- LAP UI ---
@@ -288,6 +344,10 @@ lapDiv.style.fontSize = '18px';
 lapDiv.style.zIndex = '1000';
 lapDiv.style.pointerEvents = 'none';
 document.body.appendChild(lapDiv);
+
+const powerupHud = document.createElement('div');
+powerupHud.style.cssText = 'position:absolute;top:10px;right:10px;font-family:monospace;font-size:20px;font-weight:bold;z-index:1000;pointer-events:none;display:none';
+document.body.appendChild(powerupHud);
 
 const speedHud = document.createElement('div');
 speedHud.style.position = 'absolute';
@@ -325,15 +385,14 @@ function showAnnounce(text) {
 const allCars = [player, ...aiCars];
 let raceStarted = false;
 let raceFinished = false;
+let _finishCounter = 0;
 let raceFrame = 0;
 let paused = false;
+let _waitForGasRelease = false;
 const raceConfig = { totalLaps: 5 };
 
 window.addEventListener('keydown', (e) => {
-    if (e.code === 'Escape' || e.code === 'Space') {
-        paused = !paused;
-        e.preventDefault();
-    }
+    if (e.code === 'Escape') { paused = !paused; e.preventDefault(); }
 });
 
 // --- DEBUG PANEL ---
@@ -388,7 +447,7 @@ function showLabels() {
 showLabels();
 
 function getRaceProgress(car) {
-    if (car.lap >= raceConfig.totalLaps) return raceConfig.totalLaps + 1.0; // finished cars rank above all
+    if (car.lap >= raceConfig.totalLaps) return raceConfig.totalLaps + 1.0 - (car._finishOrder || 999) * 0.001;
     return car.lap + car._trackIdx / 1000;
 }
 
@@ -447,8 +506,20 @@ app.ticker.add((ticker) => {
 
     if (paused) return;
 
+    // --- CONTROLS ---
+    input.steerLeft = false; input.steerRight = false; input.gas = false; input.brake = false; input.activate = false; input.pause = false;
+    if (controlsAcknowledged) pollControls();
+    if (_pauseCooldown > 0) _pauseCooldown--;
+    if (input.pause && _pauseCooldown === 0) { paused = !paused; _pauseCooldown = 20; }
+    if (_activateCooldown > 0) _activateCooldown--;
+    if (input.activate && _activateCooldown === 0) {
+        if (raceFinished) { advanceToNextTrack(); }
+        else if (player._heldPowerup) { activatePowerup(player); _activateCooldown = 10; }
+    }
+    const gas   = player.invertControls ? input.brake : input.gas;
+    const brake = player.invertControls ? input.gas   : input.brake;
+
     // --- RACE START ---
-    const gas = player.invertControls ? keys.ArrowDown : keys.ArrowUp;
     if (!raceStarted && gas && controlsAcknowledged) {
         raceStarted = true;
         raceFrame = 0;
@@ -478,8 +549,7 @@ app.ticker.add((ticker) => {
         }
 
         // --- PLAYER ---
-        const steer = (keys.ArrowLeft ? -1 : 0) + (keys.ArrowRight ? 1 : 0);
-        const brake = player.invertControls ? keys.ArrowUp : keys.ArrowDown;
+        const steer = (input.steerLeft ? -1 : 0) + (input.steerRight ? 1 : 0);
         const pState = updateCarPhysics(player, dt, steer, gas, brake,
             (x, y) => isOnTrack(x, y, trackCenterline), arena);
 
@@ -513,7 +583,7 @@ app.ticker.add((ticker) => {
                 aiState = { speed: 0, speedFactor: 0, onTrack: true, forwardX: 0, forwardY: 1, dot: 0, cross: 0, slip: 0, turnSign: 0, movingForward: true };
             }
             aiStates.push(aiState);
-            updateCarSprite(ai.sprite, ai, aiState.slip, aiState.turnSign, aiState.movingForward);
+            updateCarSprite(ai.sprite, ai, aiState.slip, aiState.turnSign, aiState.movingForward, aiState.steerInput);
         }
 
         // --- LAPS ---
@@ -526,6 +596,7 @@ app.ticker.add((ticker) => {
                     const prevLap = c.lap;
                     c.lap++;
                     c._hasPassedMidtrack = false;
+                    if (c.lap >= raceConfig.totalLaps) c._finishOrder = ++_finishCounter;
                     if (c === player && c.lap < raceConfig.totalLaps) {
                         const remaining = raceConfig.totalLaps - c.lap;
                         showAnnounce(remaining === 1 ? 'Final lap!' : `${remaining} laps to go!`);
@@ -538,8 +609,7 @@ app.ticker.add((ticker) => {
             if (!raceFinished && player.lap >= raceConfig.totalLaps) {
                 raceFinished = true;
                 const rank = allCars.filter(c => getRaceProgress(c) > getRaceProgress(player)).length + 1;
-                lapDiv.innerHTML = `<b>RACE FINISHED — ${rank}${rank===1?'st':rank===2?'nd':rank===3?'rd':'th'} place</b><br>Press <b>ENTER</b> for next race or <b>ESC</b> to stay`;
-                window.addEventListener('keydown', finishKeyHandler, { once: true });
+                lapDiv.innerHTML = `<b>RACE FINISHED — ${rank}${rank===1?'st':rank===2?'nd':rank===3?'rd':'th'} place</b><br>Press <b>Z / b:2</b> for next race or <b>ESC</b> to stay`;
             } else {
                 const trackId = trackSeed !== null ? seedToTrackId(trackSeed) : '?';
                 lapDiv.textContent = `Lap ${Math.min(player.lap + 1, raceConfig.totalLaps)}/${raceConfig.totalLaps}  |  Leader: ${leaderName}  |  Track: ${trackId}`;
@@ -571,11 +641,34 @@ app.ticker.add((ticker) => {
             }
         }
 
+        // --- POWERUPS ---
+        if (raceStarted) {
+            _powerupSpawnTimer++;
+            if (_powerupSpawnTimer >= POWERUP_SPAWN_INTERVAL) {
+                spawnPowerup(powerupLayer, trackCenterline);
+                _powerupSpawnTimer = 0;
+            }
+            updatePowerups(powerupLayer, allCars, player);
+            tickBoosts(allCars);
+        }
+
         // --- COLLISIONS ---
+        const BUMP_DIST = 16; // radius * 2
+        for (const ai of aiCars) {
+            if (Math.hypot(ai.x - player.x, ai.y - player.y) < BUMP_DIST) {
+                shakeOnBump();
+                break;
+            }
+        }
         resolveCollisions(allCars);
+
+        // --- ENGINE SOUND ---
+        // TODO: needs tweaking
+        // if (gas) updateEngineSound();
 
         // --- CAMERA ---
         const cam = updateCamera(world, player.x, player.y, app.screen.width, app.screen.height);
+        updateShake(app.canvas, (!pState.onTrack && gas) ? 1 : 0);
 
         // Update floating labels
         const dpr = window.devicePixelRatio;
@@ -601,7 +694,7 @@ app.ticker.add((ticker) => {
         speedHud.style.top = (pScreenY / dpr) + 'px';
 
         // --- SPRITES ---
-        updateCarSprite(playerSprite, player, pState.slip, pState.turnSign, pState.movingForward);
+        updateCarSprite(playerSprite, player, pState.slip, pState.turnSign, pState.movingForward, pState.steerInput);
 
         // --- SKID MARKS & PARTICLES (all cars) ---
         function emitCarEffects(car, state, slipThreshold = 0.4) {
@@ -627,13 +720,16 @@ app.ticker.add((ticker) => {
                     particles.emit(lrx, lry, car.vx, car.vy);
                     particles.emit(rrx, rry, car.vx, car.vy);
                 }
+                // TODO: needs tweaking
+                // const driftVel = car.isPlayer ? 1 : Math.max(0, 1 - Math.hypot(car.x - player.x, car.y - player.y) / 300);
+                // if (driftVel > 0) updateDriftSound(driftVel);
             }
         }
         emitCarEffects(player, pState, 0.5);    // only real drifts leave marks
         for (let i = 0; i < aiCars.length; i++) {
             emitCarEffects(aiCars[i], aiStates[i], 0.5); // AI marks when they oversteer
         }
-        skids.draw((x, y) => isOnTrack(x, y, trackCenterline));
+        skids.draw((x, y) => isOnTrack(x, y, trackCenterline), trackColor);
         particles.draw(cam.x, cam.y);
 
         // --- DEBUG LOG ---
@@ -647,21 +743,21 @@ app.ticker.add((ticker) => {
     }
     debugDiv.innerHTML = dbg;
     speedHud.textContent = `${pState.speed.toFixed(1)}`;
+    if (player._heldPowerup) {
+        powerupHud.style.display = 'block';
+        powerupHud.style.color = player._heldPowerup === 'S' ? '#00FF88' : '#FF8800';
+        powerupHud.textContent = player._speedBoost ? '▶▶' : `[${player._heldPowerup}] Z / b:2`;
+    } else if (player._speedBoost) {
+        powerupHud.style.display = 'block';
+        powerupHud.style.color = '#FFFFFF';
+        powerupHud.textContent = '▶▶';
+    } else {
+        powerupHud.style.display = 'none';
+    }
     updateMinimap();
     }
 });
 
-function finishKeyHandler(e) {
-    if (e.code === 'Enter') {
-        advanceToNextTrack();
-    } else if (e.code === 'Escape') {
-        lapDiv.innerHTML += '<br><i>Waiting — press ENTER when ready</i>';
-        window.addEventListener('keydown', finishKeyHandler, { once: true });
-    } else {
-        // Wrong key — re-arm so ENTER still works
-        window.addEventListener('keydown', finishKeyHandler, { once: true });
-    }
-}
 
 function advanceToNextTrack() {
     player.trackDifficulty = Math.min(1.0, player.trackDifficulty + 0.1);
@@ -681,10 +777,14 @@ function advanceToNextTrack() {
     player.prevPos = 0;
     player._trackIdx = 0;
     player.vx = 0; player.vy = 0;
-    for (const ai of aiCars) { ai.prevPos = 0; ai._trackIdx = 0; ai.lap = 0; ai._hasPassedMidtrack = false; ai._draftBoost = 0; ai._offTrackSince = 0; }
+    for (const ai of aiCars) { ai.prevPos = 0; ai._trackIdx = 0; ai.lap = 0; ai._hasPassedMidtrack = false; ai._draftBoost = 0; ai._offTrackSince = 0; ai._finishOrder = 0; }
     player._hasPassedMidtrack = true;
+    player._finishOrder = 0;
+    _finishCounter = 0;
     raceStarted = false;
     raceFinished = false;
     raceFrame = 0;
+    _waitForGasRelease = true;
     showLabels();
+
 }

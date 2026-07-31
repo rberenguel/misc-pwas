@@ -20,9 +20,9 @@ export function updateCarPhysics(car, dt, steer, gas, brake, isOnTrackFn, arena)
     const speedFactor = Math.min(speed / car.maxSpeed, 1);
     const onTrack = isOnTrackFn(car.x, car.y);
 
-    // Steering
-    if (steer !== 0) {
-        car.rotation += steer * car.turnSpeed * dt;
+    // Steering — scale with speed so stationary car doesn't spin
+    if (steer !== 0 && speed > 0.1) {
+        car.rotation += steer * car.turnSpeed * speedFactor * dt;
     }
 
     // Forward vector
@@ -105,5 +105,5 @@ export function updateCarPhysics(car, dt, steer, gas, brake, isOnTrackFn, arena)
     const turnSign = Math.sign(cross);
     const movingForward = dot > 0;
 
-    return { speed, speedFactor, onTrack, forwardX, forwardY, dot, cross, slip, turnSign, movingForward };
+    return { speed, speedFactor, onTrack, forwardX, forwardY, dot, cross, slip, turnSign, movingForward, steerInput: steer };
 }
