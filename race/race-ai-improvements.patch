@@ -1,0 +1,396 @@
+diff --git a/race/ai.js b/race/ai.js
+index e8e9a3b..9acc39f 100644
+--- a/race/ai.js
++++ b/race/ai.js
+@@ -22,6 +22,8 @@ export function createWaypointAI(trackCenterline, color) {
+     ai._trackMemory = new Float32Array(1000);           // per-point caution: 0 = fearless, 1 = terrified
+     ai._lastTrackIdx = 0;
+     ai._smoothLook = ai._lookAhead;                    // smoothed lookahead, prevents jitter
++    ai._recovering = false;                            // true while running the locked-target off-track recovery
++    ai._recoveryTargetIdx = 0;
+     return ai;
+ }
+ 
+@@ -39,21 +41,46 @@ export function updateWaypointAI(ai, dt, trackCenterline) {
+     }
+     ai._lastTrackIdx = nearestIdx;
+ 
+-    // Off-track: don't use nearest point as base — pick a rejoin point ahead on the track
++    // Off-track: don't use nearest point as base — pick a rejoin point ahead on the track.
++    // Crucially, pick it ONCE and lock onto it. Re-deriving "nearest point" or "best rejoin
++    // angle" every frame from the car's own erratic off-track position is what caused the
++    // slalom loop: the target flips sides as the car overshoots, so the correction itself
++    // becomes unstable. A dumb, stable recovery target beats a smart, twitchy one.
+     const offTrack = nearestDist > 120; // generous threshold
+     if (offTrack) {
+-        const forwardX = Math.cos(ai.rotation - Math.PI / 2);
+-        const forwardY = Math.sin(ai.rotation - Math.PI / 2);
+-        // Scan ahead from nearest point for a shallow rejoin angle
+-        let bestIdx = nearestIdx, bestDot = -Infinity;
+-        for (let i = 8; i <= 70; i++) {
+-            const idx = (nearestIdx + i) % trackCenterline.length;
+-            const dx = trackCenterline[idx].x - ai.x;
+-            const dy = trackCenterline[idx].y - ai.y;
+-            const dot = dx * forwardX + dy * forwardY;
+-            if (dot > bestDot) { bestDot = dot; bestIdx = idx; }
++        if (!ai._recovering) {
++            const forwardX = Math.cos(ai.rotation - Math.PI / 2);
++            const forwardY = Math.sin(ai.rotation - Math.PI / 2);
++            // Scan ahead from nearest point for a shallow rejoin angle — computed once
++            let bestIdx = nearestIdx, bestDot = -Infinity;
++            for (let i = 8; i <= 70; i++) {
++                const idx = (nearestIdx + i) % trackCenterline.length;
++                const dx = trackCenterline[idx].x - ai.x;
++                const dy = trackCenterline[idx].y - ai.y;
++                const dot = dx * forwardX + dy * forwardY;
++                if (dot > bestDot) { bestDot = dot; bestIdx = idx; }
++            }
++            ai._recovering = true;
++            ai._recoveryTargetIdx = bestIdx;
++        }
++        nearestIdx = ai._recoveryTargetIdx;
++    } else if (ai._recovering) {
++        // Stay locked onto the recovery target until heading is actually realigned with the
++        // track direction there — don't hand back to live curvature reasoning mid-correction.
++        const tIdx = ai._recoveryTargetIdx;
++        const aheadIdx = (tIdx + 5) % trackCenterline.length;
++        const tangentAngle = Math.atan2(
++            trackCenterline[aheadIdx].y - trackCenterline[tIdx].y,
++            trackCenterline[aheadIdx].x - trackCenterline[tIdx].x
++        );
++        let headingDiff = (ai.rotation - Math.PI / 2) - tangentAngle;
++        while (headingDiff > Math.PI) headingDiff -= Math.PI * 2;
++        while (headingDiff < -Math.PI) headingDiff += Math.PI * 2;
++        if (Math.abs(headingDiff) < 0.6) {
++            ai._recovering = false;
++        } else {
++            nearestIdx = ai._recoveryTargetIdx;
+         }
+-        nearestIdx = bestIdx;
+     }
+ 
+     // Speed-dependent base lookahead
+@@ -141,6 +168,134 @@ export function updateWaypointAI(ai, dt, trackCenterline) {
+     return { steer, gas, brake, nearestIdx };
+ }
+ 
++// Records one off-track episode into an AI's caution memory. Shared by the live race
++// loop and by pretrainAI() below, so warm-started memory behaves identically to memory
++// learned during an actual race.
++export function recordOffTrackEpisode(ai, centerIdx, duration, verbose = true) {
++    const mem = ai._trackMemory;
++    if (!mem) return;
++    const boost = Math.min(1.0, duration * 0.015); // ~67 frames off = full caution
++    const lo = Math.max(0, centerIdx - 6), hi = Math.min(1000, centerIdx + 7);
++    const oldMax = Math.max(...mem.slice(lo, hi));
++    for (let i = -6; i <= 6; i++) {
++        const idx = (centerIdx + i + 1000) % 1000;
++        const falloff = 1 - Math.abs(i) / 7;
++        mem[idx] = Math.min(1.0, mem[idx] + boost * falloff);
++    }
++    if (verbose) {
++        const newMax = Math.max(...mem.slice(lo, hi));
++        console.log(`[LEARN] ${ai.def?.name || 'AI'} idx=${centerIdx} off-track ${duration}f: caution ${oldMax.toFixed(2)} -> ${newMax.toFixed(2)}`);
++    }
++}
++
++// --- SPLINE AI ---
++// A deliberately dumb, old-school line-follower: no live curvature reasoning, no
++// off-track recovery logic, no learning. It just chases a point on the centerline
++// and interpolates toward the speed baked into the track's precomputed speed profile
++// at that point. Can't oscillate because its target is never derived from its own
++// (possibly erratic) position — it's always a fixed offset ahead on the known line.
++export function createSplineAI(trackCenterline, color, speedProfile) {
++    const pt = trackCenterline[0];
++    const next = trackCenterline[1];
++    const tangent = Math.atan2(next.y - pt.y, next.x - pt.x);
++    const ai = createCar(pt.x, pt.y, tangent + Math.PI / 2, color);
++    ai.aiType = 'spline';
++    ai.maxSpeed = 9.5 + Math.random() * 1.0;
++    ai.acceleration = 0.14;
++    ai.turnSpeed = 0.07;
++    ai.offTrackGrip = 2.0;
++    ai.offTrackDecay = 0.99;
++    ai.grip = 0.045;
++    ai._steerInertia = 0;
++    ai._lookAhead = 28;
++    ai._speedProfile = speedProfile; // Float32Array(1000) from track.computeSpeedProfile
++    ai._lastTrackIdx = 0;
++    return ai;
++}
++
++export function updateSplineAI(ai, dt, trackCenterline) {
++    const speed = Math.hypot(ai.vx, ai.vy);
++
++    // Same stable windowed nearest-point search as the waypoint AI — cheap and
++    // reliable since the spline AI rarely strays far enough for it to matter.
++    let start = ai._lastTrackIdx || 0;
++    let nearestIdx = start, nearestDist = Infinity;
++    const win = 60;
++    for (let i = -win; i <= win; i++) {
++        const idx = (start + i + trackCenterline.length) % trackCenterline.length;
++        const d = Math.hypot(trackCenterline[idx].x - ai.x, trackCenterline[idx].y - ai.y);
++        if (d < nearestDist) { nearestDist = d; nearestIdx = idx; }
++    }
++    ai._lastTrackIdx = nearestIdx;
++
++    const targetIdx = (nearestIdx + ai._lookAhead) % trackCenterline.length;
++    const target = trackCenterline[targetIdx];
++    const dx = target.x - ai.x;
++    const dy = target.y - ai.y;
++
++    const desiredAngle = Math.atan2(dy, dx);
++    const forwardAngle = ai.rotation - Math.PI / 2;
++    let angleDiff = desiredAngle - forwardAngle;
++    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
++    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
++
++    const idealSteer = Math.abs(angleDiff) < 0.08 ? 0 : (angleDiff > 0 ? 1 : -1);
++    ai._steerInertia += (idealSteer - ai._steerInertia) * 0.12;
++    const steer = ai._steerInertia;
++
++    // Target speed is just "whatever the track says here" — no per-frame curvature math.
++    const profileIdx = (nearestIdx + Math.floor(ai._lookAhead * 0.5)) % trackCenterline.length;
++    const targetSpeed = ai.maxSpeed * (ai._speedProfile ? ai._speedProfile[profileIdx] : 1);
++
++    const gas = speed < targetSpeed - 0.3;
++    const brake = speed > targetSpeed + 0.5;
++
++    return { steer, gas, brake, nearestIdx };
++}
++
++// --- PRETRAINING ---
++// Runs a waypoint AI through a headless simulation against the current track before the
++// race starts, so its caution memory is already warmed up on lap 1 instead of needing a
++// lap or two of live mistakes to learn the same corners. Physics-only, no rendering.
++//
++// Stops after `targetLaps` virtual laps rather than a fixed frame count: lap length varies
++// a lot with track difficulty (radius ranges roughly 250–2000), so a fixed frame budget
++// would under-train on big tracks and over-train on small ones. `maxSteps` is just a safety
++// net in case something pathological prevents the lap-wrap ever being detected.
++export function pretrainAI(ai, trackCenterline, isOnTrackFn, arena, targetLaps = 4, maxSteps = 30000) {
++    if (ai.aiType !== 'waypoint' || !ai._trackMemory) return;
++
++    const startPt = trackCenterline[0];
++    ai.x = startPt.x; ai.y = startPt.y; ai.vx = 0; ai.vy = 0;
++    ai._steerInertia = 0; ai._recovering = false; ai._lastTrackIdx = 0; ai._smoothLook = ai._lookAhead;
++
++    const dt = 1; // matches ticker.deltaTime at a normal 60fps frame
++    let offSince = 0, offStartIdx = 0;
++    let lapsCompleted = 0, prevIdx = 0;
++    for (let frame = 1; frame <= maxSteps && lapsCompleted < targetLaps; frame++) {
++        const input = updateWaypointAI(ai, dt, trackCenterline);
++        const state = updateCarPhysics(ai, dt, input.steer, input.gas, input.brake, isOnTrackFn, arena);
++
++        // Same wrap-detection convention as the live lap counter in app.js.
++        if (prevIdx > 800 && input.nearestIdx < 200) lapsCompleted++;
++        prevIdx = input.nearestIdx;
++
++        if (!state.onTrack) {
++            if (!offSince) { offSince = frame; offStartIdx = input.nearestIdx || 0; }
++        } else if (offSince) {
++            recordOffTrackEpisode(ai, offStartIdx, frame - offSince, false);
++            offSince = 0;
++        }
++    }
++    // No per-frame decay here (unlike the live race loop): pretraining compresses several
++    // clean virtual laps into an instant, and applying the live decay rate across that many
++    // simulated steps would erase almost everything just learned before the race even starts.
++
++    // Reset transient physical state — keep only the learned memory.
++    ai.x = startPt.x; ai.y = startPt.y; ai.vx = 0; ai.vy = 0;
++    ai._steerInertia = 0; ai._recovering = false; ai._lastTrackIdx = 0; ai._smoothLook = ai._lookAhead;
++}
++
+ const DRAFT_RANGE = 140;
+ const DRAFT_MIN = 10;
+ const DRAFT_BONUS = 1.5;
+diff --git a/race/app.js b/race/app.js
+index ede8b78..bb8d427 100644
+--- a/race/app.js
++++ b/race/app.js
+@@ -1,9 +1,9 @@
+ import { Application, Container, Graphics } from 'pixi.js';
+ import GUI from 'lil-gui';
+-import { TRACK_WIDTH, TRACK_HALF, generateTrack, drawTrackPath, isOnTrack, getTrackProgress, seedToTrackId, trackIdToSeed } from './track.js';
++import { TRACK_WIDTH, TRACK_HALF, generateTrack, drawTrackPath, isOnTrack, getTrackProgress, seedToTrackId, trackIdToSeed, computeSpeedProfile } from './track.js';
+ import { createCar, updateCarPhysics } from './car.js';
+ import { createCarSprite, updateCarSprite, initParticles, initSkids, updateCamera } from './renderer.js';
+-import { createWaypointAI, updateWaypointAI, resolveCollisions, computeDraftBoost } from './ai.js';
++import { createWaypointAI, updateWaypointAI, createSplineAI, updateSplineAI, pretrainAI, recordOffTrackEpisode, resolveCollisions, computeDraftBoost } from './ai.js';
+ 
+ // --- 1. SETUP ---
+ const app = new Application();
+@@ -21,6 +21,7 @@ window.addEventListener('hashchange', () => {
+     const m = window.location.hash.match(/track=([A-Za-z0-9]+)/);
+     if (m) {
+         rebuildTrack(player.trackDifficulty, m[1]);
++        warmUpAI();
+         positionAllCars();
+     }
+ });
+@@ -91,6 +92,7 @@ function updateMinimap() {
+ }
+ 
+ let trackCenterline = [];
++let trackSpeedProfile = null;
+ let trackSpikiness = 0;
+ let trackSeed = null;
+ let startPt, nextPt, tangent, perpAngle, perpX, perpY, backX, backY;
+@@ -103,6 +105,7 @@ const finishLine = new Graphics();
+ function rebuildTrack(difficulty, seedOrId = null) {
+     const data = generateTrack(difficulty, 0, seedOrId);
+     trackCenterline = data.points;
++    trackSpeedProfile = computeSpeedProfile(trackCenterline);
+     trackSpikiness = data.spikiness;
+     trackSeed = data.seed;
+     trackIdDisplay.current = data.trackId;
+@@ -183,20 +186,24 @@ function placeOnGrid(car, index) {
+     car.rotation = tangent + Math.PI / 2;
+ }
+ 
+-// AI opponents (5 cars)
++// AI opponents (5 cars). type 'waypoint' = curvature-reasoning learning AI; 'spline' =
++// old-school line-follower with a baked-in per-corner speed profile, no live reasoning,
++// can't slalom. Useful as a stable baseline/comparison and a reliable easier tier.
+ const aiDefs = [
+-    { color: 0xFF00FF, name: 'Magenta' },
+-    { color: 0x00FF00, name: 'Green'   },
+-    { color: 0xFF8000, name: 'Orange'  },
+-    { color: 0xFFFF00, name: 'Yellow'  },
+-    { color: 0x8000FF, name: 'Purple'  },
++    { color: 0xFF00FF, name: 'Magenta', type: 'waypoint' },
++    { color: 0x00FF00, name: 'Green',   type: 'spline'   },
++    { color: 0xFF8000, name: 'Orange',  type: 'waypoint' },
++    { color: 0xFFFF00, name: 'Yellow',  type: 'waypoint' },
++    { color: 0x8000FF, name: 'Purple',  type: 'waypoint' },
+ ];
+ 
+ const aiCars = [];
+ const aiSprites = [];
+ for (let i = 0; i < aiDefs.length; i++) {
+     const def = aiDefs[i];
+-    const ai = createWaypointAI(trackCenterline, def.color);
++    const ai = def.type === 'spline'
++        ? createSplineAI(trackCenterline, def.color, trackSpeedProfile)
++        : createWaypointAI(trackCenterline, def.color);
+     placeOnGrid(ai, i);          // AI occupy grid positions 0–4 (rows 0–2)
+     const sprite = createCarSprite(def.color, false);
+     world.addChild(sprite);
+@@ -209,6 +216,21 @@ for (let i = 0; i < aiDefs.length; i++) {
+     aiSprites.push(sprite);
+ }
+ 
++// Warm-start the waypoint AIs' caution memory against the current track before the
++// race starts, and refresh the spline AIs' speed profile reference. Call again any
++// time the track is rebuilt (new track ID, difficulty change, next-track advance).
++function warmUpAI() {
++    for (const ai of aiCars) {
++        if (ai.aiType === 'spline') {
++            ai._speedProfile = trackSpeedProfile;
++        } else {
++            ai._trackMemory = new Float32Array(1000); // old track's memory doesn't apply here
++            pretrainAI(ai, trackCenterline, (x, y) => isOnTrack(x, y, trackCenterline), arena);
++        }
++    }
++}
++warmUpAI();
++
+ placeOnGrid(player, 5);          // player starts 6th (back of grid)
+ 
+ // Initial positioning done via rebuildTrack, but player/aiCars now exist
+@@ -401,13 +423,14 @@ gui.add(player, 'turnSpeed', 0.01, 0.5);
+ gui.add(player, 'friction', 0.9, 0.999);
+ gui.add(player, 'grip', 0.001, 1.0);
+ gui.add(player, 'invertControls').name('Invert Controls');
+-gui.add(player, 'trackDifficulty', 0.1, 1.0).name('Track Difficulty').onChange(v => { rebuildTrack(v); positionAllCars(); });
++gui.add(player, 'trackDifficulty', 0.1, 1.0).name('Track Difficulty').onChange(v => { rebuildTrack(v); warmUpAI(); positionAllCars(); });
+ gui.add(raceConfig, 'totalLaps', 1, 10, 1).name('Total Laps');
+ 
+ const trackInput = { id: '' };
+ gui.add(trackInput, 'id').name('Track ID').onFinishChange(v => {
+     if (v.trim()) {
+         rebuildTrack(player.trackDifficulty, v.trim());
++        warmUpAI();
+         positionAllCars();
+     }
+ });
+@@ -465,28 +488,20 @@ app.ticker.add((ticker) => {
+         for (const ai of aiCars) {
+             let aiInput, aiState;
+             if (raceStarted && ai.lap < raceConfig.totalLaps) {
+-                aiInput = updateWaypointAI(ai, dt, trackCenterline);
++                aiInput = ai.aiType === 'spline'
++                    ? updateSplineAI(ai, dt, trackCenterline)
++                    : updateWaypointAI(ai, dt, trackCenterline);
+                 aiState = updateCarPhysics(ai, dt, aiInput.steer, aiInput.gas, aiInput.brake,
+                     (x, y) => isOnTrack(x, y, trackCenterline), arena);
+-                // Learn from mistakes: record episode when going off-track, apply on recovery
++                // Learn from mistakes: record episode when going off-track, apply on recovery.
++                // Spline AI has no _trackMemory, so recordOffTrackEpisode is a no-op for it.
+                 if (!aiState.onTrack) {
+                     if (!ai._offTrackSince) {
+                         ai._offTrackSince = raceFrame;
+                         ai._offTrackStartIdx = aiInput.nearestIdx || 0;
+                     }
+                 } else if (ai._offTrackSince) {
+-                    const duration = raceFrame - ai._offTrackSince;
+-                    const center = ai._offTrackStartIdx;
+-                    const mem = ai._trackMemory;
+-                    const boost = Math.min(1.0, duration * 0.015); // ~67 frames off = full caution
+-                    const oldMax = Math.max(...mem.slice(Math.max(0,center-6), Math.min(1000,center+7)));
+-                    for (let i = -6; i <= 6; i++) {
+-                        const idx = (center + i + 1000) % 1000;
+-                        const falloff = 1 - Math.abs(i) / 7;
+-                        mem[idx] = Math.min(1.0, mem[idx] + boost * falloff);
+-                    }
+-                    const newMax = Math.max(...mem.slice(Math.max(0,center-6), Math.min(1000,center+7)));
+-                    console.log(`[LEARN] ${ai.def.name} idx=${center} off-track ${duration}f: caution ${oldMax.toFixed(2)} -> ${newMax.toFixed(2)}`);
++                    recordOffTrackEpisode(ai, ai._offTrackStartIdx, raceFrame - ai._offTrackSince);
+                     ai._offTrackSince = 0;
+                 }
+             } else if (ai.lap >= raceConfig.totalLaps) {
+@@ -651,6 +666,7 @@ function finishKeyHandler(e) {
+ function advanceToNextTrack() {
+     player.trackDifficulty = Math.min(1.0, player.trackDifficulty + 0.1);
+     rebuildTrack(player.trackDifficulty, null); // new random seed
++    warmUpAI();
+     // Reset cars to grid
+     for (let i = 0; i < aiCars.length; i++) {
+         placeOnGrid(aiCars[i], i);
+diff --git a/race/track.js b/race/track.js
+index d3bb0aa..d1f0362 100644
+--- a/race/track.js
++++ b/race/track.js
+@@ -175,6 +175,31 @@ export function isOnTrack(x, y, centerline) {
+     return minDist <= TRACK_HALF;
+ }
+ 
++// Precompute a target-speed multiplier (0..1) for every point on the centerline,
++// based on local curvature. Corners bake in a lower multiplier, straights stay near 1.
++// This lets an AI follow the line and just interpolate toward "whatever speed is
++// tagged here" instead of measuring curvature and deciding to brake every frame.
++export function computeSpeedProfile(centerline, sampleWindow = 8) {
++    const n = centerline.length;
++    const profile = new Float32Array(n);
++    for (let i = 0; i < n; i++) {
++        let curvature = 0;
++        for (let k = 0; k < sampleWindow; k++) {
++            const i1 = (i + k) % n;
++            const i2 = (i + k + 1) % n;
++            const i3 = (i + k + 2) % n;
++            const a1 = Math.atan2(centerline[i2].y - centerline[i1].y, centerline[i2].x - centerline[i1].x);
++            const a2 = Math.atan2(centerline[i3].y - centerline[i2].y, centerline[i3].x - centerline[i2].x);
++            let diff = a2 - a1;
++            while (diff > Math.PI) diff -= Math.PI * 2;
++            while (diff < -Math.PI) diff += Math.PI * 2;
++            curvature += Math.abs(diff);
++        }
++        profile[i] = Math.max(0.35, 1 / (1 + curvature * 1.4));
++    }
++    return profile;
++}
++
+ // Brute-force closest sample. O(1000) per call — trivial for 6 cars @ 60fps.
+ export function getTrackProgress(x, y, centerline) {
+     let bestDist = Infinity, bestIdx = 0;

@@ -1,9 +1,9 @@
 import { Application, Container, Graphics } from 'pixi.js';
 import GUI from 'lil-gui';
-import { TRACK_WIDTH, TRACK_HALF, generateTrack, drawTrackPath, isOnTrack, getTrackProgress, seedToTrackId, trackIdToSeed } from './track.js';
+import { TRACK_WIDTH, TRACK_HALF, generateTrack, drawTrackPath, isOnTrack, getTrackProgress, seedToTrackId, trackIdToSeed, computeSpeedProfile } from './track.js';
 import { createCar, updateCarPhysics } from './car.js';
 import { createCarSprite, updateCarSprite, initParticles, initSkids, updateCamera } from './renderer.js';
-import { createWaypointAI, updateWaypointAI, resolveCollisions, computeDraftBoost } from './ai.js';
+import { createWaypointAI, updateWaypointAI, createSplineAI, updateSplineAI, pretrainAI, recordOffTrackEpisode, resolveCollisions, computeDraftBoost } from './ai.js';
 
 // --- 1. SETUP ---
 const app = new Application();
@@ -21,6 +21,7 @@ window.addEventListener('hashchange', () => {
     const m = window.location.hash.match(/track=([A-Za-z0-9]+)/);
     if (m) {
         rebuildTrack(player.trackDifficulty, m[1]);
+        warmUpAI();
         positionAllCars();
     }
 });
@@ -91,6 +92,7 @@ function updateMinimap() {
 }
 
 let trackCenterline = [];
+let trackSpeedProfile = null;
 let trackSpikiness = 0;
 let trackSeed = null;
 let startPt, nextPt, tangent, perpAngle, perpX, perpY, backX, backY;
@@ -103,6 +105,7 @@ const finishLine = new Graphics();
 function rebuildTrack(difficulty, seedOrId = null) {
     const data = generateTrack(difficulty, 0, seedOrId);
     trackCenterline = data.points;
+    trackSpeedProfile = computeSpeedProfile(trackCenterline);
     trackSpikiness = data.spikiness;
     trackSeed = data.seed;
     trackIdDisplay.current = data.trackId;
@@ -183,20 +186,24 @@ function placeOnGrid(car, index) {
     car.rotation = tangent + Math.PI / 2;
 }
 
-// AI opponents (5 cars)
+// AI opponents (5 cars). type 'waypoint' = curvature-reasoning learning AI; 'spline' =
+// old-school line-follower with a baked-in per-corner speed profile, no live reasoning,
+// can't slalom. Useful as a stable baseline/comparison and a reliable easier tier.
 const aiDefs = [
-    { color: 0xFF00FF, name: 'Magenta' },
-    { color: 0x00FF00, name: 'Green'   },
-    { color: 0xFF8000, name: 'Orange'  },
-    { color: 0xFFFF00, name: 'Yellow'  },
-    { color: 0x8000FF, name: 'Purple'  },
+    { color: 0xFF00FF, name: 'Magenta', type: 'waypoint' },
+    { color: 0x00FF00, name: 'Green',   type: 'spline'   },
+    { color: 0xFF8000, name: 'Orange',  type: 'waypoint' },
+    { color: 0xFFFF00, name: 'Yellow',  type: 'spline'   },
+    { color: 0x8000FF, name: 'Purple',  type: 'waypoint' },
 ];
 
 const aiCars = [];
 const aiSprites = [];
 for (let i = 0; i < aiDefs.length; i++) {
     const def = aiDefs[i];
-    const ai = createWaypointAI(trackCenterline, def.color);
+    const ai = def.type === 'spline'
+        ? createSplineAI(trackCenterline, def.color, trackSpeedProfile)
+        : createWaypointAI(trackCenterline, def.color);
     placeOnGrid(ai, i);          // AI occupy grid positions 0–4 (rows 0–2)
     const sprite = createCarSprite(def.color, false);
     world.addChild(sprite);
@@ -208,6 +215,21 @@ for (let i = 0; i < aiDefs.length; i++) {
     aiCars.push(ai);
     aiSprites.push(sprite);
 }
+
+// Warm-start the waypoint AIs' caution memory against the current track before the
+// race starts, and refresh the spline AIs' speed profile reference. Call again any
+// time the track is rebuilt (new track ID, difficulty change, next-track advance).
+function warmUpAI() {
+    for (const ai of aiCars) {
+        if (ai.aiType === 'spline') {
+            ai._speedProfile = trackSpeedProfile;
+        } else {
+            ai._trackMemory = new Float32Array(1000); // old track's memory doesn't apply here
+            pretrainAI(ai, trackCenterline, (x, y) => isOnTrack(x, y, trackCenterline), arena);
+        }
+    }
+}
+warmUpAI();
 
 placeOnGrid(player, 5);          // player starts 6th (back of grid)
 
@@ -401,13 +423,14 @@ gui.add(player, 'turnSpeed', 0.01, 0.5);
 gui.add(player, 'friction', 0.9, 0.999);
 gui.add(player, 'grip', 0.001, 1.0);
 gui.add(player, 'invertControls').name('Invert Controls');
-gui.add(player, 'trackDifficulty', 0.1, 1.0).name('Track Difficulty').onChange(v => { rebuildTrack(v); positionAllCars(); });
+gui.add(player, 'trackDifficulty', 0.1, 1.0).name('Track Difficulty').onChange(v => { rebuildTrack(v); warmUpAI(); positionAllCars(); });
 gui.add(raceConfig, 'totalLaps', 1, 10, 1).name('Total Laps');
 
 const trackInput = { id: '' };
 gui.add(trackInput, 'id').name('Track ID').onFinishChange(v => {
     if (v.trim()) {
         rebuildTrack(player.trackDifficulty, v.trim());
+        warmUpAI();
         positionAllCars();
     }
 });
@@ -465,28 +488,20 @@ app.ticker.add((ticker) => {
         for (const ai of aiCars) {
             let aiInput, aiState;
             if (raceStarted && ai.lap < raceConfig.totalLaps) {
-                aiInput = updateWaypointAI(ai, dt, trackCenterline);
+                aiInput = ai.aiType === 'spline'
+                    ? updateSplineAI(ai, dt, trackCenterline)
+                    : updateWaypointAI(ai, dt, trackCenterline);
                 aiState = updateCarPhysics(ai, dt, aiInput.steer, aiInput.gas, aiInput.brake,
                     (x, y) => isOnTrack(x, y, trackCenterline), arena);
-                // Learn from mistakes: record episode when going off-track, apply on recovery
+                // Learn from mistakes: record episode when going off-track, apply on recovery.
+                // Spline AI has no _trackMemory, so recordOffTrackEpisode is a no-op for it.
                 if (!aiState.onTrack) {
                     if (!ai._offTrackSince) {
                         ai._offTrackSince = raceFrame;
                         ai._offTrackStartIdx = aiInput.nearestIdx || 0;
                     }
                 } else if (ai._offTrackSince) {
-                    const duration = raceFrame - ai._offTrackSince;
-                    const center = ai._offTrackStartIdx;
-                    const mem = ai._trackMemory;
-                    const boost = Math.min(1.0, duration * 0.015); // ~67 frames off = full caution
-                    const oldMax = Math.max(...mem.slice(Math.max(0,center-6), Math.min(1000,center+7)));
-                    for (let i = -6; i <= 6; i++) {
-                        const idx = (center + i + 1000) % 1000;
-                        const falloff = 1 - Math.abs(i) / 7;
-                        mem[idx] = Math.min(1.0, mem[idx] + boost * falloff);
-                    }
-                    const newMax = Math.max(...mem.slice(Math.max(0,center-6), Math.min(1000,center+7)));
-                    console.log(`[LEARN] ${ai.def.name} idx=${center} off-track ${duration}f: caution ${oldMax.toFixed(2)} -> ${newMax.toFixed(2)}`);
+                    recordOffTrackEpisode(ai, ai._offTrackStartIdx, raceFrame - ai._offTrackSince);
                     ai._offTrackSince = 0;
                 }
             } else if (ai.lap >= raceConfig.totalLaps) {
@@ -651,6 +666,7 @@ function finishKeyHandler(e) {
 function advanceToNextTrack() {
     player.trackDifficulty = Math.min(1.0, player.trackDifficulty + 0.1);
     rebuildTrack(player.trackDifficulty, null); // new random seed
+    warmUpAI();
     // Reset cars to grid
     for (let i = 0; i < aiCars.length; i++) {
         placeOnGrid(aiCars[i], i);

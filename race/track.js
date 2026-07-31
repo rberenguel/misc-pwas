@@ -175,6 +175,31 @@ export function isOnTrack(x, y, centerline) {
     return minDist <= TRACK_HALF;
 }
 
+// Precompute a target-speed multiplier (0..1) for every point on the centerline,
+// based on local curvature. Corners bake in a lower multiplier, straights stay near 1.
+// This lets an AI follow the line and just interpolate toward "whatever speed is
+// tagged here" instead of measuring curvature and deciding to brake every frame.
+export function computeSpeedProfile(centerline, sampleWindow = 8) {
+    const n = centerline.length;
+    const profile = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+        let curvature = 0;
+        for (let k = 0; k < sampleWindow; k++) {
+            const i1 = (i + k) % n;
+            const i2 = (i + k + 1) % n;
+            const i3 = (i + k + 2) % n;
+            const a1 = Math.atan2(centerline[i2].y - centerline[i1].y, centerline[i2].x - centerline[i1].x);
+            const a2 = Math.atan2(centerline[i3].y - centerline[i2].y, centerline[i3].x - centerline[i2].x);
+            let diff = a2 - a1;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            curvature += Math.abs(diff);
+        }
+        profile[i] = Math.max(0.35, 1 / (1 + curvature * 1.4));
+    }
+    return profile;
+}
+
 // Brute-force closest sample. O(1000) per call — trivial for 6 cars @ 60fps.
 export function getTrackProgress(x, y, centerline) {
     let bestDist = Infinity, bestIdx = 0;
