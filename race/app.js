@@ -131,6 +131,8 @@ const POWERUP_SPAWN_INTERVAL = 600; // frames (~10s)
 
 // --- MINIMAP ---
 const _isMobile = 'ontouchstart' in window || window.innerWidth < 768;
+const ZOOM = _isMobile ? 0.5 : 1.0;
+world.scale.set(ZOOM);
 const MAP_W = _isMobile ? 130 : 220;
 const MAP_H = MAP_W;
 const MINIMAP_SCALE = MAP_W / 4000;
@@ -908,7 +910,7 @@ app.ticker.add((ticker) => {
         // if (gas) updateEngineSound();
 
         // --- CAMERA ---
-        const cam = updateCamera(world, player.x, player.y, app.screen.width, app.screen.height);
+        const cam = updateCamera(world, player.x * ZOOM, player.y * ZOOM, app.screen.width, app.screen.height);
         updateShake(app.canvas, (!pState.onTrack && gas) ? 1 : 0);
 
         // Update floating labels
@@ -1042,36 +1044,55 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js');
 }
 
-let _deferredInstall = null;
-window.addEventListener('beforeinstallprompt', e => {
-    e.preventDefault();
-    _deferredInstall = e;
-    installBtn.style.display = 'block';
-});
+const _isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.navigator.standalone;
+const _isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 
-const installBtn = document.createElement('button');
-installBtn.textContent = 'Install App';
-installBtn.style.cssText = `
+const installBanner = document.createElement('div');
+installBanner.style.cssText = `
     display:none;
     position:absolute;
     bottom:16px;left:50%;
     transform:translateX(-50%);
-    background:transparent;
+    background:rgba(0,0,0,0.85);
     color:#00FFFF;
-    border:1px solid #00FFFF;
-    padding:6px 20px;
+    border:1px solid #00FFFF44;
+    padding:8px 16px;
     font-family:monospace;font-size:13px;
-    border-radius:4px;cursor:pointer;
+    border-radius:6px;
     z-index:2000;
-    opacity:0.8;
+    text-align:center;
+    white-space:nowrap;
+    cursor:pointer;
 `;
-installBtn.addEventListener('click', async () => {
-    if (!_deferredInstall) return;
-    _deferredInstall.prompt();
-    const { outcome } = await _deferredInstall.userChoice;
-    if (outcome === 'accepted') installBtn.style.display = 'none';
-    _deferredInstall = null;
-});
-document.body.appendChild(installBtn);
+document.body.appendChild(installBanner);
 
-window.addEventListener('appinstalled', () => { installBtn.style.display = 'none'; });
+let _deferredInstall = null;
+
+if (!_isStandalone) {
+    window.addEventListener('beforeinstallprompt', e => {
+        e.preventDefault();
+        _deferredInstall = e;
+        installBanner.textContent = 'Install App';
+        installBanner.style.display = 'block';
+    });
+
+    installBanner.addEventListener('click', async () => {
+        if (_isIOS) { installBanner.style.display = 'none'; return; }
+        if (!_deferredInstall) return;
+        _deferredInstall.prompt();
+        const { outcome } = await _deferredInstall.userChoice;
+        installBanner.style.display = 'none';
+        _deferredInstall = null;
+    });
+
+    // iOS: no beforeinstallprompt — show manual instructions after a short delay
+    if (_isIOS) {
+        setTimeout(() => {
+            installBanner.textContent = 'Tap Share → Add to Home Screen to install';
+            installBanner.style.display = 'block';
+            setTimeout(() => { installBanner.style.display = 'none'; }, 6000);
+        }, 2000);
+    }
+
+    window.addEventListener('appinstalled', () => { installBanner.style.display = 'none'; });
+}
