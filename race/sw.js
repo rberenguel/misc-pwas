@@ -1,4 +1,4 @@
-const CACHE = 'neon-rally-v1';
+const CACHE = 'neon-rally-v2';
 const PRECACHE = [
   './',
   './index.html',
@@ -12,6 +12,8 @@ const PRECACHE = [
   './powerups.js',
   './touch.js',
   './splash.js',
+  './menu.js',
+  './session.js',
   './icon.png',
   './icon192.png',
   './fonts/SixtyFour.woff2',

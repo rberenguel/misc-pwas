@@ -160,6 +160,12 @@ export function showSplash() {
 
             document.addEventListener('keydown',     dismiss, { once: true });
             document.addEventListener('pointerdown', dismiss, { once: true });
+            const gpPoll = setInterval(() => {
+                for (const gp of navigator.getGamepads()) {
+                    if (!gp) continue;
+                    if (gp.buttons.some(b => b.pressed)) { clearInterval(gpPoll); dismiss(); return; }
+                }
+            }, 80);
         }
 
         run();

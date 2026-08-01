@@ -163,7 +163,7 @@ export function updateWaypointAI(ai, dt, trackCenterline) {
     // Pre-braking only when moving fast enough to need it
     const sharpCurve = curvature > Math.PI / 3 && speed > 3;
     const gas = (!backward && Math.abs(angleDiff) < Math.PI / 3 && dist > 25 && !sharpCurve && !tooFast) || stuck;
-    const brake = (Math.abs(angleDiff) > cautiousBrake || (sharpCurve && speed > 4) || tooFast) && !stuck;
+    const brake = false;
 
     return { steer, gas, brake, nearestIdx };
 }
@@ -207,7 +207,7 @@ export function createSplineAI(trackCenterline, color, speedProfile) {
     ai.offTrackDecay = 0.99;
     ai.grip = 0.045;
     ai._steerInertia = 0;
-    ai._lookAhead = 28;
+    ai._lookAhead = 40;
     ai._speedProfile = speedProfile; // Float32Array(1000) from track.computeSpeedProfile
     ai._lastTrackIdx = 0;
     return ai;
@@ -243,12 +243,19 @@ export function updateSplineAI(ai, dt, trackCenterline) {
     ai._steerInertia += (idealSteer - ai._steerInertia) * 0.12;
     const steer = ai._steerInertia;
 
-    // Target speed is just "whatever the track says here" — no per-frame curvature math.
-    const profileIdx = (nearestIdx + Math.floor(ai._lookAhead * 0.5)) % trackCenterline.length;
-    const targetSpeed = ai.maxSpeed * (ai._speedProfile ? ai._speedProfile[profileIdx] : 1);
+    // Minimum speed profile over the next _lookAhead points — brakes for upcoming corners, not ones it's already in.
+    let minProfile = 1;
+    if (ai._speedProfile) {
+        const n = trackCenterline.length;
+        for (let k = 0; k <= ai._lookAhead; k++) {
+            const v = ai._speedProfile[(nearestIdx + k) % n];
+            if (v < minProfile) minProfile = v;
+        }
+    }
+    const targetSpeed = ai.maxSpeed * minProfile;
 
     const gas = speed < targetSpeed - 0.3;
-    const brake = speed > targetSpeed + 0.5;
+    const brake = false;
 
     return { steer, gas, brake, nearestIdx };
 }

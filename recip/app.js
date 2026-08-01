@@ -39,7 +39,7 @@ sunflower seeds to taste
 
 1. lay on parchment
 2. press flat 3–3.5 mm
-3. mark thumb cuts
+3. mark thumb-sized cuts
 4. bake 160°C until golden
 `;
 
@@ -385,7 +385,10 @@ function exportToCanvas(recipe) {
     ctx.fillRect(x, y, w, h);
     ctx.strokeStyle = BORDER;
     ctx.lineWidth = BW;
-    ctx.strokeRect(x + BW / 2, y + BW / 2, w - BW, h - BW);
+    ctx.beginPath();
+    ctx.moveTo(x,          y + BW / 2); ctx.lineTo(x + w, y + BW / 2); // top
+    ctx.moveTo(x + BW / 2, y);          ctx.lineTo(x + BW / 2, y + h); // left
+    ctx.stroke();
   }
 
   // ── Title row ─────────────────────────────────────────────────────────────────
@@ -474,6 +477,16 @@ function exportToCanvas(recipe) {
     }
   }
 
+  // Close the table with right and bottom edges (each drawn exactly once).
+  ctx.strokeStyle = BORDER;
+  ctx.lineWidth = BW;
+  ctx.beginPath();
+  ctx.moveTo(cx[totalCols] - BW / 2, MARGIN);
+  ctx.lineTo(cx[totalCols] - BW / 2, ry[totalRows]);
+  ctx.moveTo(cx[0], ry[totalRows] - BW / 2);
+  ctx.lineTo(cx[totalCols], ry[totalRows] - BW / 2);
+  ctx.stroke();
+
   return canvas;
 }
 
@@ -505,12 +518,24 @@ function exportPNG() {
   const md = document.getElementById('md-input').value;
   document.fonts.ready.then(() => {
     try {
-      const recipe = parseRecipe(md);
-      const canvas = exportToCanvas(recipe);
-      const a = document.createElement('a');
-      a.download = 'recipe.png';
-      a.href = canvas.toDataURL('image/png');
-      a.click();
+      const recipe   = parseRecipe(md);
+      const canvas   = exportToCanvas(recipe);
+      const slug     = (recipe.title || 'recipe').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'recipe';
+      const filename = slug + '.png';
+      canvas.toBlob(blob => {
+        const file = new File([blob], filename, { type: 'image/png' });
+        if (navigator.canShare?.({ files: [file] })) {
+          navigator.share({ files: [file] })
+            .catch(e => { if (e.name !== 'AbortError') console.error(e); });
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.download = filename;
+          a.href = url;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      }, 'image/png');
     } catch (e) {
       alert('Export error: ' + e.message);
       console.error(e);

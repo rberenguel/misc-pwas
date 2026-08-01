@@ -52,20 +52,6 @@ export function trackIdToSeed(id) {
     return seed;
 }
 
-function catmullRom(p0, p1, p2, p3, t) {
-    const t2 = t * t;
-    const t3 = t2 * t;
-    return {
-        x: 0.5 * ((2 * p1.x) +
-                  (-p0.x + p2.x) * t +
-                  (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
-                  (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
-        y: 0.5 * ((2 * p1.y) +
-                  (-p0.y + p2.y) * t +
-                  (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
-                  (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3)
-    };
-}
 
 export function generateTrack(difficulty = 0.5, attempt = 0, seedOrId = null) {
     let seed;
@@ -81,48 +67,41 @@ export function generateTrack(difficulty = 0.5, attempt = 0, seedOrId = null) {
     const rng = createRng(seed);
     const cx = 2000, cy = 2000;
 
-    // More points = more complex/wiggly shape; fewer = longer straights, sharper corners
-    const nPoints = 4 + Math.floor(difficulty * 10); // 4 to 14 control points
+    // Polar harmonic approach: r(θ) = baseR + Σ amp_k * sin(k*θ + phase_k)
+    // Never self-intersects. Visual complexity = number and size of harmonics.
+    const baseR = 700;
 
-    // Generate control points with extreme radius variation
-    const rawPoints = [];
-    for (let i = 0; i < nPoints; i++) {
-        const baseAngle = (i / nPoints) * Math.PI * 2;
-        const angle = baseAngle + (rng() - 0.5) * (Math.PI / nPoints) * 0.6;
-        const minR = 250 + (1 - difficulty) * 350;   // 250 to 600
-        const maxR = 1400 + difficulty * 600;        // 1400 to 2000
-        const r = minR + rng() * (maxR - minR);
-        rawPoints.push({
-            x: cx + r * Math.cos(angle),
-            y: cy + r * Math.sin(angle),
-            angle
-        });
-    }
-    // Sort by angle so the loop doesn't cross over itself
-    rawPoints.sort((a, b) => a.angle - b.angle);
-    const cp = rawPoints.map(p => ({ x: p.x, y: p.y }));
-
-    // Sample along closed Catmull-Rom spline
-    const points = [];
-    const samplesPerSegment = Math.max(40, Math.floor(TRACK_SAMPLES / nPoints));
-
-    for (let i = 0; i < nPoints; i++) {
-        const p0 = cp[(i - 1 + nPoints) % nPoints];
-        const p1 = cp[i];
-        const p2 = cp[(i + 1) % nPoints];
-        const p3 = cp[(i + 2) % nPoints];
-        for (let s = 0; s < samplesPerSegment; s++) {
-            const t = s / samplesPerSegment;
-            const pt = catmullRom(p0, p1, p2, p3, t);
-            points.push({ x: pt.x, y: pt.y });
+    // Smooth: k=1 (ellipse) + maybe k=2; small amplitude → clean oval
+    // Technical: k=2..4, medium amplitude → chicanes and corners
+    // Chaotic: k=2..7, large amplitude → very irregular
+    let harmonics;
+    if (difficulty < 0.35) {
+        const ellipseAmp = 120 + rng() * 180;      // 120–300: noticeable ellipse
+        harmonics = [{ k: 1, amp: ellipseAmp, phase: rng() * Math.PI * 2 }];
+        if (rng() > 0.4) harmonics.push({ k: 2, amp: 60 + rng() * 80, phase: rng() * Math.PI * 2 });
+    } else if (difficulty < 0.65) {
+        harmonics = [];
+        const nH = 3 + Math.floor(rng() * 2);       // 3–4 harmonics
+        const totalAmp = 300 + rng() * 150;          // total variation budget
+        for (let k = 2; k <= nH + 1; k++) {
+            harmonics.push({ k, amp: (totalAmp / nH) * (0.6 + rng() * 0.8), phase: rng() * Math.PI * 2 });
+        }
+    } else {
+        harmonics = [];
+        const nH = 5 + Math.floor(rng() * 3);       // 5–7 harmonics
+        const totalAmp = 280 + rng() * 100;          // kept moderate so spline AI can follow
+        for (let k = 2; k <= nH + 1; k++) {
+            harmonics.push({ k, amp: (totalAmp / nH) * (0.6 + rng() * 0.8), phase: rng() * Math.PI * 2 });
         }
     }
 
-    // Trim/pad to exactly TRACK_SAMPLES
-    if (points.length > TRACK_SAMPLES) points.length = TRACK_SAMPLES;
-    while (points.length < TRACK_SAMPLES) {
-        const src = points[points.length % points.length];
-        points.push({ x: src.x, y: src.y });
+    const points = [];
+    for (let i = 0; i < TRACK_SAMPLES; i++) {
+        const theta = (i / TRACK_SAMPLES) * Math.PI * 2;
+        let r = baseR;
+        for (const h of harmonics) r += h.amp * Math.sin(h.k * theta + h.phase);
+        r = Math.max(280, r);
+        points.push({ x: cx + r * Math.cos(theta), y: cy + r * Math.sin(theta) });
     }
     for (let i = 0; i < points.length; i++) points[i].t = i / points.length;
 
@@ -139,31 +118,65 @@ export function generateTrack(difficulty = 0.5, attempt = 0, seedOrId = null) {
     }
     spikiness = spikiness / points.length;
 
-    if (attempt < 20 && hasSelfOverlap(points)) {
-        return generateTrack(Math.max(0.05, difficulty - 0.03), attempt + 1, seed);
-    }
-    return { points, spikiness, seed, trackId: seedToTrackId(seed) };
+    const racingLine = computeRacingLine(points);
+    return { points, racingLine, spikiness, seed, trackId: seedToTrackId(seed) };
 }
 
-function hasSelfOverlap(points) {
-    const minGap = TRACK_WIDTH * 0.8;
-    const step = 25, skip = 50;
-    for (let i = 0; i < points.length; i += step) {
-        const a = points[i];
-        for (let j = i + skip; j < points.length; j += step) {
-            const b = points[j];
-            if (Math.hypot(a.x - b.x, a.y - b.y) < minGap) return true;
+// Compute a racing line via constrained Laplacian smoothing.
+// Each pass pulls points toward shorter paths (cutting inside corners, straightening S-curves).
+// The constraint clamps each point to within TRACK_HALF*0.8 of its original centerline position,
+// keeping the line on track without any curvature calculations.
+// Pull each point toward the midpoint of neighbours `look` steps away, then clamp
+// to within TRACK_HALF of the original. Large `look` shortcuts aggressively across
+// corners; the clamp keeps the line on track.
+export function computeRacingLine(centerline) {
+    const n = centerline.length;
+    const maxDist = TRACK_HALF * 0.65;
+    const look = 20;
+    let pts = centerline.map(p => ({ x: p.x, y: p.y }));
+    // Phase 1: chord-midpoint pulls — cuts corners aggressively
+    for (let pass = 0; pass < 200; pass++) {
+        const next = [];
+        for (let i = 0; i < n; i++) {
+            const behind = pts[(i - look + n) % n];
+            const ahead  = pts[(i + look) % n];
+            const mx = (behind.x + ahead.x) * 0.5;
+            const my = (behind.y + ahead.y) * 0.5;
+            let sx = pts[i].x + (mx - pts[i].x) * 0.4;
+            let sy = pts[i].y + (my - pts[i].y) * 0.4;
+            const orig = centerline[i];
+            const dx = sx - orig.x, dy = sy - orig.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist > maxDist) { sx = orig.x + dx / dist * maxDist; sy = orig.y + dy / dist * maxDist; }
+            next.push({ x: sx, y: sy });
         }
+        pts = next;
     }
-    return false;
+    // Phase 2: gentle Laplacian to smooth out micro-bumps from phase 1
+    for (let pass = 0; pass < 30; pass++) {
+        const next = [];
+        for (let i = 0; i < n; i++) {
+            const prev = pts[(i - 1 + n) % n], curr = pts[i], nx = pts[(i + 1) % n];
+            let sx = curr.x * 0.5 + prev.x * 0.25 + nx.x * 0.25;
+            let sy = curr.y * 0.5 + prev.y * 0.25 + nx.y * 0.25;
+            const orig = centerline[i];
+            const dx = sx - orig.x, dy = sy - orig.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist > maxDist) { sx = orig.x + dx / dist * maxDist; sy = orig.y + dy / dist * maxDist; }
+            next.push({ x: sx, y: sy });
+        }
+        pts = next;
+    }
+    return pts;
 }
+
 
 export function drawTrackPath(g, centerline, width, color, alpha = 1) {
     if (centerline.length === 0) return;
     g.moveTo(centerline[0].x, centerline[0].y);
     for (let i = 1; i < centerline.length; i++) g.lineTo(centerline[i].x, centerline[i].y);
-    g.lineTo(centerline[0].x, centerline[0].y);
-    g.stroke({ width, color, alpha });
+    g.closePath();
+    g.stroke({ width, color, alpha, join: 'round', cap: 'round' });
 }
 
 export function isOnTrack(x, y, centerline) {

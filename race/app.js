@@ -9,6 +9,8 @@ import { makeControlHandler, presentKeyMap, commandNames, keyMap, buttonMap, rma
 import { createPowerupLayer, spawnPowerup, clearPowerups, updatePowerups, activatePowerup, tickBoosts, resetPowerupRng } from './powerups.js';
 import { initTouchControls } from './touch.js';
 import { showSplash } from './splash.js';
+import { showTrackSelect } from './menu.js';
+import { showSessionSummary } from './session.js';
 
 // --- 0. SPLASH ---
 await showSplash();
@@ -77,7 +79,7 @@ function formatTime(frames) {
     return `${m}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
 }
 
-window.addEventListener('hashchange', () => {
+window.addEventListener('hashchange', async () => {
     const p = parseHash(window.location.hash);
     if (p.track) {
         const ch = p.challenge ? decodeChallenge(p.challenge) : null;
@@ -86,7 +88,7 @@ window.addEventListener('hashchange', () => {
         challengeSplits = ch ? ch.splits : null;
         if (challengeLaps) raceConfig.totalLaps = challengeLaps;
         rebuildTrack(player.trackDifficulty, p.track);
-        warmUpAI();
+        await warmUpAI();
         positionAllCars();
     }
 });
@@ -119,9 +121,11 @@ const skids = initSkids();
 const trackSurf = new Graphics();
 const trackGlow = new Graphics();
 const trackLine = new Graphics();
+const debugGfx  = new Graphics();
 world.addChild(trackSurf);
 world.addChild(trackGlow);
 world.addChild(trackLine);
+world.addChild(debugGfx);
 world.addChild(finishLine);
 world.addChild(skids.graphics);
 
@@ -172,6 +176,7 @@ function updateMinimap() {
 const TRACK_PALETTE = [0x00FFFF, 0xFF00FF, 0x00FF00, 0xFF8000, 0xFFFF00, 0x8000FF];
 let trackColor = 0x00FFFF;
 let trackCenterline = [];
+let trackRacingLine = [];
 let trackSpeedProfile = null;
 let trackSpikiness = 0;
 let trackSeed = null;
@@ -179,16 +184,17 @@ let startPt, nextPt, tangent, perpAngle, perpX, perpY, backX, backY;
 const trackIdDisplay = { current: '-' };
 let trackIdController;
 
-function rebuildTrack(difficulty, seedOrId = null) {
+function rebuildTrack(difficulty, seedOrId = null, updateUrl = true) {
     trackColor = TRACK_PALETTE[Math.floor(Math.random() * TRACK_PALETTE.length)];
     const data = generateTrack(difficulty, 0, seedOrId);
     trackCenterline = data.points;
-    trackSpeedProfile = computeSpeedProfile(trackCenterline);
+    trackRacingLine = data.racingLine;
+    trackSpeedProfile = computeSpeedProfile(trackRacingLine);
     trackSpikiness = data.spikiness;
     trackSeed = data.seed;
     trackIdDisplay.current = data.trackId;
     if (trackIdController) trackIdController.updateDisplay();
-    history.replaceState(null, '', '#track=' + data.trackId);
+    if (updateUrl) history.replaceState(null, '', '#track=' + data.trackId);
     trackSurf.clear();
     trackGlow.clear();
     trackLine.clear();
@@ -232,7 +238,7 @@ function positionAllCars() {
     placeOnGrid(player, 5);
 }
 
-rebuildTrack(0.6, hashTrack ? hashTrack[1] : null);
+rebuildTrack(0.6, hashTrack ? hashTrack[1] : null, !!hashTrack);
 
 // --- 2. CARS ---
 startPt = trackCenterline[0];
@@ -272,9 +278,9 @@ function placeOnGrid(car, index) {
 const aiDefs = [
     { color: 0xFF00FF, name: 'Magenta', type: 'waypoint' },
     { color: 0x00FF00, name: 'Green',   type: 'spline'   },
-    { color: 0xFF8000, name: 'Orange',  type: 'waypoint' },
+    { color: 0xFF8000, name: 'Orange',  type: 'spline'   },
     { color: 0xFFFF00, name: 'Yellow',  type: 'spline'   },
-    { color: 0x8000FF, name: 'Purple',  type: 'waypoint' },
+    { color: 0x8000FF, name: 'Purple',  type: 'spline'   },
 ];
 
 const aiCars = [];
@@ -282,8 +288,8 @@ const aiSprites = [];
 for (let i = 0; i < aiDefs.length; i++) {
     const def = aiDefs[i];
     const ai = def.type === 'spline'
-        ? createSplineAI(trackCenterline, def.color, trackSpeedProfile)
-        : createWaypointAI(trackCenterline, def.color);
+        ? createSplineAI(trackRacingLine, def.color, trackSpeedProfile)
+        : createWaypointAI(trackRacingLine, def.color);
     placeOnGrid(ai, i);          // AI occupy grid positions 0–4 (rows 0–2)
     const sprite = createCarSprite(def.color, false);
     world.addChild(sprite);
@@ -299,17 +305,28 @@ for (let i = 0; i < aiDefs.length; i++) {
 // Warm-start the waypoint AIs' caution memory against the current track before the
 // race starts, and refresh the spline AIs' speed profile reference. Call again any
 // time the track is rebuilt (new track ID, difficulty change, next-track advance).
-function warmUpAI() {
+async function warmUpAI() {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,10,0.82);z-index:8000;
+        display:flex;align-items:center;justify-content:center;font-family:monospace;`;
+    overlay.innerHTML = `<div style="color:#00FFFF;font-size:18px;letter-spacing:3px;text-shadow:0 0 12px #00FFFF">
+        LOADING&hellip;</div>`;
+    document.body.appendChild(overlay);
+    await new Promise(r => setTimeout(r, 30)); // let browser paint the overlay
     for (const ai of aiCars) {
         if (ai.aiType === 'spline') {
             ai._speedProfile = trackSpeedProfile;
+            ai._trackCenterline = trackRacingLine;
         } else {
-            ai._trackMemory = new Float32Array(1000); // old track's memory doesn't apply here
-            pretrainAI(ai, trackCenterline, (x, y) => isOnTrack(x, y, trackCenterline), arena);
+            ai._trackMemory = new Float32Array(1000);
+            ai._trackCenterline = trackRacingLine;
+            pretrainAI(ai, trackRacingLine, (x, y) => isOnTrack(x, y, trackCenterline), arena);
         }
     }
+    positionAllCars();
+    document.body.removeChild(overlay);
 }
-warmUpAI();
+if (hashTrack) warmUpAI(); // only pre-train if loading a specific track from URL; otherwise done after track select
 
 placeOnGrid(player, 5);          // player starts 6th (back of grid)
 
@@ -319,8 +336,8 @@ positionAllCars();
 player.lap = 0;
 player.prevPos = 0;
 player._trackIdx = 0;
-player._hasPassedMidtrack = true; // player starts at front of grid, already "past" start
-for (const ai of aiCars) { ai.prevPos = 0; ai._trackIdx = 0; ai._hasPassedMidtrack = false; }
+player._lapDelta = 0;
+for (const ai of aiCars) { ai.prevPos = 0; ai._trackIdx = 0; ai._lapDelta = 0; }
 
 
 // --- ORIENTATION LOCK (mobile only) ---
@@ -379,7 +396,7 @@ const mainPanel = document.createElement('div');
     const btns = document.createElement('div');
     btns.style.cssText = 'margin-bottom:12px';
     btns.innerHTML = `
-        <button id="ctrl-ok" style="background:#00FFFF;color:#000;border:none;padding:6px 18px;font-family:monospace;font-size:14px;cursor:pointer;border-radius:4px;">OK — Press Gas to Start</button>
+        <button id="ctrl-ok" style="background:#00FFFF;color:#000;border:none;padding:6px 18px;font-family:monospace;font-size:14px;cursor:pointer;border-radius:4px;">OK — Press 'Use powerup' to continue</button>
     `;
     mainPanel.appendChild(btns);
 
@@ -436,10 +453,17 @@ controlsDiv.appendChild(remapPanel);
 
 document.body.appendChild(controlsDiv);
 
-document.getElementById('ctrl-ok').addEventListener('click', () => {
+function dismissControls() {
+    if (controlsAcknowledged) return;
     controlsDiv.style.display = 'none';
     controlsAcknowledged = true;
+}
+document.getElementById('ctrl-ok').addEventListener('click', dismissControls);
+document.addEventListener('keydown', (e) => {
+    if (!controlsAcknowledged && (e.key === 'Enter' || e.key === ' ')) dismissControls();
 });
+const _ctrlInput = { steerLeft: false, steerRight: false, gas: false, brake: false, activate: false, pause: false };
+const _ctrlPoll = makeControlHandler(_ctrlInput);
 document.getElementById('ctrl-remap').addEventListener('click', () => {
     mainPanel.style.display = 'none';
     remapPanel.style.display = 'block';
@@ -495,8 +519,10 @@ function showFinishedOverlay(rank, timeStr, challengeStr, shareUrl) {
     const place = `${rank}${rank===1?'st':rank===2?'nd':rank===3?'rd':'th'}`;
     const challengeBlock = challengeStr
         ? `<div style="margin:6px 0;font-size:15px">${challengeStr}</div>` : '';
+    const sessionCount = sessionRaces.length;
     finishedDiv.innerHTML = `
         <h2 style="margin:0 0 10px 0;color:#fff;font-size:22px;letter-spacing:2px">RACE FINISHED</h2>
+        <div style="font-size:11px;color:#00FFFF88;margin-bottom:6px">Race ${sessionCount} of session</div>
         <div style="font-size:28px;font-weight:bold;color:#FFD700;margin:4px 0">${place} Place</div>
         <div style="font-size:22px;color:#FFD700;margin:4px 0">${timeStr}</div>
         ${challengeBlock}
@@ -510,11 +536,18 @@ function showFinishedOverlay(rank, timeStr, challengeStr, shareUrl) {
                 style="background:transparent;color:#0FF;border:1px solid #0FF;padding:4px 12px;
                        font-family:monospace;font-size:13px;cursor:pointer;border-radius:4px">Copy</button>
         </div>
-        <button id="finished-next"
-            style="background:#00FFFF;color:#000;border:none;padding:8px 28px;
-                   font-family:monospace;font-size:16px;cursor:pointer;border-radius:4px">
-            Next Race  (Z / b:2)
-        </button>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+            <button id="finished-next"
+                style="background:#00FFFF;color:#000;border:none;padding:8px 22px;
+                       font-family:monospace;font-size:15px;cursor:pointer;border-radius:4px">
+                Next Race  (${rmap(keyMap)['activate'] ?? 'Z'} / ${rmap(buttonMap)['activate'] ?? 'b:2'})
+            </button>
+            <button id="finished-end"
+                style="background:transparent;color:#FF00FF;border:1px solid #FF00FF;padding:8px 22px;
+                       font-family:monospace;font-size:15px;cursor:pointer;border-radius:4px">
+                End Session
+            </button>
+        </div>
     `;
     finishedDiv.style.display = 'block';
     document.getElementById('share-copy').addEventListener('click', () => {
@@ -532,6 +565,10 @@ function showFinishedOverlay(rank, timeStr, challengeStr, shareUrl) {
     document.getElementById('finished-next').addEventListener('click', () => {
         finishedDiv.style.display = 'none';
         advanceToNextTrack();
+    });
+    document.getElementById('finished-end').addEventListener('click', () => {
+        finishedDiv.style.display = 'none';
+        endSession();
     });
 }
 
@@ -563,6 +600,8 @@ let raceStarted = false;
 let raceFinished = false;
 let _finishCounter = 0;
 let raceFrame = 0;
+let sessionRaces = [];
+let _advancingTrack = false;
 let paused = false;
 let _waitForGasRelease = false;
 const raceConfig = { totalLaps: challengeLaps || 5 };
@@ -681,6 +720,17 @@ window.showTuning = () => {
 };
 if (_showTuningOnLoad) window.showTuning();
 
+// --- INITIAL TRACK SELECT ---
+if (!hashTrack) {
+    const initSel = await showTrackSelect(false, controlsDiv);
+    player.trackDifficulty = initSel.difficulty;
+    rebuildTrack(initSel.difficulty, initSel.seed);
+    await warmUpAI();
+    positionAllCars();
+    for (const ai of aiCars) { ai.lap = 0; ai.prevPos = 0; ai._trackIdx = 0; ai.vx = 0; ai.vy = 0; }
+    player.lap = 0; player.prevPos = 0; player._trackIdx = 0; player.vx = 0; player.vy = 0;
+}
+
 // --- 5. GAME LOOP ---
 app.ticker.add((ticker) => {
     const dt = ticker.deltaTime;
@@ -689,7 +739,13 @@ app.ticker.add((ticker) => {
 
     // --- CONTROLS ---
     input.steerLeft = false; input.steerRight = false; input.gas = false; input.brake = false; input.activate = false; input.pause = false;
-    if (controlsAcknowledged) pollControls();
+    if (!controlsAcknowledged) {
+        _ctrlInput.activate = false;
+        _ctrlPoll();
+        if (_ctrlInput.activate) dismissControls();
+    } else {
+        pollControls();
+    }
     pollTouch(raceStarted && !raceFinished);
     if (_pauseCooldown > 0) _pauseCooldown--;
     if (input.pause && _pauseCooldown === 0) { paused = !paused; _pauseCooldown = 20; }
@@ -743,27 +799,27 @@ app.ticker.add((ticker) => {
             let aiInput, aiState;
             if (raceStarted && ai.lap < raceConfig.totalLaps) {
                 aiInput = ai.aiType === 'spline'
-                    ? updateSplineAI(ai, dt, trackCenterline)
-                    : updateWaypointAI(ai, dt, trackCenterline);
+                    ? updateSplineAI(ai, dt, trackRacingLine)
+                    : updateWaypointAI(ai, dt, trackRacingLine);
                 aiState = updateCarPhysics(ai, dt, aiInput.steer, aiInput.gas, aiInput.brake,
                     (x, y) => isOnTrack(x, y, trackCenterline), arena);
                 // Learn from mistakes: record episode when going off-track, apply on recovery.
                 // Spline AI has no _trackMemory, so recordOffTrackEpisode is a no-op for it.
+                // Stuck rescue: near-zero speed for 0.2s anywhere → hand off to spline
+                if (ai.aiType === 'waypoint' && aiState.speed < 1.0) {
+                    ai._stuckFrames = (ai._stuckFrames || 0) + 1;
+                    if (ai._stuckFrames > 12) {
+                        ai.aiType = 'spline';
+                        ai._speedProfile = trackSpeedProfile;
+                        ai._stuckFrames = 0;
+                    }
+                } else {
+                    ai._stuckFrames = 0;
+                }
                 if (!aiState.onTrack) {
                     if (!ai._offTrackSince) {
                         ai._offTrackSince = raceFrame;
                         ai._offTrackStartIdx = aiInput.nearestIdx || 0;
-                    }
-                    // Stuck rescue: if near-zero speed off-track for 2 s, hand off to spline
-                    if (ai.aiType === 'waypoint' && aiState.speed < 1.0) {
-                        ai._stuckFrames = (ai._stuckFrames || 0) + 1;
-                        if (ai._stuckFrames > 120) {
-                            ai.aiType = 'spline';
-                            ai._speedProfile = trackSpeedProfile;
-                            ai._stuckFrames = 0;
-                        }
-                    } else {
-                        ai._stuckFrames = 0;
                     }
                 } else if (ai._offTrackSince) {
                     recordOffTrackEpisode(ai, ai._offTrackStartIdx, raceFrame - ai._offTrackSince);
@@ -800,11 +856,11 @@ app.ticker.add((ticker) => {
         if (raceStarted && raceFrame > 120) {
             for (const c of allCars) {
                 const idx = Math.floor(getTrackProgress(c.x, c.y, trackCenterline) * 1000);
-                if (idx > 500) c._hasPassedMidtrack = true;
-                if (c._trackIdx !== undefined && c._trackIdx > 800 && idx < 200 && c.lap < raceConfig.totalLaps && c._hasPassedMidtrack) {
-                    const prevLap = c.lap;
+                const raw = idx - (c._trackIdx ?? idx);
+                if (raw > 0 && raw < 500) c._lapDelta = (c._lapDelta ?? 0) + raw;
+                if (c._trackIdx !== undefined && c._trackIdx > 800 && idx < 200 && c.lap < raceConfig.totalLaps && (c._lapDelta ?? 0) >= 800) {
                     c.lap++;
-                    c._hasPassedMidtrack = false;
+                    c._lapDelta = 0;
                     if (c.lap >= raceConfig.totalLaps) c._finishOrder = ++_finishCounter;
                     if (c === player && c.lap < raceConfig.totalLaps) {
                         const remaining = raceConfig.totalLaps - c.lap;
@@ -833,6 +889,14 @@ app.ticker.add((ticker) => {
                     ? `${location.origin}${location.pathname}#track=${trackId}&challenge=${challenge}`
                     : location.href;
                 if (trackId) history.replaceState(null, '', `#track=${trackId}&challenge=${challenge}`);
+                sessionRaces.push({
+                    trackId,
+                    difficulty: player.trackDifficulty,
+                    laps: raceConfig.totalLaps,
+                    timeFrames: playerFinishFrame,
+                    rank,
+                    points: trackCenterline.map(p => ({ x: p.x, y: p.y })),
+                });
                 showFinishedOverlay(rank, timeStr, challengeStr, shareUrl);
                 lapDiv.textContent = '';
                 deltaDiv.style.display = 'none';
@@ -1002,27 +1066,19 @@ app.ticker.add((ticker) => {
 });
 
 
-function advanceToNextTrack() {
-    player.trackDifficulty = Math.min(1.0, player.trackDifficulty + 0.1);
-    rebuildTrack(player.trackDifficulty, null); // new random seed
-    warmUpAI();
-    // Reset cars to grid
+function resetCarsForNewRace() {
     for (let i = 0; i < aiCars.length; i++) {
         placeOnGrid(aiCars[i], i);
-        aiCars[i].lap = 0;
-        aiCars[i].prevPos = 0;
-        aiCars[i]._trackIdx = 0;
-        aiCars[i].vx = 0; aiCars[i].vy = 0;
-        aiCars[i]._steerInertia = 0;
+        aiCars[i].lap = 0; aiCars[i].prevPos = 0; aiCars[i]._trackIdx = 0;
+        aiCars[i].vx = 0; aiCars[i].vy = 0; aiCars[i]._steerInertia = 0;
+        aiCars[i]._lapDelta = 0; aiCars[i]._draftBoost = 0;
+        aiCars[i]._offTrackSince = 0; aiCars[i]._finishOrder = 0; aiCars[i]._stuckFrames = 0;
+        if (aiCars[i]._trackMemory) aiCars[i].aiType = 'waypoint';
     }
     placeOnGrid(player, 5);
-    player.lap = 0;
-    player.prevPos = 0;
-    player._trackIdx = 0;
+    player.lap = 0; player.prevPos = 0; player._trackIdx = 0;
     player.vx = 0; player.vy = 0;
-    for (const ai of aiCars) { ai.prevPos = 0; ai._trackIdx = 0; ai.lap = 0; ai._hasPassedMidtrack = false; ai._draftBoost = 0; ai._offTrackSince = 0; ai._finishOrder = 0; ai._stuckFrames = 0; if (ai._trackMemory) ai.aiType = 'waypoint'; }
-    player._hasPassedMidtrack = true;
-    player._finishOrder = 0;
+    player._lapDelta = 0; player._finishOrder = 0;
     _finishCounter = 0;
     raceStarted = false;
     raceFinished = false;
@@ -1036,7 +1092,45 @@ function advanceToNextTrack() {
     deltaDiv.style.display = 'none';
     _waitForGasRelease = true;
     showLabels();
+}
 
+async function advanceToNextTrack() {
+    if (_advancingTrack) return;
+    _advancingTrack = true;
+    finishedDiv.style.display = 'none';
+    deltaDiv.style.display = 'none';
+
+    const sel = await showTrackSelect(sessionRaces.length > 0, controlsDiv);
+    if (sel.endSession) {
+        _advancingTrack = false;
+        await endSession();
+        return;
+    }
+
+    raceStarted = false;
+    player.trackDifficulty = sel.difficulty;
+    rebuildTrack(sel.difficulty, sel.seed);
+    await warmUpAI();
+    resetCarsForNewRace();
+    _advancingTrack = false;
+}
+
+async function endSession() {
+    if (_advancingTrack) return;
+    _advancingTrack = true;
+    finishedDiv.style.display = 'none';
+    deltaDiv.style.display = 'none';
+
+    await showSessionSummary(sessionRaces);
+
+    raceStarted = false;
+    sessionRaces = [];
+    const sel = await showTrackSelect(false, controlsDiv);
+    player.trackDifficulty = sel.difficulty;
+    rebuildTrack(sel.difficulty, sel.seed);
+    await warmUpAI();
+    resetCarsForNewRace();
+    _advancingTrack = false;
 }
 
 // --- PWA ---
@@ -1095,4 +1189,17 @@ if (!_isStandalone) {
     }
 
     window.addEventListener('appinstalled', () => { installBanner.style.display = 'none'; });
+
+    window.drawRacingLine = function(color = 0x00FF00, alpha = 0.7) {
+        debugGfx.clear();
+        if (!trackRacingLine.length) { console.log('No racing line available'); return; }
+        debugGfx.moveTo(trackRacingLine[0].x, trackRacingLine[0].y);
+        for (let i = 1; i < trackRacingLine.length; i++)
+            debugGfx.lineTo(trackRacingLine[i].x, trackRacingLine[i].y);
+        debugGfx.closePath();
+        debugGfx.stroke({ width: 6, color, alpha, join: 'round', cap: 'round' });
+        const maxDev = Math.max(...trackRacingLine.map((p, i) => Math.hypot(p.x - trackCenterline[i].x, p.y - trackCenterline[i].y)));
+        console.log(`Racing line drawn. Max deviation from centerline: ${maxDev.toFixed(1)} (track half-width: ${130}). Call clearRacingLine() to remove.`);
+    };
+    window.clearRacingLine = function() { debugGfx.clear(); };
 }
