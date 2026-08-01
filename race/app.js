@@ -6,7 +6,12 @@ import { createCarSprite, updateCarSprite, initParticles, initSkids, updateCamer
 import { createWaypointAI, updateWaypointAI, createSplineAI, updateSplineAI, pretrainAI, recordOffTrackEpisode, resolveCollisions, computeDraftBoost } from './ai.js';
 import { initEngineSound, updateEngineSound, updateDriftSound } from './audio.js';
 import { makeControlHandler, presentKeyMap, commandNames, keyMap, buttonMap, rmap } from './controls.js';
-import { createPowerupLayer, spawnPowerup, clearPowerups, updatePowerups, activatePowerup, tickBoosts } from './powerups.js';
+import { createPowerupLayer, spawnPowerup, clearPowerups, updatePowerups, activatePowerup, tickBoosts, resetPowerupRng } from './powerups.js';
+import { initTouchControls } from './touch.js';
+import { showSplash } from './splash.js';
+
+// --- 0. SPLASH ---
+await showSplash();
 
 // --- 1. SETUP ---
 const app = new Application();
@@ -16,16 +21,71 @@ initEngineSound();
 
 const input = { steerLeft: false, steerRight: false, gas: false, brake: false, activate: false, pause: false };
 const pollControls = makeControlHandler(input);
+const pollTouch = initTouchControls(input);
 let _pauseCooldown = 0;
 let _activateCooldown = 0;
 
-// Parse URL hash for shared track BEFORE first rebuild
-const hashTrack = window.location.hash.match(/track=([A-Za-z0-9]+)/);
+// Parse URL hash for shared track / challenge BEFORE first rebuild
+function parseHash(hash) {
+    const params = {};
+    for (const part of hash.replace(/^#/, '').split('&')) {
+        const eq = part.indexOf('=');
+        if (!part) continue;
+        if (eq === -1) params[part] = true;
+        else params[part.slice(0, eq)] = part.slice(eq + 1);
+    }
+    return params;
+}
+const _initialHash = parseHash(window.location.hash);
+const hashTrack = _initialHash.track ? [null, _initialHash.track] : null;
+const _showTuningOnLoad = 'tuning' in _initialHash;
+
+// Splits stored as frames at 25%, 50%, 75%, 100% race progress.
+// Encoding: btoa("laps:t25:t50:t75:t100") — falls back to btoa("laps:t100") for old URLs.
+function encodeChallenge(laps, frames, splits) {
+    const s = splits ? `${laps}:${splits[0]}:${splits[1]}:${splits[2]}:${frames}` : `${laps}:${frames}`;
+    return btoa(s);
+}
+function decodeChallenge(s) {
+    try {
+        const parts = atob(s).split(':').map(Number);
+        if (parts.length === 5) return { laps: parts[0], splits: [parts[1], parts[2], parts[3]], frames: parts[4] };
+        if (parts.length === 2) return { laps: parts[0], splits: null, frames: parts[1] };
+        return null;
+    } catch { return null; }
+}
+// Piecewise-linear delta: interpolates between known split times for an accurate pace estimate.
+function challengeDelta(raceFrame, progress, splits, totalFrames) {
+    const pts = [0, 0.25, 0.5, 0.75, 1.0];
+    const times = splits ? [0, splits[0], splits[1], splits[2], totalFrames] : [0, totalFrames * 0.25, totalFrames * 0.5, totalFrames * 0.75, totalFrames];
+    let i = pts.findIndex((p, j) => j > 0 && progress <= p);
+    if (i < 1) i = pts.length - 1;
+    const t = (progress - pts[i - 1]) / (pts[i] - pts[i - 1]);
+    return raceFrame - (times[i - 1] + t * (times[i] - times[i - 1]));
+}
+const _initChallenge = _initialHash.challenge ? decodeChallenge(_initialHash.challenge) : null;
+let challengeTime = _initChallenge ? _initChallenge.frames : null;
+let challengeLaps = _initChallenge ? _initChallenge.laps : null;
+let challengeSplits = _initChallenge ? _initChallenge.splits : null;
+
+function formatTime(frames) {
+    const totalCs = Math.round(frames / 60 * 100);
+    const cs = totalCs % 100;
+    const totalS = Math.floor(totalCs / 100);
+    const s = totalS % 60;
+    const m = Math.floor(totalS / 60);
+    return `${m}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
+}
 
 window.addEventListener('hashchange', () => {
-    const m = window.location.hash.match(/track=([A-Za-z0-9]+)/);
-    if (m) {
-        rebuildTrack(player.trackDifficulty, m[1]);
+    const p = parseHash(window.location.hash);
+    if (p.track) {
+        const ch = p.challenge ? decodeChallenge(p.challenge) : null;
+        challengeTime = ch ? ch.frames : null;
+        challengeLaps = ch ? ch.laps : null;
+        challengeSplits = ch ? ch.splits : null;
+        if (challengeLaps) raceConfig.totalLaps = challengeLaps;
+        rebuildTrack(player.trackDifficulty, p.track);
         warmUpAI();
         positionAllCars();
     }
@@ -70,11 +130,11 @@ let _powerupSpawnTimer = 0;
 const POWERUP_SPAWN_INTERVAL = 600; // frames (~10s)
 
 // --- MINIMAP ---
-const MAP_W = 220, MAP_H = 220;
+const _isMobile = 'ontouchstart' in window || window.innerWidth < 768;
+const MAP_W = _isMobile ? 130 : 220;
+const MAP_H = MAP_W;
 const MINIMAP_SCALE = MAP_W / 4000;
 const minimap = new Container();
-minimap.x = app.screen.width - MAP_W - 16;
-minimap.y = app.screen.height - MAP_H - 16;
 app.stage.addChild(minimap);
 
 const minimapBg = new Graphics();
@@ -90,8 +150,9 @@ const minimapDots = new Graphics();
 minimap.addChild(minimapDots);
 
 function updateMinimap() {
+    // Top-right on mobile (away from bottom touch zones), bottom-right on desktop
     minimap.x = app.screen.width - MAP_W - 16;
-    minimap.y = app.screen.height - MAP_H - 16;
+    minimap.y = _isMobile ? 16 : app.screen.height - MAP_H - 16;
     minimapDots.clear();
     for (const p of powerupLayer.powerups) {
         minimapDots.circle(p.x * MINIMAP_SCALE, p.y * MINIMAP_SCALE, 2);
@@ -260,29 +321,78 @@ player._hasPassedMidtrack = true; // player starts at front of grid, already "pa
 for (const ai of aiCars) { ai.prevPos = 0; ai._trackIdx = 0; ai._hasPassedMidtrack = false; }
 
 
+// --- ORIENTATION LOCK (mobile only) ---
+const orientationDiv = document.createElement('div');
+orientationDiv.style.cssText = `
+    position:fixed;inset:0;z-index:99999;
+    background:#050510;color:#00FFFF;
+    font-family:monospace;font-size:20px;font-weight:bold;
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+    text-align:center;
+`;
+orientationDiv.innerHTML = `<div style="font-size:48px">&#8635;</div><div>Rotate to landscape</div>`;
+document.body.appendChild(orientationDiv);
+
+function checkOrientation() {
+    if (!_isMobile) return;
+    const portrait = window.screen.orientation
+        ? window.screen.orientation.type.startsWith('portrait')
+        : window.innerHeight > window.innerWidth;
+    orientationDiv.style.display = portrait ? 'flex' : 'none';
+}
+checkOrientation();
+window.addEventListener('orientationchange', checkOrientation);
+window.addEventListener('resize', checkOrientation);
+
 // --- CONTROLS OVERLAY ---
 let controlsAcknowledged = false;
 const controlsDiv = document.createElement('div');
-controlsDiv.style.position = 'absolute';
-controlsDiv.style.top = '50%';
-controlsDiv.style.left = '50%';
-controlsDiv.style.transform = 'translate(-50%, -50%)';
-controlsDiv.style.background = 'rgba(0,0,0,0.85)';
-controlsDiv.style.border = '2px solid #00FFFF';
-controlsDiv.style.borderRadius = '8px';
-controlsDiv.style.padding = '24px 32px';
-controlsDiv.style.color = '#00FFFF';
-controlsDiv.style.fontFamily = 'monospace';
-controlsDiv.style.fontSize = '16px';
-controlsDiv.style.textAlign = 'center';
-controlsDiv.style.zIndex = '5000';
-controlsDiv.style.lineHeight = '1.6';
+controlsDiv.style.cssText = `
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.88);
+    border: 2px solid #00FFFF;
+    border-radius: 8px;
+    padding: 16px 20px;
+    color: #00FFFF;
+    font-family: monospace;
+    font-size: clamp(12px, 2.5vw, 16px);
+    text-align: center;
+    z-index: 5000;
+    line-height: 1.6;
+    max-width: min(90vw, 480px);
+    max-height: 85vh;
+    overflow-y: auto;
+    box-sizing: border-box;
+`;
 const mainPanel = document.createElement('div');
 {
     const h = document.createElement('h2');
     h.textContent = 'Controls';
-    h.style.cssText = 'margin:0 0 12px 0;color:#fff';
+    h.style.cssText = 'margin:0 0 10px 0;color:#fff';
     mainPanel.appendChild(h);
+
+    // OK button first so it's always visible without scrolling
+    const btns = document.createElement('div');
+    btns.style.cssText = 'margin-bottom:12px';
+    btns.innerHTML = `
+        <button id="ctrl-ok" style="background:#00FFFF;color:#000;border:none;padding:6px 18px;font-family:monospace;font-size:14px;cursor:pointer;border-radius:4px;">OK — Press Gas to Start</button>
+    `;
+    mainPanel.appendChild(btns);
+
+    if (_isMobile) {
+        const touch = document.createElement('div');
+        touch.style.cssText = 'margin:0 0 10px 0;padding:8px 12px;border:1px solid #00FFFF44;border-radius:6px;font-size:13px;text-align:left;line-height:1.8;color:#aaa';
+        touch.innerHTML = `
+            <div style="color:#fff;margin-bottom:4px">Touch (landscape)</div>
+            <div><span style="color:#0FF">Hold bottom left / right</span> — steer</div>
+            <div><span style="color:#0FF">Gas auto</span> — hold reverse top half to lift</div>
+            <div><span style="color:#0FF">Both top halves</span> — brake</div>
+            <div><span style="color:#0FF">Both lower halves</span> — powerup · start race</div>
+        `;
+        mainPanel.appendChild(touch);
+    }
 
     const rkeymap = rmap(keyMap);
     const rbuttonmap = rmap(buttonMap);
@@ -304,12 +414,17 @@ const mainPanel = document.createElement('div');
     }
     mainPanel.appendChild(table);
 
-    const btns = document.createElement('div');
-    btns.innerHTML = `
-        <button id="ctrl-remap" style="background:transparent;color:#00FFFF;border:1px solid #00FFFF;padding:6px 18px;font-family:monospace;font-size:14px;cursor:pointer;border-radius:4px;margin-right:8px;">Remap Controls</button>
-        <button id="ctrl-ok" style="background:#00FFFF;color:#000;border:none;padding:8px 24px;font-family:monospace;font-size:16px;cursor:pointer;border-radius:4px;">OK — Press Gas to Start</button>
-    `;
-    mainPanel.appendChild(btns);
+    const remapBtn = document.createElement('div');
+    remapBtn.style.cssText = 'margin-bottom:12px';
+    remapBtn.innerHTML = `<button id="ctrl-remap" style="background:transparent;color:#00FFFF;border:1px solid #00FFFF;padding:4px 14px;font-family:monospace;font-size:13px;cursor:pointer;border-radius:4px;">Remap Controls</button>`;
+    mainPanel.appendChild(remapBtn);
+
+    if (challengeTime) {
+        const cb = document.createElement('div');
+        cb.style.cssText = 'margin-top:16px;padding:10px 16px;border:1px solid #FFD700;border-radius:6px;color:#FFD700;font-size:15px';
+        cb.innerHTML = `&#9654; Challenge: beat <b>${formatTime(challengeTime)}</b> over ${challengeLaps} lap${challengeLaps !== 1 ? 's' : ''}`;
+        mainPanel.appendChild(cb);
+    }
 }
 controlsDiv.appendChild(mainPanel);
 
@@ -345,6 +460,10 @@ lapDiv.style.zIndex = '1000';
 lapDiv.style.pointerEvents = 'none';
 document.body.appendChild(lapDiv);
 
+const deltaDiv = document.createElement('div');
+deltaDiv.style.cssText = 'position:absolute;top:34px;left:10px;font-family:monospace;font-size:15px;font-weight:bold;z-index:1000;pointer-events:none;display:none';
+document.body.appendChild(deltaDiv);
+
 const powerupHud = document.createElement('div');
 powerupHud.style.cssText = 'position:absolute;top:10px;right:10px;font-family:monospace;font-size:20px;font-weight:bold;z-index:1000;pointer-events:none;display:none';
 document.body.appendChild(powerupHud);
@@ -358,6 +477,61 @@ speedHud.style.zIndex = '1000';
 speedHud.style.pointerEvents = 'none';
 speedHud.style.opacity = '0.7';
 document.body.appendChild(speedHud);
+
+// --- RACE FINISHED OVERLAY ---
+const finishedDiv = document.createElement('div');
+finishedDiv.style.cssText = `
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    background:rgba(0,0,0,0.88);border:2px solid #00FFFF;border-radius:8px;
+    padding:16px 20px;color:#00FFFF;font-family:monospace;font-size:clamp(12px,2.5vw,16px);
+    text-align:center;z-index:5000;line-height:1.7;display:none;
+    width:min(90vw,420px);max-height:85vh;overflow-y:auto;box-sizing:border-box;
+`;
+document.body.appendChild(finishedDiv);
+
+function showFinishedOverlay(rank, timeStr, challengeStr, shareUrl) {
+    const place = `${rank}${rank===1?'st':rank===2?'nd':rank===3?'rd':'th'}`;
+    const challengeBlock = challengeStr
+        ? `<div style="margin:6px 0;font-size:15px">${challengeStr}</div>` : '';
+    finishedDiv.innerHTML = `
+        <h2 style="margin:0 0 10px 0;color:#fff;font-size:22px;letter-spacing:2px">RACE FINISHED</h2>
+        <div style="font-size:28px;font-weight:bold;color:#FFD700;margin:4px 0">${place} Place</div>
+        <div style="font-size:22px;color:#FFD700;margin:4px 0">${timeStr}</div>
+        ${challengeBlock}
+        <hr style="border:none;border-top:1px solid #00FFFF44;margin:14px 0">
+        <div style="font-size:13px;color:#aaa;margin-bottom:6px">Challenge a friend — share this run:</div>
+        <div style="display:flex;gap:6px;justify-content:center;align-items:center;margin-bottom:14px">
+            <input id="share-url" readonly value="${shareUrl}"
+                style="background:#111;color:#0FF;border:1px solid #00FFFF55;border-radius:4px;
+                       padding:4px 8px;font-family:monospace;font-size:12px;width:240px;outline:none">
+            <button id="share-copy"
+                style="background:transparent;color:#0FF;border:1px solid #0FF;padding:4px 12px;
+                       font-family:monospace;font-size:13px;cursor:pointer;border-radius:4px">Copy</button>
+        </div>
+        <button id="finished-next"
+            style="background:#00FFFF;color:#000;border:none;padding:8px 28px;
+                   font-family:monospace;font-size:16px;cursor:pointer;border-radius:4px">
+            Next Race  (Z / b:2)
+        </button>
+    `;
+    finishedDiv.style.display = 'block';
+    document.getElementById('share-copy').addEventListener('click', () => {
+        const btn = document.getElementById('share-copy');
+        const flash = () => { if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { if (btn) btn.textContent = 'Copy'; }, 1500); } };
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(shareUrl).then(flash);
+        } else {
+            const inp = document.getElementById('share-url');
+            inp.select();
+            document.execCommand('copy');
+            flash();
+        }
+    });
+    document.getElementById('finished-next').addEventListener('click', () => {
+        finishedDiv.style.display = 'none';
+        advanceToNextTrack();
+    });
+}
 
 // --- LAP ANNOUNCEMENT ---
 const announceDiv = document.createElement('div');
@@ -389,7 +563,9 @@ let _finishCounter = 0;
 let raceFrame = 0;
 let paused = false;
 let _waitForGasRelease = false;
-const raceConfig = { totalLaps: 5 };
+const raceConfig = { totalLaps: challengeLaps || 5 };
+let playerFinishFrame = 0;
+let _splitFrames = [null, null, null]; // recorded at 25%, 50%, 75% race progress
 
 window.addEventListener('keydown', (e) => {
     if (e.code === 'Escape') { paused = !paused; e.preventDefault(); }
@@ -474,31 +650,34 @@ function getColorName(hex) {
 const particles = initParticles();
 
 // --- 4. GUI ---
-const gui = new GUI({ title: 'Parameter Tuning' });
-gui.close();
-gui.add(player, 'acceleration', 0.01, 2.0);
-gui.add(player, 'maxSpeed', 1, 40);
-gui.add(player, 'turnSpeed', 0.01, 0.5);
-gui.add(player, 'friction', 0.9, 0.999);
-gui.add(player, 'grip', 0.001, 1.0);
-gui.add(player, 'invertControls').name('Invert Controls');
-gui.add(player, 'trackDifficulty', 0.1, 1.0).name('Track Difficulty').onChange(v => { rebuildTrack(v); warmUpAI(); positionAllCars(); });
-gui.add(raceConfig, 'totalLaps', 1, 10, 1).name('Total Laps');
+// Hidden by default. Activate via console (showTuning()) or URL hash flag (&tuning).
+window.showTuning = () => {
+    const gui = new GUI({ title: 'Parameter Tuning' });
+    gui.add(player, 'acceleration', 0.01, 2.0);
+    gui.add(player, 'maxSpeed', 1, 40);
+    gui.add(player, 'turnSpeed', 0.01, 0.5);
+    gui.add(player, 'friction', 0.9, 0.999);
+    gui.add(player, 'grip', 0.001, 1.0);
+    gui.add(player, 'invertControls').name('Invert Controls');
+    gui.add(player, 'trackDifficulty', 0.1, 1.0).name('Track Difficulty').onChange(v => { rebuildTrack(v); warmUpAI(); positionAllCars(); });
+    gui.add(raceConfig, 'totalLaps', 1, 10, 1).name('Total Laps');
 
-const trackInput = { id: '' };
-gui.add(trackInput, 'id').name('Track ID').onFinishChange(v => {
-    if (v.trim()) {
-        rebuildTrack(player.trackDifficulty, v.trim());
-        warmUpAI();
-        positionAllCars();
-    }
-});
-trackIdController = gui.add(trackIdDisplay, 'current').name('Current Track').disable();
+    const trackInput = { id: '' };
+    gui.add(trackInput, 'id').name('Track ID').onFinishChange(v => {
+        if (v.trim()) {
+            rebuildTrack(player.trackDifficulty, v.trim());
+            warmUpAI();
+            positionAllCars();
+        }
+    });
+    trackIdController = gui.add(trackIdDisplay, 'current').name('Current Track').disable();
 
-const debugToggle = { showDebug: false };
-gui.add(debugToggle, 'showDebug').name('Show Debug').onChange(v => {
-    debugDiv.style.display = v ? 'block' : 'none';
-});
+    const debugToggle = { showDebug: false };
+    gui.add(debugToggle, 'showDebug').name('Show Debug').onChange(v => {
+        debugDiv.style.display = v ? 'block' : 'none';
+    });
+};
+if (_showTuningOnLoad) window.showTuning();
 
 // --- 5. GAME LOOP ---
 app.ticker.add((ticker) => {
@@ -509,6 +688,7 @@ app.ticker.add((ticker) => {
     // --- CONTROLS ---
     input.steerLeft = false; input.steerRight = false; input.gas = false; input.brake = false; input.activate = false; input.pause = false;
     if (controlsAcknowledged) pollControls();
+    pollTouch(raceStarted && !raceFinished);
     if (_pauseCooldown > 0) _pauseCooldown--;
     if (input.pause && _pauseCooldown === 0) { paused = !paused; _pauseCooldown = 20; }
     if (_activateCooldown > 0) _activateCooldown--;
@@ -523,6 +703,8 @@ app.ticker.add((ticker) => {
     if (!raceStarted && gas && controlsAcknowledged) {
         raceStarted = true;
         raceFrame = 0;
+        _splitFrames = [null, null, null];
+        resetPowerupRng(trackSeed ?? 0);
         showLabels();
     }
     if (raceStarted) raceFrame++;
@@ -570,9 +752,26 @@ app.ticker.add((ticker) => {
                         ai._offTrackSince = raceFrame;
                         ai._offTrackStartIdx = aiInput.nearestIdx || 0;
                     }
+                    // Stuck rescue: if near-zero speed off-track for 2 s, hand off to spline
+                    if (ai.aiType === 'waypoint' && aiState.speed < 1.0) {
+                        ai._stuckFrames = (ai._stuckFrames || 0) + 1;
+                        if (ai._stuckFrames > 120) {
+                            ai.aiType = 'spline';
+                            ai._speedProfile = trackSpeedProfile;
+                            ai._stuckFrames = 0;
+                        }
+                    } else {
+                        ai._stuckFrames = 0;
+                    }
                 } else if (ai._offTrackSince) {
                     recordOffTrackEpisode(ai, ai._offTrackStartIdx, raceFrame - ai._offTrackSince);
                     ai._offTrackSince = 0;
+                    ai._stuckFrames = 0;
+                    // Return rescued car to waypoint mode once back on track
+                    if (ai.aiType === 'spline' && ai._trackMemory) {
+                        ai.aiType = 'waypoint';
+                        ai._recovering = false;
+                    }
                 }
             } else if (ai.lap >= raceConfig.totalLaps) {
                 // Finished: hard brake to stop
@@ -584,6 +783,14 @@ app.ticker.add((ticker) => {
             }
             aiStates.push(aiState);
             updateCarSprite(ai.sprite, ai, aiState.slip, aiState.turnSign, aiState.movingForward, aiState.steerInput);
+        }
+
+        // --- SPLIT RECORDING ---
+        if (raceStarted && !raceFinished) {
+            const progress = Math.min(1, (player.lap + (player._trackIdx || 0) / 1000) / raceConfig.totalLaps);
+            if (_splitFrames[0] === null && progress >= 0.25) _splitFrames[0] = raceFrame;
+            if (_splitFrames[1] === null && progress >= 0.50) _splitFrames[1] = raceFrame;
+            if (_splitFrames[2] === null && progress >= 0.75) _splitFrames[2] = raceFrame;
         }
 
         // --- LAPS ---
@@ -608,14 +815,48 @@ app.ticker.add((ticker) => {
             const leaderName = getColorName(leaderCar.color);
             if (!raceFinished && player.lap >= raceConfig.totalLaps) {
                 raceFinished = true;
+                playerFinishFrame = raceFrame;
                 const rank = allCars.filter(c => getRaceProgress(c) > getRaceProgress(player)).length + 1;
-                lapDiv.innerHTML = `<b>RACE FINISHED — ${rank}${rank===1?'st':rank===2?'nd':rank===3?'rd':'th'} place</b><br>Press <b>Z / b:2</b> for next race or <b>ESC</b> to stay`;
+                const timeStr = formatTime(playerFinishFrame);
+                let challengeStr = '';
+                if (challengeTime) {
+                    const diff = playerFinishFrame - challengeTime;
+                    if (diff < 0) challengeStr = `<span style="color:#00FF88">Beat challenge by ${formatTime(-diff)}!</span>`;
+                    else challengeStr = `<span style="color:#FF4444">Missed by ${formatTime(diff)}</span>`;
+                }
+                const trackId = trackSeed !== null ? seedToTrackId(trackSeed) : '';
+                const splits = _splitFrames.every(v => v !== null) ? _splitFrames : null;
+                const challenge = encodeChallenge(raceConfig.totalLaps, playerFinishFrame, splits);
+                const shareUrl = trackId
+                    ? `${location.origin}${location.pathname}#track=${trackId}&challenge=${challenge}`
+                    : location.href;
+                if (trackId) history.replaceState(null, '', `#track=${trackId}&challenge=${challenge}`);
+                showFinishedOverlay(rank, timeStr, challengeStr, shareUrl);
+                lapDiv.textContent = '';
+                deltaDiv.style.display = 'none';
             } else {
                 const trackId = trackSeed !== null ? seedToTrackId(trackSeed) : '?';
-                lapDiv.textContent = `Lap ${Math.min(player.lap + 1, raceConfig.totalLaps)}/${raceConfig.totalLaps}  |  Leader: ${leaderName}  |  Track: ${trackId}`;
+                lapDiv.textContent = `Lap ${Math.min(player.lap + 1, raceConfig.totalLaps)}/${raceConfig.totalLaps}  |  ${formatTime(raceFrame)}  |  Leader: ${leaderName}  |  Track: ${trackId}`;
+                if (challengeTime) {
+                    const progress = Math.min(1, (player.lap + (player._trackIdx || 0) / 1000) / raceConfig.totalLaps);
+                    const delta = challengeDelta(raceFrame, progress, challengeSplits, challengeTime);
+                    const ahead = delta < 0;
+                    deltaDiv.style.display = 'block';
+                    deltaDiv.style.color = ahead ? '#00FF88' : '#FF4444';
+                    deltaDiv.textContent = `${ahead ? '▲' : '▼'} ${ahead ? '-' : '+'}${formatTime(Math.abs(delta))} vs challenge`;
+                } else {
+                    deltaDiv.style.display = 'none';
+                }
             }
+        } else if (controlsAcknowledged) {
+            const preRaceMsg = challengeTime
+                ? `Challenge: beat ${formatTime(challengeTime)} (${challengeLaps} laps) — Press gas to start`
+                : 'Press gas to start race';
+            if (lapDiv.textContent !== preRaceMsg) lapDiv.textContent = preRaceMsg;
+            deltaDiv.style.display = 'none';
         } else {
-            lapDiv.textContent = 'Press gas to start race';
+            if (lapDiv.textContent !== '') lapDiv.textContent = '';
+            deltaDiv.style.display = 'none';
         }
 
         // --- POSITION TRACKING ---
@@ -777,14 +1018,60 @@ function advanceToNextTrack() {
     player.prevPos = 0;
     player._trackIdx = 0;
     player.vx = 0; player.vy = 0;
-    for (const ai of aiCars) { ai.prevPos = 0; ai._trackIdx = 0; ai.lap = 0; ai._hasPassedMidtrack = false; ai._draftBoost = 0; ai._offTrackSince = 0; ai._finishOrder = 0; }
+    for (const ai of aiCars) { ai.prevPos = 0; ai._trackIdx = 0; ai.lap = 0; ai._hasPassedMidtrack = false; ai._draftBoost = 0; ai._offTrackSince = 0; ai._finishOrder = 0; ai._stuckFrames = 0; if (ai._trackMemory) ai.aiType = 'waypoint'; }
     player._hasPassedMidtrack = true;
     player._finishOrder = 0;
     _finishCounter = 0;
     raceStarted = false;
     raceFinished = false;
     raceFrame = 0;
+    playerFinishFrame = 0;
+    _splitFrames = [null, null, null];
+    challengeTime = null;
+    challengeLaps = null;
+    challengeSplits = null;
+    finishedDiv.style.display = 'none';
+    deltaDiv.style.display = 'none';
     _waitForGasRelease = true;
     showLabels();
 
 }
+
+// --- PWA ---
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js');
+}
+
+let _deferredInstall = null;
+window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    _deferredInstall = e;
+    installBtn.style.display = 'block';
+});
+
+const installBtn = document.createElement('button');
+installBtn.textContent = 'Install App';
+installBtn.style.cssText = `
+    display:none;
+    position:absolute;
+    bottom:16px;left:50%;
+    transform:translateX(-50%);
+    background:transparent;
+    color:#00FFFF;
+    border:1px solid #00FFFF;
+    padding:6px 20px;
+    font-family:monospace;font-size:13px;
+    border-radius:4px;cursor:pointer;
+    z-index:2000;
+    opacity:0.8;
+`;
+installBtn.addEventListener('click', async () => {
+    if (!_deferredInstall) return;
+    _deferredInstall.prompt();
+    const { outcome } = await _deferredInstall.userChoice;
+    if (outcome === 'accepted') installBtn.style.display = 'none';
+    _deferredInstall = null;
+});
+document.body.appendChild(installBtn);
+
+window.addEventListener('appinstalled', () => { installBtn.style.display = 'none'; });

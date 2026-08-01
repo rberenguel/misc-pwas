@@ -1,4 +1,4 @@
-export { createPowerupLayer, spawnPowerup, clearPowerups, updatePowerups, activatePowerup, tickBoosts };
+export { createPowerupLayer, spawnPowerup, clearPowerups, updatePowerups, activatePowerup, tickBoosts, resetPowerupRng };
 
 import { Graphics } from 'pixi.js';
 import { TRACK_HALF } from './track.js';
@@ -7,6 +7,13 @@ const POWERUP_SIZE     = 14;
 const PICKUP_RADIUS_SQ = (POWERUP_SIZE + 14) ** 2;
 const MAX_POWERUPS     = 5;
 const TAPER_FRAMES     = 30;
+
+// Seeded RNG — reset at race start so powerup placement is reproducible per track seed.
+let _rng = Math.random;
+function resetPowerupRng(seed) {
+    let s = (seed >>> 0) ^ 0xDEADBEEF;
+    _rng = () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; return (s >>> 0) / 4294967296; };
+}
 
 // S = sustained speed boost, T = turbo burst
 const TYPES = {
@@ -34,7 +41,7 @@ function spawnPowerup(layer, trackCenterline) {
     if (layer.powerups.length >= MAX_POWERUPS) return;
 
     const n = trackCenterline.length;
-    const idx = Math.floor(Math.random() * n);
+    const idx = Math.floor(_rng() * n);
     const pt = trackCenterline[idx];
     const next = trackCenterline[(idx + 1) % n];
 
@@ -42,10 +49,10 @@ function spawnPowerup(layer, trackCenterline) {
     const tx = next.x - pt.x, ty = next.y - pt.y;
     const len = Math.hypot(tx, ty) || 1;
     const px = -ty / len, py = tx / len;
-    const side = Math.random() < 0.5 ? 1 : -1;
-    const offset = TRACK_HALF * (0.4 + Math.random() * 0.3) * side;
+    const side = _rng() < 0.5 ? 1 : -1;
+    const offset = TRACK_HALF * (0.4 + _rng() * 0.3) * side;
 
-    const type = Math.random() < 0.6 ? 'S' : 'T';
+    const type = _rng() < 0.6 ? 'S' : 'T';
     const powerup = {
         x: pt.x + px * offset,
         y: pt.y + py * offset,
