@@ -973,7 +973,7 @@ app.ticker.add((ticker) => {
             emitCarEffects(aiCars[i], aiStates[i], 0.5); // AI marks when they oversteer
         }
         skids.draw((x, y) => isOnTrack(x, y, trackCenterline), trackColor);
-        particles.draw(cam.x, cam.y);
+        particles.draw(cam.x, cam.y, ZOOM);
 
         // --- DEBUG LOG ---
     let dbg = '<b>RACE DEBUG</b><br>';

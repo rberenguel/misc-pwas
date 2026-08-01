@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recipe Flowchart</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#fffde7" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="editor-pane">
+      <h2>Recipe Markdown</h2>
+      <textarea id="md-input" spellcheck="false"></textarea>
+      <div id="editor-actions">
+        <button id="render-btn">Render</button>
+        <button id="export-btn">Export PNG</button>
+      </div>
+      <div id="editor-samples">
+        <span>Samples:</span>
+        <button id="sample-brownie">Brownie</button>
+        <button id="sample-banana">Crackers</button>
+      </div>
+    </div>
+    <div id="preview-pane">
+      <h2>Flowchart</h2>
+      <div id="recipe-output"></div>
+    </div>
+  </div>
+  <script src="marked.min.js"></script>
+  <script src="html2canvas.min.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js');
+    }
+  </script>
+</body>
+</html>

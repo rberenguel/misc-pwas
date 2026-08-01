@@ -1,0 +1,212 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+@font-face {
+  font-family: 'Inter';
+  src: url('fonts/Inter-Regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+/* ── Dunno dark palette ── */
+:root {
+  --body-bg:   #0f1020;
+  --panel-bg:  #1e2040;
+  --border:    #3a3a6a;
+  --fg:        #ccccee;
+  --fg-dim:    #8b8baa;
+  --input-bg:  #0f1020;
+  --btn-green: #2e7d32;
+  --btn-blue:  #1565c0;
+
+  /* Recipe table dark theme — light on dark */
+  --rec-bg:     #1e2040;
+  --rec-border: #6666aa;
+  --rec-fg:     #ccccee;
+  --rec-title:  #ffffff;
+  --rec-prep:   #9999cc;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--body-bg);
+  color: var(--fg);
+  height: 100vh;
+  overflow: hidden;
+}
+
+#app {
+  display: flex;
+  height: 100vh;
+}
+
+/* ── Editor pane ── */
+#editor-pane {
+  display: flex;
+  flex-direction: column;
+  width: 380px;
+  min-width: 280px;
+  flex-shrink: 0;
+  background: var(--panel-bg);
+  border-right: 2px solid var(--border);
+  padding: 12px;
+  gap: 8px;
+}
+
+#editor-pane h2 {
+  font-size: 11px;
+  color: var(--fg-dim);
+  font-family: 'Inter', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+#md-input {
+  flex: 1;
+  resize: none;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  padding: 8px;
+  border-radius: 4px;
+  line-height: 1.5;
+  background: var(--input-bg);
+  color: var(--fg);
+  outline: none;
+}
+
+#md-input:focus { border-color: #6666aa; }
+
+#editor-actions {
+  display: flex;
+  gap: 8px;
+}
+
+#editor-actions button {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+}
+
+#render-btn { background: var(--btn-green); color: #fff; }
+#render-btn:hover { background: #388e3c; }
+#export-btn { background: var(--btn-blue); color: #fff; }
+#export-btn:hover { background: #1976d2; }
+
+#editor-samples {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+#editor-samples button {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  background: var(--panel-bg);
+  color: var(--fg);
+}
+
+#editor-samples button:hover { background: var(--border); }
+
+/* ── Preview pane ── */
+#preview-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  padding: 12px;
+  gap: 8px;
+  background: var(--body-bg);
+}
+
+#preview-pane h2 {
+  font-size: 11px;
+  color: var(--fg-dim);
+  font-family: 'Inter', sans-serif;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+#recipe-output {
+  flex: 1;
+  overflow: auto;
+}
+
+/* ── Recipe table — dark, light on dark ── */
+.recipe-table {
+  border-collapse: collapse;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  background: var(--rec-bg);
+  border: 2px solid var(--rec-border);
+}
+
+.recipe-table th,
+.recipe-table td {
+  border: 1px solid var(--rec-border);
+  padding: 6px 10px;
+  vertical-align: middle;
+  line-height: 1.35;
+  color: var(--rec-fg);
+  background: var(--rec-bg);
+}
+
+/* Title row */
+.recipe-table .title-row td {
+  text-align: center;
+  font-size: 15px;
+  font-weight: bold;
+  color: var(--rec-title);
+}
+
+/* Prep rows */
+.recipe-table .prep-row td {
+  text-align: center;
+  color: var(--rec-prep);
+  font-style: italic;
+}
+
+/* Ingredient cells */
+.recipe-table .cell-ingredient { white-space: nowrap; }
+
+.recipe-table .cell-ingredient .prep-label {
+  font-style: italic;
+  margin-right: 4px;
+  opacity: .75;
+}
+
+/* Action / finish cells */
+.recipe-table .cell-action,
+.recipe-table .cell-finish {
+  font-weight: bold;
+  min-width: 28px;
+  padding: 4px 2px;
+  text-align: center;
+  color: var(--rec-title);
+}
+
+.recipe-table .cell-action span,
+.recipe-table .cell-finish span {
+  display: inline-block;
+  writing-mode: vertical-rl;
+  white-space: pre-line;
+}
+
+.error-msg {
+  color: #ff8888;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  padding: 12px;
+  background: #2a1010;
+  border-radius: 4px;
+}

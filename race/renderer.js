@@ -107,7 +107,7 @@ export function initParticles() {
         });
     }
 
-    function draw(camX, camY) {
+    function draw(camX, camY, zoom = 1) {
         const dpr = window.devicePixelRatio;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         for (let i = particles.length - 1; i >= 0; i--) {
@@ -121,10 +121,10 @@ export function initParticles() {
                 particles.splice(i, 1);
                 continue;
             }
-            const sx = (p.wx + camX) * dpr;
-            const sy = (p.wy + camY) * dpr;
+            const sx = (p.wx * zoom + camX) * dpr;
+            const sy = (p.wy * zoom + camY) * dpr;
             ctx.beginPath();
-            ctx.arc(sx, sy, p.radius * dpr, 0, Math.PI * 2);
+            ctx.arc(sx, sy, p.radius * zoom * dpr, 0, Math.PI * 2);
             ctx.fillStyle = `rgba(${p.color} ${p.alpha})`;
             ctx.fill();
         }

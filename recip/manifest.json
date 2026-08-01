@@ -1,0 +1,9 @@
+{
+  "name": "Recipe Flowchart",
+  "short_name": "RecipeFlow",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fffde7",
+  "theme_color": "#fffde7",
+  "icons": []
+}
