@@ -12,96 +12,96 @@ export const PAO_PEGS = [
     p("Q",                "stops the Enterprise",     "weird regal robe"),                  //  7
     p("V",                "puts on its face",                  "mask"),                              //  8
     p("Apu",              "thanks you for coming",    "squishee"),                          //  9
-    p("Dizzy Gillespie",  "blows",                    "trumpet"),                           // 10
-    p("Data",             "calculates",               "circuit board"),                     // 11
+    p("Tom Selleck",      "twitches moustache",       "Hawaiian shirt"),                    // 10
+    p("David Tennant",    "throws open door to vast space", "sonic screwdriver"),          // 11
     p("Tintin",           "investigates",             "magnifying glass"),                  // 12
-    p("Tom",              "chases",                   "mouse"),                             // 13
-    p("Thor",             "throws",                   "Mjolnir"),                           // 14
-    p("Dolly (Parton)",   "sings",                    "wig"),                               // 15
-    p("Tchaikovsky",      "conducts",                 "cannon"),                            // 16
+    p("Troy McClure",     "introduces",               "film reel"),                         // 13
+    p("Tony Robbins",     "firewalks",                "burning coals"),                     // 14
+    p("David Lynch",      "places",                   "Directed by David Lynch sticker"),   // 15
+    p("The Joker",        "laughs maniacally",        "playing card"),                      // 16
     p("Tim Cook",         "unveils",                  "iPhone"),                            // 17
-    p("Dave Grohl",       "drums",                    "drumsticks"),                        // 18
+    p("Darth Vader",      "force-chokes",             "lightsaber"),                        // 18
     p("David Bowie",      "floats away",                    "tin can"),                    // 19
     p("Nancy Sinatra",    "stomps",                   "boots"),                             // 20
     p("Nikola Tesla",     "zaps",                     "coil"),                              // 21
     p("Nino Bravo",       "closes the door",          "stone"),                             // 22
     p("Nemo",             "looks angry",              "submarine"),                         // 23
     p("Nero",             "burns",                    "grapes"),                            // 24
-    p("Nole (Djokovic)",  "smashes to the ground",    "racket"),                            // 25
+    p("Niles (Crane)",    "adjusts cufflinks",        "sherry glass"),                      // 25
     p("(John) Nash",      "chalkboards",              "equation"),                          // 26
     p("Nog",              "salutes",                  "Starfleet badge"),                   // 27
     p("Nathan Fillion",   "rendered speechless",      "typewriter"),                        // 28
-    p("Napoleon",         "tucks hand in jacket",     "bicorne"),                           // 29
-    p("Marge Simpson",    "vacuums",                  "vacuum"),                            // 30
-    p("Meat (Loaf)",      "roars",                    "motorcycle"),                        // 31
+    p("Natalie Portman",  "shaves head",              "electric razor"),                    // 29
+    p("Marge Simpson",    "vacuums",                  "blue hair"),                         // 30
+    p("Margaret Thatcher","stands, glacial",           "miner's helmet"),                    // 31
     p("Johnny Cash",      "strums",                   "long black jacket"),                 // 32
     p("Marilyn Monroe",   "holds skirt",              "skirt"),                             // 33
     p("Homer",            "eats",                     "donut"),                             // 34
     p("Millhouse",        "pulls up trousers",        "Bonestorm game cartridge"),          // 35
     p("Michael Jordan",   "soars",                    "sneakers"),                          // 36
     p("Michael Caine",    "fidgets",                  "stress balls"),                      // 37
-    p("Morgan Freeman",   "narrates",                 "globe"),                             // 38
+    p("Humphrey Bogart",  "looks quizzically",        "maltese falcon"),                    // 38
     p("Mary Poppins",             "flies",                   "umbrella"),                              // 39
     p("Roz (Frasier)",    "answers",                  "phone"),                             // 40
-    p("Rudy Fernández",   "alley-oop",                "number 5 Club Joventut shirt"),      // 41
-    p("Ron (Swanson)",    "frowns",                   "meat"),            // 42
+    p("Robert De Niro",   "talks to mirror",          "taxi"),                              // 41
+    p("Rafael Nadal",     "pumps fist",               "clay"),                              // 42
     p("Rambo",            "fires",                    "machine gun"),                       // 43
     p("Rory",             "talks fast",               "coffee cup"),                        // 44
     p("Ralph Wiggum",     "rolls",                    "banana"),                            // 45
-    p("Raj",              "whispers",                 "cocktail"),                          // 46
+    p("Ronnie James (Dio)","throws devil horns",       "Holy Diver album"),                  // 46
     p("Rick (Astley)",    "dances",                   "trench coat"),                       // 47
-    p("Rafa (Nadal)",     "flexes arm",               "clay"),                              // 48
-    p("Robin Hood",       "draws bow",                "arrow"),                             // 49
+    p("Roger Federer",    "serves",                   "Wimbledon trophy"),                  // 48
+    p("Rocky Balboa",     "trains",                   "jumping rope"),                      // 49
     p("Lisa",             "shines",                   "saxophone"),                         // 50
-    p("Liz Taylor",       "poses",                    "Cleopatra crown"),                   // 51
+    p("Linus Torvalds",   "flames",                   "Tux penguin"),                       // 51
     p("Lenny",            "stares intently",          "inanimate carbon rod"),              // 52
-    p("Dalai Lama",       "meditates",                "prayer beads"),                      // 53
-    p("Laura Palmer",     "acts dead",                "plastic foil"),                      // 54
+    p("Luka Modric",      "dribbles",                 "Ballon d'Or"),                       // 53
+    p("Lrrr (Ruler)",     "disintegrates",            "laser gun"),                         // 54
     p("Leela",            "revs up engine",           "wrist scanner"),                     // 55
     p("LeBron James",     "posterizes",               "basketball"),                        // 56
-    p("Lucky (Luke)",     "pulls out gun",            "revolver"),                          // 57
-    p("Lovecraft",        "summons",                  "Cthulhu"),                           // 58
-    p("Arsène Lupin",     "steals / sneaks",          "briefcase"),                         // 59
-    p("Jesse (BrB)",      "cooks (chemistry style)",  "blue meth"),                         // 60
-    p("Charles Darwin",   "writes",                   "giraffe"),                           // 61
-    p("Jon (Snow)",       "pets",                     "direwolf"),                          // 62
-    p("James (Bond)",     "shakes",                   "martini"),                           // 63
-    p("Jerry",            "runs",                     "cheese"),                            // 64
+    p("Lisa Kudrow",      "plays",                    "acoustic guitar"),                   // 57
+    p("Lord Voldemort",   "casts",                    "wand"),                              // 58
+    p("Little Prince",    "tends",                    "rose"),                              // 59
+    p("Jake Sisko",       "writes",                   "DS9 uniform"),                       // 60
+    p("James Dean",       "combs hair",               "comb"),                              // 61
+    p("Jack Nicholson",   "breaks through door",      "axe"),                               // 62
+    p("John McClane",     "limps on",                 "broken glass"),                      // 63
+    p("Julia Roberts",    "shops",                    "shopping bag"),                      // 64
     p("John Lennon",      "adjusts",                  "round glasses"),                     // 65
     p("Jar Jar",          "flaps",                    "ears"),                              // 66
-    p("Chuck (Norris)",   "roundhouses",              "Ranger badge"),                      // 67
+    p("Jeff Goldblum",    "stammers",                 "dinosaur"),                          // 67
     p("JFK",              "waves",                    "sniper rifle"),                      // 68
-    p("Jabba",            "oozes",                    "pizza"),                             // 69
-    p("Gus",              "straightens",              "tie"),                               // 70
-    p("Godzilla",     "demolishes",                   "Tokyo scale model"),                              // 71
+    p("James Bond",       "shakes",                   "martini"),                           // 69
+    p("Gene Simmons",     "sticks out tongue",        "white face makeup"),                 // 70
+    p("Gérard Depardieu", "fences",                   "sabre"),                             // 71
     p("Commander Keen",   "jumps",                    "pogo stick"),                        // 72
-    p("Groucho Marx",     "wiggles",                  "cigar"),                             // 73
+    p("Groucho Marx",     "wiggles",                  "Groucho glasses"),                   // 73
     p("Gordon Ramsay",    "shouts angrily",           "white chef dress"),                  // 74
     p("Gil",              "pouts",                    "salesman red jacket"),               // 75
     p("Cage",             "closes eyes enjoying",     "long hair"),                         // 76
-    p("Goku",             "charges on the side",      "Kamehameha"),                        // 77
+    p("Genghis Khan",     "charges on horseback",     "Mongolian bow"),                      // 77
     p("Kif",              "sighs",                    "clipboard"),                         // 78
     p("Kobe (Bryant)",    "shoots",                   "black snake"),                       // 79
     p("Frank Sinatra",    "snaps",                    "fedora"),                            // 80
     p("Vito",             "stroke",                   "horsehead"),                         // 81
     p("Phineas",          "builds",                   "contraption"),                       // 82
-    p("Freddie Mercury",  "twirls",                   "moustache"),                         // 83
+    p("Viggo (Mortensen)", "screams For Frodo",       "orc horde"),                         // 83
     p("Fry",              "drinks",                   "coffee"),                            // 84
     p("Vladimir Lenin",   "raises",                   "fist"),                              // 85
     p("Fish",             "swims",                    "scales"),                            // 86
-    p("Viggo (Aragorn)",  "screams For Frodo",        "orc horde"),                         // 87
-    p("Johnny Five",      "reads",                    "book"),                              // 88
+    p("Vincent van Gogh", "paints frantically",       "sunflowers"),                        // 87
+    p("Victor Frankenstein", "sews limbs",             "big bolt"),                          // 88
     p("Vincent Price",    "cackles",                  "cape"),                              // 89
-    p("Buzz Aldrin",   "steps on",                    "flag"),                             // 90
-    p("Peter Pan",        "sprinkles",                "fairy dust"),                        // 91
-    p("Mr. Bean",         "hides",                    "steak tartare"),                     // 92
-    p("Pam (The Office)", "doodles",                  "post-it"),                           // 93
-    p("Bruce Lee",        "spins around skillfully",  "nunchaku"),                          // 94
-    p("Uma Thurman (Kill Bill → B+L)", "slashes",     "katana"),                            // 95
+    p("Bart Simpson",     "skateboards",              "slingshot"),                         // 90
+    p("Prof. Doofenshmirtz", "emerges sooty",          "lab coat"),                          // 91
+    p("Bill Nye",          "mixes liquids",            "bowtie"),                            // 92
+    p("Philip Marlowe",   "lights",                   "cigarette"),                         // 93
+    p("Bob Ross",         "paints",                   "happy little tree"),                 // 94
+    p("Bruce Lee",        "spins around skillfully",  "nunchaku"),                          // 95
     p("Billy Joel",       "pounds",                   "piano keys"),                        // 96
-    p("Pac-Man",          "chomps",                   "large pills"),                       // 97
-    p("Buffoon",          "jesters",                  "clown suit"),                        // 98
-    p("Pope",             "blesses",                  "holy-hand grenade from Worms"),      // 99
+    p("Peter Griffin",    "fights",                   "giant chicken"),                     // 97
+    p("Benjamin Franklin","flies",                    "kite with key"),                     // 98
+    p("Perry the Platypus","puts on",                 "fedora"),                            // 99
 ];
 
 // Consonant sounds for each digit in the Major System

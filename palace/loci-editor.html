@@ -278,7 +278,7 @@
         <button class="action" id="btn-clear" onclick="clearCurrent()" disabled>Clear</button>
         <label class="action">
             Load
-            <input type="file" id="file-input" accept=".txt,.csv" style="display:none" onchange="loadFile(event)">
+            <input type="file" id="file-input" accept=".txt,.csv,.md" style="display:none" onchange="loadFile(event)">
         </label>
     </div>
 </header>
@@ -339,21 +339,91 @@ function applyPalaces(palaces) {
     document.getElementById('editor').innerHTML = '<div class="no-selection">Select a palace →</div>';
 }
 
+// ── Markdown loading ──
+
+function parseMarkdownLoci(text) {
+    const palaces = [];
+    const lines = text.split('\n');
+    let currentPalace = null;
+    let currentRoom = null;
+
+    for (const raw of lines) {
+        const line = raw.replace(/\r$/, '');
+        const pMatch = line.match(/^##\s+([A-Za-z])\s+[—–-]\s+(.+)$/);
+        if (pMatch) {
+            if (currentPalace) palaces.push(currentPalace);
+            currentPalace = { letter: pMatch[1].toUpperCase(), name: pMatch[2].trim(), loci: [] };
+            currentRoom = null;
+            continue;
+        }
+        if (!currentPalace) continue;
+
+        const rMatch = line.match(/^-\s+\*\*(.+?)\*\*\s*$/);
+        if (rMatch) {
+            currentRoom = rMatch[1].trim();
+            continue;
+        }
+
+        const lMatch = line.match(/^  -\s+(.+)$/);
+        if (lMatch && currentRoom) {
+            const locusText = lMatch[1].trim();
+            let position = '';
+            let item = locusText;
+            const colonIdx = locusText.indexOf(': ');
+            if (colonIdx > 0) {
+                position = locusText.slice(0, colonIdx).trim();
+                item = locusText.slice(colonIdx + 2).trim();
+            }
+            currentPalace.loci.push({ room: currentRoom, position, item });
+        }
+    }
+    if (currentPalace) palaces.push(currentPalace);
+    return palaces;
+}
+
+function applyMarkdownPalaces(palaces) {
+    if (palaces.length === 0) { alert('No palaces found — check file format.'); return; }
+    const tabLines = palaces.map(p => `${p.letter}\t${p.name}`);
+    localStorage.setItem('palace_file', tabLines.join('\n'));
+    for (const p of palaces) {
+        saveData(p.letter, p.loci);
+    }
+    PALACES = palaces.map(p => ({ letter: p.letter, name: p.name }));
+    document.getElementById('btn-export').disabled = false;
+    document.getElementById('btn-export-md').disabled = false;
+    activeLetter = null;
+    renderSidebar();
+    document.getElementById('editor').innerHTML = '<div class="no-selection">Select a palace →</div>';
+}
+
 function loadFile(e) {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = ev => {
-        const palaces = parsePalaces(ev.target.result);
-        if (palaces.length === 0) { alert('No palaces found — check file format.'); return; }
-        localStorage.setItem('palace_file', ev.target.result);
-        applyPalaces(palaces);
+        const text = ev.target.result;
+        if (/^##\s+[A-Za-z]\s+[—–-]/m.test(text)) {
+            const palaces = parseMarkdownLoci(text);
+            applyMarkdownPalaces(palaces);
+        } else {
+            const palaces = parsePalaces(text);
+            if (palaces.length === 0) { alert('No palaces found — check file format.'); return; }
+            localStorage.setItem('palace_file', text);
+            applyPalaces(palaces);
+        }
     };
     reader.readAsText(file);
 }
 
 const savedFile = localStorage.getItem('palace_file');
-if (savedFile) applyPalaces(parsePalaces(savedFile));
+if (savedFile) {
+    if (/^##\s+[A-Za-z]\s+[—–-]/m.test(savedFile)) {
+        const palaces = parseMarkdownLoci(savedFile);
+        applyMarkdownPalaces(palaces);
+    } else {
+        applyPalaces(parsePalaces(savedFile));
+    }
+}
 
 // ── Sidebar ──
 

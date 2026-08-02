@@ -1,0 +1,26 @@
+A	Adliswil
+B	Badalona
+C	Chiswick
+D	Cabo de Gata
+E	El Masnou
+F	Friends (Joey → Corridor → Rachel)
+G	Gerechtichkeitsgasse
+H	EURH (Entrance → Floor 2)
+I	Imholz Gattikon
+J	Bunker M.A. (Jardí)
+K	La Place EURH (Kantine)
+L	Le Miclivier (Villars)
+M	Migros Adliswil
+N	Despatx UB
+O	East Finchley
+P	Cucurulla (Portal de l'Àngel)
+Q	Kew
+R	Roca 23, l'Arboc
+S	Villars (Sunny Hill)
+T	The Big Bang Theory (Penny → Corridor → Sheldon)
+U	Urgell 12
+V	Vilafranca (Manpuk?)
+W	Brandschenkenstrasse 100, Floor 3
+X	Cornellà
+Y	Yaya
+Z	EURH → Platform 21/22
