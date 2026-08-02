@@ -286,6 +286,36 @@ function renderMode3Tab(el, sessions) {
     renderM3Heatmap(el.querySelector('#heatmap-m3'), pegStats);
 }
 
+// ── PAO reading table ─────────────────────────────────────────────────────────
+
+function renderPaoTable(el) {
+    const rows = PAO_PEGS.map((peg, i) => `
+        <tr>
+            <td class="pao-tbl-num">${String(i).padStart(2, '0')}</td>
+            <td class="pao-tbl-p">${peg.person ?? '—'}</td>
+            <td class="pao-tbl-a">${peg.action ?? '—'}</td>
+            <td class="pao-tbl-o">${peg.object ?? '—'}</td>
+        </tr>`).join('');
+
+    el.innerHTML = `
+        <table class="pao-tbl">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Person</th>
+                    <th>Action</th>
+                    <th>Object</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>`;
+
+    el.querySelector('tbody').addEventListener('click', e => {
+        const row = e.target.closest('tr');
+        if (row) row.classList.toggle('pao-tbl-flagged');
+    });
+}
+
 // ── Main entry point ──────────────────────────────────────────────────────────
 
 // Called once at startup to wire static stats UI elements
@@ -345,4 +375,5 @@ export async function renderStats() {
     renderMode1Tab(document.getElementById('tab-mode1'), sessions.filter(s => s.mode === 1));
     renderMode2Tab(document.getElementById('tab-mode2'), sessions.filter(s => s.mode === 2));
     renderMode3Tab(document.getElementById('tab-mode3'), sessions.filter(s => s.mode === 3));
+    renderPaoTable(document.getElementById('tab-pao'));
 }
