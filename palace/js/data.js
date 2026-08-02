@@ -8,8 +8,8 @@ export const PAO_PEGS = [
     p("Moe",              "pours",                    "beer"),                              //  3
     p("Roy",              "rained on",                    "dove"),                             //  4
     p("Eugenio",          "standup comedy",           "owl joke"),                          //  5
-    p("Dr J",             "dunks violently",          "basketball backboard, shattered glass"), //  6
-    p("Q",                "stops the Enterprise",     "weird regal robe"),                  //  7
+    p("Che Guevara",             "smoking cigar",          "bandana"), //  6
+    p("Q",                "makes things change",     "weird regal robe"),                  //  7
     p("V",                "puts on its face",                  "mask"),                              //  8
     p("Apu",              "thanks you for coming",    "squishee"),                          //  9
     p("Tom Selleck",      "twitches moustache",       "Hawaiian shirt"),                    // 10
@@ -23,7 +23,7 @@ export const PAO_PEGS = [
     p("Darth Vader",      "force-chokes",             "lightsaber"),                        // 18
     p("David Bowie",      "floats away",                    "tin can"),                    // 19
     p("Nancy Sinatra",    "stomps",                   "boots"),                             // 20
-    p("Nikola Tesla",     "zaps",                     "coil"),                              // 21
+    p("Nikola Tesla",     "closes circuit",                     "Tesla coil"),                              // 21
     p("Nino Bravo",       "closes the door",          "stone"),                             // 22
     p("Nemo",             "looks angry",              "submarine"),                         // 23
     p("Nero",             "burns",                    "grapes"),                            // 24
@@ -38,31 +38,31 @@ export const PAO_PEGS = [
     p("Marilyn Monroe",   "holds skirt",              "skirt"),                             // 33
     p("Homer",            "eats",                     "donut"),                             // 34
     p("Millhouse",        "pulls up trousers",        "Bonestorm game cartridge"),          // 35
-    p("Michael Jordan",   "soars",                    "sneakers"),                          // 36
+    p("Michael Jordan",   "soars in the air",                    "sneakers"),                          // 36
     p("Michael Caine",    "fidgets",                  "stress balls"),                      // 37
     p("Humphrey Bogart",  "looks quizzically",        "maltese falcon"),                    // 38
     p("Mary Poppins",             "flies",                   "umbrella"),                              // 39
     p("Roz (Frasier)",    "answers",                  "phone"),                             // 40
-    p("Robert De Niro",   "talks to mirror",          "taxi"),                              // 41
+    p("Robert De Niro",   "talks to mirror",          "spring knife"),                              // 41
     p("Rafael Nadal",     "pumps fist",               "clay"),                              // 42
     p("Rambo",            "fires",                    "machine gun"),                       // 43
     p("Rory",             "talks fast",               "coffee cup"),                        // 44
     p("Ralph Wiggum",     "rolls",                    "banana"),                            // 45
     p("Ronnie James (Dio)","throws devil horns",       "Holy Diver album"),                  // 46
     p("Rick (Astley)",    "dances",                   "trench coat"),                       // 47
-    p("Roger Federer",    "serves",                   "Wimbledon trophy"),                  // 48
+    p("Roger Federer",    "serves as in tennis",                   "Wimbledon trophy"),                  // 48
     p("Rocky Balboa",     "trains",                   "jumping rope"),                      // 49
-    p("Lisa",             "shines",                   "saxophone"),                         // 50
+    p("Lisa",             "blows musical instrument",                   "saxophone"),                         // 50
     p("Linus Torvalds",   "flames",                   "Tux penguin"),                       // 51
     p("Lenny",            "stares intently",          "inanimate carbon rod"),              // 52
-    p("Luka Modric",      "dribbles",                 "Ballon d'Or"),                       // 53
-    p("Lrrr (Ruler)",     "disintegrates",            "laser gun"),                         // 54
+    p("Luka Modric",      "dribbles (feet)",                 "Ballon d'Or"),                       // 53
+    p("Lrrr (Ruler)",     "zaps",            "laser gun"),                         // 54
     p("Leela",            "revs up engine",           "wrist scanner"),                     // 55
     p("LeBron James",     "posterizes",               "basketball"),                        // 56
     p("Lisa Kudrow",      "plays",                    "acoustic guitar"),                   // 57
     p("Lord Voldemort",   "casts",                    "wand"),                              // 58
     p("Little Prince",    "tends",                    "rose"),                              // 59
-    p("Jake Sisko",       "writes",                   "DS9 uniform"),                       // 60
+    p("Jake Sisko",       "writes",                   "funky looking vest"),                       // 60
     p("James Dean",       "combs hair",               "comb"),                              // 61
     p("Jack Nicholson",   "breaks through door",      "axe"),                               // 62
     p("John McClane",     "limps on",                 "broken glass"),                      // 63
@@ -81,15 +81,15 @@ export const PAO_PEGS = [
     p("Cage",             "closes eyes enjoying",     "long hair"),                         // 76
     p("Genghis Khan",     "charges on horseback",     "Mongolian bow"),                      // 77
     p("Kif",              "sighs",                    "clipboard"),                         // 78
-    p("Kobe (Bryant)",    "shoots",                   "black snake"),                       // 79
-    p("Frank Sinatra",    "snaps",                    "fedora"),                            // 80
+    p("Kobe (Bryant)",    "shoots towards a basket",                   "black snake"),                       // 79
+    p("Frank Sinatra",    "snaps fingers",                    "tuxedo fedora"),                            // 80
     p("Vito",             "stroke",                   "horsehead"),                         // 81
     p("Phineas",          "builds",                   "contraption"),                       // 82
     p("Viggo (Mortensen)", "screams For Frodo",       "orc horde"),                         // 83
     p("Fry",              "drinks",                   "coffee"),                            // 84
     p("Vladimir Lenin",   "raises",                   "fist"),                              // 85
     p("Fish",             "swims",                    "scales"),                            // 86
-    p("Vincent van Gogh", "paints frantically",       "sunflowers"),                        // 87
+    p("Vincent van Gogh", "cuts ear",       "sunflowers"),                        // 87
     p("Victor Frankenstein", "sews limbs",             "big bolt"),                          // 88
     p("Vincent Price",    "cackles",                  "cape"),                              // 89
     p("Bart Simpson",     "skateboards",              "slingshot"),                         // 90
@@ -101,7 +101,7 @@ export const PAO_PEGS = [
     p("Billy Joel",       "pounds",                   "piano keys"),                        // 96
     p("Peter Griffin",    "fights",                   "giant chicken"),                     // 97
     p("Benjamin Franklin","flies",                    "kite with key"),                     // 98
-    p("Perry the Platypus","puts on",                 "fedora"),                            // 99
+    p("Perry the Platypus","puts on hat disguise",                 "comic fedora"),                            // 99
 ];
 
 // Consonant sounds for each digit in the Major System
