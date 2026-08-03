@@ -1,4 +1,5 @@
 'use strict';
+import { normalizeLabel, splitPrepLabel, parseRecipe, buildLayoutCells } from './lib.js';
 
 // ── Samples ───────────────────────────────────────────────────────────────────
 
@@ -7,189 +8,43 @@ const SAMPLE = `# Brownie (20×20 cm pan)
 > Butter and flour a 20×20 cm pan
 > Preheat oven to 170°C
 
-## fold in
-### mix
-#### mix
-##### melt
+4. fold in
+3. mix
+2. mix
+1. melt
 115 g unsalted butter
-#### 200 g sugar
-#### 2.5 mL vanilla extract
-#### 60 mL fresh brewed espresso or very strong coffee
-### lightly beat: 2 large eggs
-## 80 g all-purpose flour
-## 80 g Hershey's cocoa powder
-## 1.3 g baking soda
-## 1.5 g table salt
+1. 200 g sugar
+1. 2.5 mL vanilla extract
+1. 60 mL fresh brewed espresso or very strong coffee
+2. lightly beat: 2 large eggs
+3. 80 g all-purpose flour
+3. 80 g Hershey's cocoa powder
+3. 1.3 g baking soda
+3. 1.5 g table salt
 
-1. bake 170°C for 30 to 40 min
+---
+bake 170°C for 30 to 40 min
 `;
 
 const BANANA = `# Sunflower Seed Crackers
 
-## thorough mix
-### add
+4. thorough mix
+3. add
 1/2 tbsp honey
-#### add
+2. add
 75 ml olive oil
 100 ml water
-##### mix dry
+1. mix dry
 150 g white flour
 2.5 pinches of salt
 sunflower seeds to taste
 
-1. lay on parchment
-2. press flat 3–3.5 mm
-3. mark thumb-sized cuts
-4. bake 160°C until golden
+---
+lay on parchment
+press flat 3–3.5 mm
+mark thumb-sized cuts
+bake 160°C until golden
 `;
-
-// ── Label normalization ───────────────────────────────────────────────────────
-// Converts literal \n and <br/> in user-typed labels to real newline characters.
-// These become extra vertical text columns (wider cell, not taller).
-function normalizeLabel(text) {
-  return text.replace(/\\n/g, '\n').replace(/<br\s*\/?>/gi, '\n').trim();
-}
-
-// ── Tree math ─────────────────────────────────────────────────────────────────
-
-// Number of leaf nodes in this subtree (= rowspan of this cell).
-function calcRowspan(node) {
-  if (node.children.length === 0) return 1;
-  return node.children.reduce((s, c) => s + calcRowspan(c), 0);
-}
-
-// Distance from this node to its deepest leaf (= column index in the table).
-function calcHeight(node) {
-  if (node.children.length === 0) return 0;
-  return 1 + Math.max(...node.children.map(calcHeight));
-}
-
-// ── Parser ────────────────────────────────────────────────────────────────────
-
-// "melt: 4 oz butter" → { prep: "melt", ingredient: "4 oz butter" }
-function splitPrepLabel(text) {
-  const m = text.match(/^([a-zA-Z ]{1,20}):\s*(.+)$/);
-  if (m) return { prep: m[1].trim(), ingredient: m[2].trim() };
-  return { prep: null, ingredient: text };
-}
-
-// Heading-based syntax:
-//   # Title
-//   > prep step
-//   ## root action   (## = depth 1, ### = depth 2, …)
-//   plain paragraph  = ingredient leaf under the current heading
-//   1. finish step
-function parseRecipe(md) {
-  const tokens = marked.lexer(md);
-  const recipe = { title: null, prepSteps: [], roots: [], finishSteps: [] };
-  const stack = []; // [{depth, node}]
-
-  function stackTop() { return stack.length ? stack[stack.length - 1] : null; }
-  function attach(node) {
-    const p = stackTop();
-    if (p) p.node.children.push(node);
-    else recipe.roots.push(node);
-  }
-
-  for (const tok of tokens) {
-    if (tok.type === 'heading') {
-      if (tok.depth === 1) { recipe.title = tok.text.replace(/\*\*/g, ''); continue; }
-      while (stack.length && stack[stack.length - 1].depth >= tok.depth) stack.pop();
-      const node = { label: normalizeLabel(tok.text.replace(/\*\*/g, '')), prepLabel: null, children: [] };
-      attach(node);
-      stack.push({ depth: tok.depth, node });
-
-    } else if (tok.type === 'paragraph') {
-      tok.text.split('\n').map(l => l.trim()).filter(Boolean).forEach(line => {
-        const { prep, ingredient } = splitPrepLabel(line);
-        attach({ label: ingredient, prepLabel: prep, children: [] });
-      });
-
-    } else if (tok.type === 'blockquote') {
-      tok.raw.replace(/^>\s*/gm, '').trim()
-        .split('\n').map(l => l.trim()).filter(Boolean)
-        .forEach(l => recipe.prepSteps.push(l));
-
-    } else if (tok.type === 'list' && tok.ordered) {
-      for (const item of tok.items) {
-        const raw = item.tokens
-          .filter(t => t.type === 'text' || t.type === 'paragraph')
-          .map(t => (t.text || t.raw || '').replace(/\*\*/g, '').trim())
-          .join(' ').trim();
-        recipe.finishSteps.push({ label: normalizeLabel(raw), prepLabel: null, children: [] });
-      }
-    }
-  }
-
-  return recipe;
-}
-
-// ── Shared layout ─────────────────────────────────────────────────────────────
-//
-// Produces a flat list of cell descriptors used by both the DOM builder and
-// the canvas renderer.  Each descriptor:
-//   { row, col, rowspan, colspan, text, prepLabel, type }
-// type: 'ingredient' | 'action' | 'finish'
-
-function buildLayoutCells(recipe) {
-  const { title, prepSteps, roots, finishSteps } = recipe;
-  const treeH     = roots.length ? Math.max(...roots.map(calcHeight)) : 0;
-  const totalRows  = roots.reduce((s, r) => s + calcRowspan(r), 0);
-  const totalCols  = (treeH + 1) + finishSteps.length;
-
-  const slots = Array.from({ length: totalRows }, () => []);
-
-  function place(node, startRow, parentHeight) {
-    const rs     = calcRowspan(node);
-    const isLeaf = node.children.length === 0;
-    const h      = calcHeight(node);
-
-    if (isLeaf) {
-      slots[startRow].push({
-        row: startRow, col: 0,
-        rowspan: rs, colspan: Math.max(1, parentHeight),
-        text: node.label, prepLabel: node.prepLabel,
-        type: 'ingredient',
-      });
-    } else {
-      slots[startRow].push({
-        row: startRow, col: h,
-        rowspan: rs, colspan: 1,
-        text: node.label, prepLabel: null,
-        type: 'action',
-      });
-      // In bottom-up recipes a nested sub-recipe (taller tree) is usually
-      // the chronologically earlier step; place it first so it appears
-      // higher in the layout while keeping original order among ties.
-      const sortedChildren = node.children.slice().sort((a, b) => calcHeight(b) - calcHeight(a));
-      let childRow = startRow;
-      for (const child of sortedChildren) {
-        place(child, childRow, h);
-        childRow += calcRowspan(child);
-      }
-    }
-  }
-
-  let cur = 0;
-  for (const root of roots) { place(root, cur, treeH + 1); cur += calcRowspan(root); }
-
-  // Sort each row's cells left-to-right, then flatten
-  const bodyCells = [];
-  for (let r = 0; r < totalRows; r++) {
-    slots[r].sort((a, b) => a.col - b.col);
-    bodyCells.push(...slots[r]);
-  }
-
-  // Finish steps: appended as last column(s) starting at row 0
-  finishSteps.forEach((step, fi) => bodyCells.push({
-    row: 0, col: treeH + 1 + fi,
-    rowspan: totalRows, colspan: 1,
-    text: step.label, prepLabel: null,
-    type: 'finish',
-  }));
-
-  return { bodyCells, title, prepSteps, totalRows, totalCols, treeH };
-}
 
 // ── DOM table ─────────────────────────────────────────────────────────────────
 

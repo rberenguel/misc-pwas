@@ -1,10 +1,10 @@
-const CACHE = 'recipe-flowchart-v1';
+const CACHE = 'recipe-flowchart-v3';
 const ASSETS = [
   '/',
   '/index.html',
   '/app.js',
+  '/lib.js',
   '/styles.css',
-  '/marked.min.js',
   '/html2canvas.min.js',
   '/manifest.json',
 ];
