@@ -2,106 +2,106 @@
 const p = (person = null, action = null, object = null) => ({ person, action, object });
 
 export const PAO_PEGS = [
-    p("Zeus",             "hurls",                    "thunderbolt"),                       //  0
-    p("Mr T",             "fall asleep",              "black and red van"),                 //  1
-    p("Neo",              "dodges",                   "bullet"),                            //  2
-    p("Moe",              "pours",                    "beer"),                              //  3
-    p("Roy",              "rained on",                    "dove"),                             //  4
-    p("Eugenio",          "standup comedy",           "owl joke"),                          //  5
-    p("Che Guevara",             "smoking cigar",          "bandana"), //  6
-    p("Q",                "makes things change",     "weird regal robe"),                  //  7
-    p("V",                "puts on its face",                  "mask"),                              //  8
-    p("Apu",              "thanks you for coming",    "squishee"),                          //  9
-    p("Tom Selleck",      "twitches moustache",       "Hawaiian shirt"),                    // 10
-    p("David Tennant",    "throws open door to vast space", "sonic screwdriver"),          // 11
-    p("Tintin",           "investigates",             "magnifying glass"),                  // 12
-    p("Troy McClure",     "introduces",               "film reel"),                         // 13
-    p("Tony Robbins",     "firewalks",                "burning coals"),                     // 14
-    p("David Lynch",      "places",                   "Directed by David Lynch sticker"),   // 15
-    p("The Joker",        "laughs maniacally",        "playing card"),                      // 16
-    p("Tim Cook",         "unveils",                  "iPhone"),                            // 17
-    p("Darth Vader",      "force-chokes",             "lightsaber"),                        // 18
-    p("David Bowie",      "floats away",                    "tin can"),                    // 19
-    p("Nancy Sinatra",    "stomps",                   "boots"),                             // 20
-    p("Nikola Tesla",     "closes circuit",                     "Tesla coil"),                              // 21
-    p("Nino Bravo",       "closes the door",          "stone"),                             // 22
-    p("Nemo",             "looks angry",              "submarine"),                         // 23
-    p("Nero",             "burns",                    "grapes"),                            // 24
-    p("Niles (Crane)",    "adjusts cufflinks",        "sherry glass"),                      // 25
-    p("(John) Nash",      "chalkboards",              "equation"),                          // 26
-    p("Nog",              "salutes",                  "Starfleet badge"),                   // 27
-    p("Nathan Fillion",   "rendered speechless",      "typewriter"),                        // 28
-    p("Natalie Portman",  "shaves head",              "electric razor"),                    // 29
-    p("Marge Simpson",    "vacuums",                  "blue hair"),                         // 30
-    p("Margaret Thatcher","stands, glacial",           "miner's helmet"),                    // 31
-    p("Johnny Cash",      "strums",                   "long black jacket"),                 // 32
-    p("Marilyn Monroe",   "holds skirt",              "skirt"),                             // 33
-    p("Homer",            "eats",                     "donut"),                             // 34
-    p("Millhouse",        "pulls up trousers",        "Bonestorm game cartridge"),          // 35
-    p("Michael Jordan",   "soars in the air",                    "sneakers"),                          // 36
-    p("Michael Caine",    "fidgets",                  "stress balls"),                      // 37
-    p("Humphrey Bogart",  "looks quizzically",        "maltese falcon"),                    // 38
-    p("Mary Poppins",             "flies",                   "umbrella"),                              // 39
-    p("Roz (Frasier)",    "answers",                  "phone"),                             // 40
-    p("Robert De Niro",   "talks to mirror",          "spring knife"),                              // 41
-    p("Rafael Nadal",     "pumps fist",               "clay"),                              // 42
-    p("Rambo",            "fires",                    "machine gun"),                       // 43
-    p("Rory",             "talks fast",               "coffee cup"),                        // 44
-    p("Ralph Wiggum",     "rolls",                    "banana"),                            // 45
-    p("Ronnie James (Dio)","throws devil horns",       "Holy Diver album"),                  // 46
-    p("Rick (Astley)",    "dances",                   "trench coat"),                       // 47
+    p("Zeus",             "seizing",                    "sauce"),                       //  0
+    p("Mr T",             "teeing",              "toe"),                 //  1
+    p("Neo",              "no-ing",                   "gnat"),                            //  2
+    p("Moe",              "meowing",                    "ham"),                              //  3
+    p("Roy",              "rowing",                    "roe"),                             //  4
+    p("Eugenio",          "laying",           "loo"),                          //  5
+    p("Che Guevara",             "chewing",          "shoe"), //  6
+    p("Q",                "hugging",     "key"),                  //  7
+    p("V",                "waving",                  "fee"),                              //  8
+    p("Apu",              "peeing",    "pie"),                          //  9
+    p("Tom Selleck",      "tossing",       "dice"),                    // 10
+    p("David Tennant",    "tidying", "toad"),          // 11
+    p("Tintin",           "tuning",             "tuna"),                  // 12
+    p("Troy McClure",     "timing",               "tome"),                         // 13
+    p("Tony Robbins",     "tearing",                "deer"),                     // 14
+    p("David Lynch",      "dealing",                   "doily"),   // 15
+    p("The Joker",        "dodging",        "dish"),                      // 16
+    p("Tim Cook",         "attacking",                  "taco"),                            // 17
+    p("Darth Vader",      "diving",             "dove"),                        // 18
+    p("David Bowie",      "tipping",                    "tape"),                    // 19
+    p("Nancy Sinatra",    "nosing",                   "nose"),                             // 20
+    p("Nikola Tesla",     "knighting",                     "knight"),                              // 21
+    p("Nino Bravo",       "nannying",          "nun"),                             // 22
+    p("Nemo",             "naming",              "gnome"),                         // 23
+    p("Nero",             "honoring",                    "noir"),                            // 24
+    p("Niles (Crane)",    "kneeling",        "nail"),                      // 25
+    p("(John) Nash",      "nudging",              "nacho"),                          // 26
+    p("Nog",              "knocking",                  "nuke"),                   // 27
+    p("Nathan Fillion",   "envying",      "knife"),                        // 28
+    p("Natalie Portman",  "napping",              "napa"),                    // 29
+    p("Marge Simpson",    "missing",                  "mouse"),                         // 30
+    p("Margaret Thatcher","meeting",           "meat"),                    // 31
+    p("Johnny Cash",      "mining",                   "moon"),                 // 32
+    p("Marilyn Monroe",   "maiming",              "mime"),                             // 33
+    p("Homer",            "marrying",                     "mare"),                             // 34
+    p("Millhouse",        "mailing",        "mole"),          // 35
+    p("Michael Jordan",   "mashing",                    "match"),                          // 36
+    p("Michael Caine",    "mocking",                  "mike"),                      // 37
+    p("Humphrey Bogart",  "moving",        "muff"),                    // 38
+    p("Mary Poppins",             "moping",                   "map"),                              // 39
+    p("Roz (Frasier)",    "raising",                  "rose"),                             // 40
+    p("Robert De Niro",   "riding",          "rat"),                              // 41
+    p("Rafael Nadal",     "running",               "rhino"),                              // 42
+    p("Rambo",            "roaming",                    "rum"),                       // 43
+    p("Rory",             "rearing",               "rear"),                        // 44
+    p("Ralph Wiggum",     "rolling",                    "roll"),                            // 45
+    p("Ronnie James (Dio)","reaching",       "roach"),                  // 46
+    p("Rick (Astley)",    "rifling",                   "rifle"),                       // 47
     p("Roger Federer",    "serves as in tennis",                   "Wimbledon trophy"),                  // 48
-    p("Rocky Balboa",     "trains",                   "jumping rope"),                      // 49
-    p("Lisa",             "blows musical instrument",                   "saxophone"),                         // 50
-    p("Linus Torvalds",   "flames",                   "Tux penguin"),                       // 51
-    p("Lenny",            "stares intently",          "inanimate carbon rod"),              // 52
-    p("Luka Modric",      "dribbles (feet)",                 "Ballon d'Or"),                       // 53
-    p("Lrrr (Ruler)",     "zaps",            "laser gun"),                         // 54
-    p("Leela",            "revs up engine",           "wrist scanner"),                     // 55
-    p("LeBron James",     "posterizes",               "basketball"),                        // 56
-    p("Lisa Kudrow",      "plays",                    "acoustic guitar"),                   // 57
-    p("Lord Voldemort",   "casts",                    "wand"),                              // 58
-    p("Little Prince",    "tends",                    "rose"),                              // 59
-    p("Jake Sisko",       "writes",                   "funky looking vest"),                       // 60
-    p("James Dean",       "combs hair",               "comb"),                              // 61
-    p("Jack Nicholson",   "breaks through door",      "axe"),                               // 62
-    p("John McClane",     "limps on",                 "broken glass"),                      // 63
-    p("Julia Roberts",    "shops",                    "shopping bag"),                      // 64
-    p("John Lennon",      "adjusts",                  "round glasses"),                     // 65
-    p("Jar Jar",          "flaps",                    "ears"),                              // 66
-    p("Jeff Goldblum",    "stammers",                 "dinosaur"),                          // 67
-    p("JFK",              "waves",                    "sniper rifle"),                      // 68
-    p("James Bond",       "shakes",                   "martini"),                           // 69
-    p("Gene Simmons",     "sticks out tongue",        "white face makeup"),                 // 70
-    p("Gérard Depardieu", "fences",                   "sabre"),                             // 71
-    p("Commander Keen",   "jumps",                    "pogo stick"),                        // 72
-    p("Groucho Marx",     "wiggles",                  "Groucho glasses"),                   // 73
-    p("Gordon Ramsay",    "shouts angrily",           "white chef dress"),                  // 74
-    p("Gil",              "pouts",                    "salesman red jacket"),               // 75
-    p("Cage",             "closes eyes enjoying",     "long hair"),                         // 76
-    p("Genghis Khan",     "charges on horseback",     "Mongolian bow"),                      // 77
-    p("Kif",              "sighs",                    "clipboard"),                         // 78
-    p("Kobe (Bryant)",    "shoots towards a basket",                   "black snake"),                       // 79
-    p("Frank Sinatra",    "snaps fingers",                    "tuxedo fedora"),                            // 80
-    p("Vito",             "stroke",                   "horsehead"),                         // 81
-    p("Phineas",          "builds",                   "contraption"),                       // 82
-    p("Viggo (Mortensen)", "screams For Frodo",       "orc horde"),                         // 83
-    p("Fry",              "drinks",                   "coffee"),                            // 84
-    p("Vladimir Lenin",   "raises",                   "fist"),                              // 85
-    p("Fish",             "swims",                    "scales"),                            // 86
-    p("Vincent van Gogh", "cuts ear",       "sunflowers"),                        // 87
-    p("Victor Frankenstein", "sews limbs",             "big bolt"),                          // 88
-    p("Vincent Price",    "cackles",                  "cape"),                              // 89
-    p("Bart Simpson",     "skateboards",              "slingshot"),                         // 90
-    p("Prof. Doofenshmirtz", "emerges sooty",          "lab coat"),                          // 91
-    p("Bill Nye",          "mixes liquids",            "bowtie"),                            // 92
-    p("Philip Marlowe",   "lights",                   "cigarette"),                         // 93
-    p("Bob Ross",         "paints",                   "happy little tree"),                 // 94
-    p("Bruce Lee",        "spins around skillfully",  "nunchaku"),                          // 95
-    p("Billy Joel",       "pounds",                   "piano keys"),                        // 96
-    p("Peter Griffin",    "fights",                   "giant chicken"),                     // 97
-    p("Benjamin Franklin","flies",                    "kite with key"),                     // 98
-    p("Perry the Platypus","puts on hat disguise",                 "comic fedora"),                            // 99
+    p("Rocky Balboa",     "rubbing",                   "rope"),                      // 49
+    p("Lisa",             "lassoing",                   "lace"),                         // 50
+    p("Linus Torvalds",   "leading",                   "lute"),                       // 51
+    p("Lenny",            "leaning",          "lion"),              // 52
+    p("Luka Modric",      "looming",                 "llama"),                       // 53
+    p("Lrrr (Ruler)",     "luring",            "lyre"),                         // 54
+    p("Leela",            "lol'ing",           "lolly"),                     // 55
+    p("LeBron James",     "lashing",               "leash"),                        // 56
+    p("Lisa Kudrow",      "licking",                    "lego"),                   // 57
+    p("Lord Voldemort",   "leaving",                    "loaf"),                              // 58
+    p("Little Prince",    "leaping",                    "loupe"),                              // 59
+    p("Jake Sisko",       "chasing",                   "cheese"),                       // 60
+    p("James Dean",       "shooting",               "jet"),                              // 61
+    p("Jack Nicholson",   "shining",      "chain"),                               // 62
+    p("John McClane",     "shaming",                 "gem"),                      // 63
+    p("Julia Roberts",    "cheering",                    "cherry"),                      // 64
+    p("John Lennon",      "chilling",                  "jello"),                     // 65
+    p("Jar Jar",          "judging",                    "judge"),                              // 66
+    p("Jeff Goldblum",    "shaking",                 "shake"),                          // 67
+    p("JFK",              "shaving",                    "shiv"),                      // 68
+    p("James Bond",       "chipping",                   "chip"),                           // 69
+    p("Gene Simmons",     "kissing",        "goose"),                 // 70
+    p("Gérard Depardieu", "cutting",                   "cod"),                             // 71
+    p("Commander Keen",   "canning",                    "can"),                        // 72
+    p("Groucho Marx",     "combing",                  "comb"),                   // 73
+    p("Gordon Ramsay",    "carrying",           "core"),                  // 74
+    p("Gil",              "calling",                    "koala"),               // 75
+    p("Cage",             "catching",     "cage"),                         // 76
+    p("Genghis Khan",     "cooking",     "cookie"),                      // 77
+    p("Kif",              "coughing",                    "coffee"),                         // 78
+    p("Kobe (Bryant)",    "cupping",                   "cape"),                       // 79
+    p("Frank Sinatra",    "phasing",                    "vice"),                            // 80
+    p("Vito",             "feeding",                   "foot"),                         // 81
+    p("Phineas",          "fanning",                   "fan"),                       // 82
+    p("Viggo Mortensen", "fuming",       "fife (flute)"),                         // 83
+    p("Fry",              "frying",                   "fur"),                            // 84
+    p("Vladimir Lenin",   "falling",                   "file"),                              // 85
+    p("Fish",             "fishing",                    "fish"),                            // 86
+    p("Vincent van Gogh", "viking",       "fokker"),                        // 87
+    p("Victor Frankenstein", "fiving",             "???"),                          // 88
+    p("Vincent Price",    "vaping",                  "fob"),                              // 89
+    p("Bart Simpson",     "posing",              "pez"),                         // 90
+    p("Prof. Doofenshmirtz", "petting",          "bat"),                          // 91
+    p("Bill Nye",          "pinning",            "pen"),                            // 92
+    p("Philip Marlowe",   "palming",                   "pom"),                         // 93
+    p("Bob Ross",         "burying",                   "bear"),                 // 94
+    p("Bruce Lee",        "peeling",  "ball"),                          // 95
+    p("Billy Joel",       "pitching",                   "peach"),                        // 96
+    p("Peter Griffin",    "puking",                   "pig"),                     // 97
+    p("Benjamin Franklin","puffing",                    "beef"),                     // 98
+    p("Perry the Platypus","pooping",                 "poop"),                            // 99
 ];
 
 // Consonant sounds for each digit in the Major System
