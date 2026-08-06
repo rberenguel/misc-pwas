@@ -12,15 +12,15 @@ const SAMPLE = `# Brownie (20×20 cm pan)
 3. mix
 2. mix
 1. melt
-115 g unsalted butter
-1. 200 g sugar
-1. 2.5 mL vanilla extract
-1. 60 mL fresh brewed espresso or very strong coffee
-2. lightly beat: 2 large eggs
-3. 80 g all-purpose flour
-3. 80 g Hershey's cocoa powder
-3. 1.3 g baking soda
-3. 1.5 g table salt
+1. 115 g unsalted butter
+2. 200 g sugar
+2. 2.5 mL vanilla extract
+2. 60 mL fresh brewed espresso or very strong coffee
+3. lightly beat: 2 large eggs
+4. 80 g all-purpose flour
+4. 80 g Hershey's cocoa powder
+4. 1.3 g baking soda
+4. 1.5 g table salt
 
 ---
 bake 170°C for 30 to 40 min
@@ -29,15 +29,15 @@ bake 170°C for 30 to 40 min
 const BANANA = `# Sunflower Seed Crackers
 
 4. thorough mix
-3. add
-1/2 tbsp honey
-2. add
-75 ml olive oil
-100 ml water
+3. add honey
+3. 1/2 tbsp honey
+2. add wet
+2. 75 ml olive oil
+2. 100 ml water
 1. mix dry
-150 g white flour
-2.5 pinches of salt
-sunflower seeds to taste
+1. 150 g white flour
+1. 2.5 pinches of salt
+1. sunflower seeds to taste
 
 ---
 lay on parchment

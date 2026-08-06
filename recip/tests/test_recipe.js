@@ -12,15 +12,15 @@ const BROWNIE = `# Brownie (20×20 cm pan)
 3. mix
 2. mix
 1. melt
-115 g unsalted butter
-1. 200 g sugar
-1. 2.5 mL vanilla extract
-1. 60 mL fresh brewed espresso or very strong coffee
-2. lightly beat: 2 large eggs
-3. 80 g all-purpose flour
-3. 80 g Hershey's cocoa powder
-3. 1.3 g baking soda
-3. 1.5 g table salt
+1. 115 g unsalted butter
+2. 200 g sugar
+2. 2.5 mL vanilla extract
+2. 60 mL fresh brewed espresso or very strong coffee
+3. lightly beat: 2 large eggs
+4. 80 g all-purpose flour
+4. 80 g Hershey's cocoa powder
+4. 1.3 g baking soda
+4. 1.5 g table salt
 
 ---
 bake 170°C for 30 to 40 min
@@ -100,7 +100,7 @@ describe('parseRecipe', () => {
   });
 
   it('same-level items are siblings under their shared parent', () => {
-    const r = parseRecipe('2. mix\n1. melt\nbutter\n1. sugar\n');
+    const r = parseRecipe('2. mix\n1. melt\nbutter\n2. sugar\n');
     const mix = r.roots[0];
     expect(mix.children).to.have.length(2);
     expect(mix.children[0].label).to.equal('melt');
