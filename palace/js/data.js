@@ -85,12 +85,12 @@ export const PAO_PEGS = [
     p("Frank Sinatra",    "phasing",                    "vice"),                            // 80
     p("Vito",             "feeding",                   "foot"),                         // 81
     p("Phineas",          "fanning",                   "fan"),                       // 82
-    p("Viggo Mortensen", "fuming",       "fife (flute)"),                         // 83
+    p("Viggo Mortensen", "vomiting",       "fife (flute)"),                         // 83
     p("Fry",              "frying",                   "fur"),                            // 84
     p("Vladimir Lenin",   "falling",                   "file"),                              // 85
     p("Fish",             "fishing",                    "fish"),                            // 86
     p("Vincent van Gogh", "viking",       "fokker"),                        // 87
-    p("Victor Frankenstein", "fiving",             "???"),                          // 88
+    p("Victor Frankenstein", "fiving",             "foam"),                          // 88
     p("Vincent Price",    "vaping",                  "fob"),                              // 89
     p("Bart Simpson",     "posing",              "pez"),                         // 90
     p("Prof. Doofenshmirtz", "petting",          "bat"),                          // 91
@@ -99,7 +99,7 @@ export const PAO_PEGS = [
     p("Bob Ross",         "burying",                   "bear"),                 // 94
     p("Bruce Lee",        "peeling",  "ball"),                          // 95
     p("Billy Joel",       "pitching",                   "peach"),                        // 96
-    p("Peter Griffin",    "puking",                   "pig"),                     // 97
+    p("Peter Griffin",    "packing",                   "pig"),                     // 97
     p("Benjamin Franklin","puffing",                    "beef"),                     // 98
     p("Perry the Platypus","pooping",                 "poop"),                            // 99
 ];
