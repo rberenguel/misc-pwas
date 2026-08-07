@@ -188,6 +188,39 @@ describe('buildLayoutCells — brownie', () => {
   });
 });
 
+// ── parseRecipe — close markers ───────────────────────────────────────────────
+
+describe('parseRecipe — close markers', () => {
+  it('.N pops the stack back past N, allowing a sibling branch', () => {
+    // Without .3, the `1. melt` below would attach to mix_2to6 (nearest higher N).
+    // With .3, the stack is popped to combine, making melt a sibling of mix_2to6.
+    const r = parseRecipe('4. combine\n3. mix\ningredient_a\n.3\n1. melt\ningredient_b\n');
+    const combine = r.roots[0];
+    expect(combine.label).to.equal('combine');
+    expect(combine.children).to.have.length(2);
+    expect(combine.children[0].label).to.equal('mix');
+    expect(combine.children[1].label).to.equal('melt');
+  });
+
+  it('.N pops multiple stack levels when needed', () => {
+    const r = parseRecipe('4. root\n3. mid\n2. inner\ningredient_a\n.3\ningredient_b\n');
+    const root = r.roots[0];
+    // .3 pops inner(2) and mid(3); ingredient_b attaches to root(4)
+    expect(root.children).to.have.length(2);
+    expect(root.children[0].label).to.equal('mid');
+    expect(root.children[1].label).to.equal('ingredient_b');
+  });
+
+  it('asymmetric tree: short branch gets correct colspan', () => {
+    // combine(4) → mix_2to6(3) → mix_2to4(2); combine(4) → melt(1)
+    const md = '4. combine\n3. mix_2to6\n2. mix_2to4\ning_a\n.2\n.3\n1. melt\ning_b\n';
+    const { bodyCells } = buildLayoutCells(parseRecipe(md));
+    const melt = bodyCells.find(c => c.type === 'action' && c.text === 'melt');
+    // melt is at height 1, parent combine is at height 3, so colspan should be 2
+    expect(melt.colspan).to.equal(2);
+  });
+});
+
 // ── buildLayoutCells — simple cases ───────────────────────────────────────────
 
 describe('buildLayoutCells — simple cases', () => {
