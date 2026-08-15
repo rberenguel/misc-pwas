@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-900 text-slate-100">
+<head>
+    <!-- Chosen Palette: Game Boy Retro Industrial (Deep Slate #0f172a, Dark Zinc #18181b, Warm Amber #f59e0b, Cyber Emerald #10b981, Indigo Accent #6366f1) -->
+    <!-- Application Structure Plan: Designed as an interactive LSDJ Instrument Workbench and Sound Reference Tool. Unlike a static report, it prioritizes rapid music composition by providing an interactive Preset Browser with real-time Web Audio chiptune synthesis previews, an Envelope & Table Dynamic Visualizer (Chart.js), a Game Boy Sound Hardware Architecture matrix, and an Interactive Instrument Configuration Generator. This allows chiptune composers to quickly prototype sounds, inspect hardware register settings, and copy step-by-step table sequences directly while tracking. -->
+    <!-- Visualization & Content Choices:
+         1. Interactive Web Audio API Synthesizer -> Sound Preview -> Allows instant listening to Game Boy pulse, wave, and noise synthesis.
+         2. Dynamic Volume Envelope & Pitch Chart (Chart.js) -> Visualize envelope attack/decay and pitch table sweeps frame-by-frame (60Hz ticks).
+         3. Hardware Channel Capabilities Matrix -> Dynamic Comparison -> Explains register limits (4-bit resolution, 4 channels) with interactive feature breakdown.
+         4. Step-by-Step LSDJ Setup Inspector -> Modal/Drawer -> Displays LSDJ screen settings (Instrument, Table, Synth) with direct copy buttons.
+         - Confirmation: NO SVG graphics used (used styled HTML elements and Unicode chiptune icons). NO Mermaid JS used.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#000000">
+    <title>LSDJ Studio</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icon.png" type="image/png">
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="stylesheet" href="src/tailwind.css">
+    <link rel="stylesheet" href="src/styles.css">
+    <script src="src/chart.js"></script>
+</head>
+<body class="h-full flex flex-col font-sans antialiased bg-slate-950 text-slate-100 selection:bg-amber-500 selection:text-slate-950">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-30 shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-3">
+                    <img src="icon.png" alt="LSDJ" class="w-9 h-9 rounded-lg shadow-md" style="object-fit: cover;">
+                    <div>
+                        <h1 class="text-lg font-bold text-slate-100 tracking-wide">
+                            LSDJ Studio
+                        </h1>
+                        <p class="text-xs text-slate-400">Game Boy Audio Synthesis & Rapid Workflow Reference</p>
+                    </div>
+                </div>
+
+                <!-- Global Sound Enable Warning & Status -->
+                <div class="hidden md:flex items-center space-x-4 text-xs font-mono">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Web Audio Ready
+                    </span>
+                    <button id="global-audio-btn" class="px-3 py-1.5 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold transition">
+                        Init Audio Engine
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tab Navigation Bar -->
+            <nav class="nav-bar">
+                <button onclick="switchTab('presets')" id="tab-presets" class="nav-tab active-tab">Presets</button>
+                <div class="nav-sep"></div>
+                <button onclick="switchTab('envelope')" id="tab-envelope" class="nav-tab">Simulator</button>
+                <div class="nav-sep"></div>
+                <button onclick="switchTab('hardware')" id="tab-hardware" class="nav-tab">Hardware</button>
+                <div class="nav-sep"></div>
+                <button onclick="switchTab('workflow')" id="tab-workflow" class="nav-tab">Guide</button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- ================= SECTION 1: PRESET LIBRARY & SYNTH STUDIO ================= -->
+        <section id="sec-presets" class="space-y-6">
+            <!-- Introductory Context Block -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+                <h2 class="text-xl font-bold text-slate-100 mb-2">
+                    Rapid Instrument Preset Library
+                </h2>
+                <p class="text-slate-300 text-sm leading-relaxed">
+                    Crafting timbres from scratch kills momentum. These presets cover all four Game Boy channels. Preview them instantly, then inspect the exact LSDJ registers and table steps.
+                </p>
+            </div>
+
+            <!-- Filter Controls & Search -->
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900/60 p-4 rounded-xl border border-slate-800/80">
+                <!-- Channel & Style Filters -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 mr-1">Filter:</span>
+                    <button onclick="filterPresets('all')" class="filter-btn active-filter px-3 py-1 rounded-lg text-xs font-medium bg-amber-500 text-slate-950 transition">All Timbres</button>
+                    <button onclick="filterPresets('noise')" class="filter-btn px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition">Noise Percussion</button>
+                    <button onclick="filterPresets('wave')" class="filter-btn px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition">Wave (Sub/Kicks)</button>
+                    <button onclick="filterPresets('pulse')" class="filter-btn px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition">Pulse Tonal</button>
+                    <button onclick="filterPresets('synthwave')" class="filter-btn px-3 py-1 rounded-lg text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition">Synthwave / Darkwave</button>
+                </div>
+
+                <!-- Live Search Input -->
+                <div class="w-full sm:w-64 relative">
+                    <input type="text" id="preset-search" oninput="searchPresets()" placeholder="Search instrument or genre..." class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500 transition">
+                </div>
+            </div>
+
+            <!-- Preset Cards Grid -->
+            <div id="preset-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <!-- Cards injected dynamically via JS -->
+            </div>
+        </section>
+
+        <!-- ================= SECTION 2: DYNAMIC ENVELOPE & PITCH ANALYZER ================= -->
+        <section id="sec-envelope" class="hidden space-y-6">
+            <!-- Introductory Context Block -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+                <h2 class="text-xl font-bold text-slate-100 mb-2">
+                    Volume Envelope & Frame Table Simulator
+                </h2>
+                <p class="text-slate-300 text-sm leading-relaxed">
+                    Volume envelopes use two hex digits: initial amplitude (<span class="font-mono text-amber-400">0–F</span>) and sweep speed (<span class="font-mono text-amber-400">0–7</span>). Once triggered, these values freeze. LSDJ overrides them with 60 Hz frame tables. Dial in values below and watch the curve change.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Interactive Controls Column -->
+                <div class="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-5">
+                    <h3 class="text-base font-semibold text-slate-200 border-b border-slate-800 pb-3 flex items-center justify-between">
+                        <span>Envelope & Wave Parameters</span>
+                        <span class="text-xs font-mono text-emerald-400">Live Synthesis</span>
+                    </h3>
+
+                    <!-- Channel Selection -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Target Audio Channel</label>
+                        <select id="sim-channel" onchange="updateSimulatedChart()" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:border-amber-500">
+                            <option value="pulse">Pulse Channel (50% / 25% / 12.5% Duty Cycle)</option>
+                            <option value="wave">Wave Channel (Sine / Custom Sub Wave)</option>
+                            <option value="noise">Noise Channel (White/Crunch Percussion)</option>
+                        </select>
+                    </div>
+
+                    <!-- Envelope Hex Input -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Initial Vol (Left Hex: 0-F)</label>
+                            <input type="range" id="sim-vol" min="0" max="15" value="13" oninput="updateSimulatedChart()" class="w-full accent-amber-500">
+                            <div class="flex justify-between text-xs font-mono text-slate-400 mt-1">
+                                <span>0 (Mute)</span>
+                                <span id="sim-vol-val" class="text-amber-400 font-bold">D (13)</span>
+                                <span>F (Max)</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Sweep Speed (Right Hex: 0-7)</label>
+                            <input type="range" id="sim-sweep" min="0" max="7" value="1" oninput="updateSimulatedChart()" class="w-full accent-amber-500">
+                            <div class="flex justify-between text-xs font-mono text-slate-400 mt-1">
+                                <span>0 (Sustain)</span>
+                                <span id="sim-sweep-val" class="text-amber-400 font-bold">1 (Fast)</span>
+                                <span>7 (Slow)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Envelope Mode Toggle -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Envelope Direction</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button onclick="setEnvDirection('decay')" id="btn-env-decay" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500 text-slate-950 border border-amber-400">Decay (Standard/Percussive)</button>
+                            <button onclick="setEnvDirection('swell')" id="btn-env-swell" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700">Swell (Wind/Saxophone)</button>
+                        </div>
+                    </div>
+
+                    <!-- Table Command FX Simulation -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Simulated Table Modulation Command</label>
+                        <select id="sim-cmd" onchange="updateSimulatedChart()" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:border-amber-500">
+                            <option value="none">None (Static Hardware Envelope)</option>
+                            <option value="pitch_drop">S / P Pitch Sweep (Kick / Snare Transient)</option>
+                            <option value="arpeggio">C 04 / C 07 (Fast Major Triad Arpeggio)</option>
+                            <option value="phase_detune">P 01 / P FF (Reese Bass Phase Modulation)</option>
+                        </select>
+                    </div>
+
+                    <button onclick="playCustomSimulation()" class="w-full py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition shadow-md">
+                        Synth Preview Custom Sound
+                    </button>
+                </div>
+
+                <!-- Visualization Output Column -->
+                <div class="lg:col-span-7 space-y-6">
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider">
+                                Volume Decay & Pitch Trajectory (60Hz Ticks)
+                            </h3>
+                            <span class="text-xs font-mono text-slate-400">1 Tick ≈ 16.6 ms</span>
+                        </div>
+
+                        <!-- Chart Container -->
+                        <div class="chart-container">
+                            <canvas id="envelopeChart"></canvas>
+                        </div>
+
+                        <div class="mt-4 p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300">
+                            <div>
+                                <strong class="text-slate-100">Chiptune Insight:</strong> High volume plus fast sweep gives a sharp attack. Use it for snares and plucked leads. Low volume plus slow sweep gives a gentle swell. Use it for wind and brass.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= SECTION 3: HARDWARE ARCHITECTURE REFERENCE ================= -->
+        <section id="sec-hardware" class="hidden space-y-6">
+            <!-- Introductory Context Block -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+                <h2 class="text-xl font-bold text-slate-100 mb-2">
+                    Game Boy Audio Processing & Channel Hardware
+                </h2>
+                <p class="text-slate-300 text-sm leading-relaxed">
+                    The DMG-01 has four hardwired sound channels. Each has fixed registers and fixed limits. LSDJ works around those limits with frame tables. You get arpeggios, pitch bends, and detuned basses that the raw hardware cannot produce alone.
+                </p>
+            </div>
+
+            <!-- Hardware Comparison Chart & Summary Cards -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Channel Capabilities Chart -->
+                <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+                    <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider mb-4">Channel Bandwidth & Functional Domain</h3>
+                    <div class="chart-container">
+                        <canvas id="hardwareChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Hardware Feature Matrix -->
+                <div class="lg:col-span-5 space-y-4">
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                        <div class="text-amber-400 font-bold text-sm mb-1">
+                            Pulse 1 & Pulse 2 Channels
+                        </div>
+                        <p class="text-xs text-slate-300 leading-relaxed mb-2">
+                            Two square-wave channels. Use them for melody, arpeggios, and chords.
+                        </p>
+                        <div class="grid grid-cols-2 gap-2 text-[11px] font-mono bg-slate-950 p-2 rounded border border-slate-800/80">
+                            <div>Duty: <span class="text-slate-200">12.5%, 25%, 50%, 75%</span></div>
+                            <div>Vol Resolution: <span class="text-slate-200">4-Bit (16 steps)</span></div>
+                            <div>Pitch Sweep: <span class="text-slate-200">Pulse 1 Native Sweep</span></div>
+                            <div>Polyphony: <span class="text-slate-200">Monophonic each</span></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                        <div class="text-indigo-400 font-bold text-sm mb-1">
+                            Wave Channel (Custom Synth)
+                        </div>
+                        <p class="text-xs text-slate-300 leading-relaxed mb-2">
+                            32 4-bit samples per wave. Lower range than Pulse. Use it for sub-bass.
+                        </p>
+                        <div class="grid grid-cols-2 gap-2 text-[11px] font-mono bg-slate-950 p-2 rounded border border-slate-800/80">
+                            <div>Mode: <span class="text-slate-200">DRUM (Logarithmic Slide)</span></div>
+                            <div>Waveform: <span class="text-slate-200">Sine, Square, User RAM</span></div>
+                            <div>Sub-Bass Reach: <span class="text-slate-200">Down to C-0 / 16Hz</span></div>
+                            <div>Vol Control: <span class="text-slate-200">4 fixed levels</span></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                        <div class="text-emerald-400 font-bold text-sm mb-1">
+                            Noise Channel (Pseudo-Random)
+                        </div>
+                        <p class="text-xs text-slate-300 leading-relaxed mb-2">
+                            Pseudo-random noise from a 15-bit shift register. Use it for drums and effects.
+                        </p>
+                        <div class="grid grid-cols-2 gap-2 text-[11px] font-mono bg-slate-950 p-2 rounded border border-slate-800/80">
+                            <div>Shape Parameter: <span class="text-slate-200">High (Hiss) / Low (Crunch)</span></div>
+                            <div>Envelope: <span class="text-slate-200">4-Bit Hardware Vol</span></div>
+                            <div>Primary Role: <span class="text-slate-200">Percussion & FX</span></div>
+                            <div>Table Pitch: <span class="text-slate-200">S / P Pitch shift</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= SECTION 4: WORKFLOW & TABLE COMMAND GUIDE ================= -->
+        <section id="sec-workflow" class="hidden space-y-6">
+            <!-- Introductory Context Block -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+                <h2 class="text-xl font-bold text-slate-100 mb-2">
+                    Composition Workflow & Table Command Cheat Sheet
+                </h2>
+                <p class="text-slate-300 text-sm leading-relaxed">
+                    Do not lose momentum designing instruments. Pick a channel, set an envelope, choose a shape, and attach a table. The command reference below shows how to change the sound on every frame.
+                </p>
+            </div>
+
+            <!-- Workflow Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 relative overflow-hidden">
+                    <div class="absolute -right-3 -top-3 text-6xl text-slate-800/40 font-bold select-none">1</div>
+                    <h3 class="text-base font-bold text-amber-400 mb-2">1. Pick Channel & Envelope</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                        Pulse does leads and chords. Wave does sub-bass and kicks. Noise does percussion. For a pluck, set Initial Vol to <span class="font-mono text-slate-100">D</span> or <span class="font-mono text-slate-100">E</span>. Set Sweep to <span class="font-mono text-slate-100">1</span> or <span class="font-mono text-slate-100">2</span>.
+                    </p>
+                    <div class="bg-slate-950 p-2 rounded text-[11px] font-mono text-slate-400 border border-slate-800">
+                        PULSE Envelope: C2 / A7<br>
+                        NOISE Envelope: D1 / EC
+                    </div>
+                </div>
+
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 relative overflow-hidden">
+                    <div class="absolute -right-3 -top-3 text-6xl text-slate-800/40 font-bold select-none">2</div>
+                    <h3 class="text-base font-bold text-indigo-400 mb-2">2. Set Duty Cycle / Shape</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                        Pulse: 50% sounds hollow. 25% sounds like a guitar pluck. 12.5% sounds like a synth bass. Noise: higher shape values sound brighter.
+                    </p>
+                    <div class="bg-slate-950 p-2 rounded text-[11px] font-mono text-slate-400 border border-slate-800">
+                        WAVE DUTY: 50% (Hollow) / 25% (Pluck)<br>
+                        NOISE SHAPE: FC (Kick) / 55 (Hi-Hat)
+                    </div>
+                </div>
+
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 relative overflow-hidden">
+                    <div class="absolute -right-3 -top-3 text-6xl text-slate-800/40 font-bold select-none">3</div>
+                    <h3 class="text-base font-bold text-emerald-400 mb-2">3. Attach Table Sequence</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed mb-3">
+                        Attach a Table to the instrument. Step 00 can drop the pitch for a kick or run an arpeggio. The main track stays clean.
+                    </p>
+                    <div class="bg-slate-950 p-2 rounded text-[11px] font-mono text-slate-400 border border-slate-800">
+                        Table 00: Pitch Sweep (S F0)<br>
+                        Table 05: Arp (C 04, C 07)
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table Commands Reference Table -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+                <h3 class="text-base font-bold text-slate-100 mb-4 flex items-center justify-between">
+                    <span>LSDJ Key Table Commands Cheat Sheet</span>
+                    <span class="text-xs font-mono text-amber-400">Essential Register Commands</span>
+                </h3>
+
+                <!-- Desktop: wide table -->
+                <div class="hidden md:block overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="border-b border-slate-800 text-slate-400 uppercase font-mono text-[11px] bg-slate-950">
+                                <th class="p-3">Cmd</th>
+                                <th class="p-3">Full Name</th>
+                                <th class="p-3">Common Value</th>
+                                <th class="p-3">Chiptune Function & Sound Effect</th>
+                                <th class="p-3">Primary Use Case</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/60 font-mono text-slate-300">
+                            <tr class="hover:bg-slate-800/30">
+                                <td class="p-3 font-bold text-amber-400">S</td>
+                                <td class="p-3">Shape / Sweep</td>
+                                <td class="p-3 text-emerald-400">F0 / E0</td>
+                                <td class="p-3 text-slate-200">Rapid frequency downward sweep per frame.</td>
+                                <td class="p-3 text-slate-400">Noise Kick Transient</td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/30">
+                                <td class="p-3 font-bold text-amber-400">P</td>
+                                <td class="p-3">Pitch Offset</td>
+                                <td class="p-3 text-emerald-400">02 / FF / C0</td>
+                                <td class="p-3 text-slate-200">Shifts pitch by semitones or raw hex offset.</td>
+                                <td class="p-3 text-slate-400">Plucked Guitar Attack / Detune</td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/30">
+                                <td class="p-3 font-bold text-amber-400">C</td>
+                                <td class="p-3">Arpeggio</td>
+                                <td class="p-3 text-emerald-400">04 / 07</td>
+                                <td class="p-3 text-slate-200">Cycles pitch quickly (e.g. +4 semitones major 3rd, +7 5th).</td>
+                                <td class="p-3 text-slate-400">Synthwave Chords / Rapid Chords</td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/30">
+                                <td class="p-3 font-bold text-amber-400">L</td>
+                                <td class="p-3">Slide Transpose</td>
+                                <td class="p-3 text-emerald-400">80</td>
+                                <td class="p-3 text-slate-200">Forces pitch slide down to lowest note to avoid freq wrapping.</td>
+                                <td class="p-3 text-slate-400">Wave Sub-Bass Kick</td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/30">
+                                <td class="p-3 font-bold text-amber-400">H</td>
+                                <td class="p-3">Hop / Loop</td>
+                                <td class="p-3 text-emerald-400">00 / 05</td>
+                                <td class="p-3 text-slate-200">Jumps table execution to specified step.</td>
+                                <td class="p-3 text-slate-400">Infinite Arp Loop / Reese Detune</td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/30">
+                                <td class="p-3 font-bold text-amber-400">V</td>
+                                <td class="p-3">Volume Override</td>
+                                <td class="p-3 text-emerald-400">42 / 08</td>
+                                <td class="p-3 text-slate-200">Sets explicit volume level on frame.</td>
+                                <td class="p-3 text-slate-400">Saxophone Swell Release</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Mobile: stacked cards -->
+                <div class="md:hidden space-y-2 font-mono text-xs">
+                    <div class="bg-slate-950 border border-slate-800 rounded p-2.5">
+                        <div class="flex items-baseline gap-2 mb-1">
+                            <span class="font-bold text-amber-400 text-sm">S</span>
+                            <span class="text-slate-300">Shape / Sweep</span>
+                            <span class="text-emerald-400 text-[10px] ml-auto">F0 / E0</span>
+                        </div>
+                        <p class="text-slate-400 leading-relaxed">Drops frequency every frame.</p>
+                        <p class="text-slate-500 text-[10px] mt-0.5">Noise Kick Transient</p>
+                    </div>
+                    <div class="bg-slate-950 border border-slate-800 rounded p-2.5">
+                        <div class="flex items-baseline gap-2 mb-1">
+                            <span class="font-bold text-amber-400 text-sm">P</span>
+                            <span class="text-slate-300">Pitch Offset</span>
+                            <span class="text-emerald-400 text-[10px] ml-auto">02 / FF / C0</span>
+                        </div>
+                        <p class="text-slate-400 leading-relaxed">Shifts pitch by semitones or hex offset.</p>
+                        <p class="text-slate-500 text-[10px] mt-0.5">Plucked Guitar Attack / Detune</p>
+                    </div>
+                    <div class="bg-slate-950 border border-slate-800 rounded p-2.5">
+                        <div class="flex items-baseline gap-2 mb-1">
+                            <span class="font-bold text-amber-400 text-sm">C</span>
+                            <span class="text-slate-300">Arpeggio</span>
+                            <span class="text-emerald-400 text-[10px] ml-auto">04 / 07</span>
+                        </div>
+                        <p class="text-slate-400 leading-relaxed">Cycles pitch fast. +4 = major third. +7 = fifth.</p>
+                        <p class="text-slate-500 text-[10px] mt-0.5">Synthwave Chords / Rapid Chords</p>
+                    </div>
+                    <div class="bg-slate-950 border border-slate-800 rounded p-2.5">
+                        <div class="flex items-baseline gap-2 mb-1">
+                            <span class="font-bold text-amber-400 text-sm">L</span>
+                            <span class="text-slate-300">Slide Transpose</span>
+                            <span class="text-emerald-400 text-[10px] ml-auto">80</span>
+                        </div>
+                        <p class="text-slate-400 leading-relaxed">Slides pitch down to the lowest note. Prevents wrap.</p>
+                        <p class="text-slate-500 text-[10px] mt-0.5">Wave Sub-Bass Kick</p>
+                    </div>
+                    <div class="bg-slate-950 border border-slate-800 rounded p-2.5">
+                        <div class="flex items-baseline gap-2 mb-1">
+                            <span class="font-bold text-amber-400 text-sm">H</span>
+                            <span class="text-slate-300">Hop / Loop</span>
+                            <span class="text-emerald-400 text-[10px] ml-auto">00 / 05</span>
+                        </div>
+                        <p class="text-slate-400 leading-relaxed">Jumps to a step in the table.</p>
+                        <p class="text-slate-500 text-[10px] mt-0.5">Infinite Arp Loop / Reese Detune</p>
+                    </div>
+                    <div class="bg-slate-950 border border-slate-800 rounded p-2.5">
+                        <div class="flex items-baseline gap-2 mb-1">
+                            <span class="font-bold text-amber-400 text-sm">V</span>
+                            <span class="text-slate-300">Volume Override</span>
+                            <span class="text-emerald-400 text-[10px] ml-auto">42 / 08</span>
+                        </div>
+                        <p class="text-slate-400 leading-relaxed">Sets volume for one frame.</p>
+                        <p class="text-slate-500 text-[10px] mt-0.5">Saxophone Swell Release</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal Drawer for LSDJ Inspector Code -->
+    <div id="inspector-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
+            <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-100 font-bold text-lg">&times;</button>
+
+            <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
+                <div>
+                    <h3 id="modal-title" class="text-lg font-bold text-slate-100">Synthwave Snare</h3>
+                    <p id="modal-subtitle" class="text-xs text-amber-400 font-mono">Noise Channel • Envelope: D1 • Shape: EC</p>
+                </div>
+            </div>
+
+            <!-- Parameters Grid -->
+            <div class="space-y-3">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">1. Instrument Screen Setup</h4>
+                <div id="modal-inst-params" class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono bg-slate-950 p-3 rounded-lg border border-slate-800">
+                    <!-- Injected via JS -->
+                </div>
+
+                <div id="modal-synth-container" class="hidden space-y-2">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">2. Synth Screen Setup (Wave Channel)</h4>
+                    <div id="modal-synth-params" class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono bg-slate-950 p-3 rounded-lg border border-slate-800">
+                        <!-- Injected via JS -->
+                    </div>
+                </div>
+
+                <div id="modal-table-container" class="space-y-2">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">3. Table Sequence Screen Steps</h4>
+                    <div class="bg-slate-950 rounded-lg border border-slate-800 p-3 overflow-x-auto">
+                        <table class="w-full text-left text-xs font-mono">
+                            <thead>
+                                <tr class="text-slate-500 border-b border-slate-800">
+                                    <th class="pb-1">STEP</th>
+                                    <th class="pb-1">CMD 1</th>
+                                    <th class="pb-1">CMD 2</th>
+                                    <th class="pb-1">VOL / PITCH FX</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal-table-steps" class="divide-y divide-slate-800/40 text-slate-300">
+                                <!-- Injected via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-3 bg-slate-950/60 rounded-lg border border-slate-800 text-xs text-slate-300">
+                <strong class="text-amber-400">Pro-Tip:</strong> <span id="modal-tip">Set shape high for crisp hiss transient.</span>
+            </div>
+
+            <div class="flex justify-end gap-3 pt-2">
+                <button onclick="closeModal()" class="px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300">Close</button>
+                <button onclick="playModalSound()" class="px-4 py-2 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950">
+                    Play Test Audio
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-slate-900 border-t border-slate-800 py-4 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-2">
+            <div>Little Sound DJ Instrument Manual & Interactive Reference</div>
+            <div class="font-mono text-slate-400">Game Boy Audio Processing Engine (DMG-01 4-Bit Hardware)</div>
+        </div>
+    </footer>
+
+    <!-- Application Logic -->
+    <script src="src/app.js"></script>
+
+    <div id="update-banner" hidden>
+        Update available — <a href="#" id="update-link">reload</a>
+    </div>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => {
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            if (!newWorker) return;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
+                                    document.getElementById('update-banner').hidden = false;
+                                }
+                            });
+                        });
+                    })
+                    .catch(err => console.error('SW registration failed:', err));
+            });
+
+            document.getElementById('update-link').addEventListener('click', e => {
+                e.preventDefault();
+                window.location.reload();
+            });
+        }
+    </script>
+</body>
+</html>
