@@ -1,0 +1,276 @@
+/* ── Pure Black + Warm Neutral Palette ──
+   bg        #000000   surface   #111111   elevated  #1a1a1a
+   border    #2a2a2a   text      #e0e0e0   muted     #666666
+   accent    #ff9500   stop      #ff3b30   clear     #ff6b35
+   export    #0a84ff
+*/
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #000000;
+  color: #e0e0e0;
+  font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Code", monospace;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── Toolbar ── */
+#toolbar {
+  height: 56px;
+  background: #111111;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 8px;
+  border-bottom: 1px solid #222222;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  flex-shrink: 0;
+}
+
+#toolbar button,
+#toolbar select {
+  height: 36px;
+  padding: 0 12px;
+  background: #1a1a1a;
+  color: #e0e0e0;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+#toolbar button:active {
+  background: #444444;
+  color: #ffffff;
+}
+
+#toolbar button i {
+  font-size: 18px;
+}
+
+#btnPlay { background: #ff9500; color: #000000; border-color: #ff9500; }
+#btnPlay:active { background: #ffb84d; border-color: #ffb84d; }
+
+#btnStop { background: #ff3b30; color: #000000; border-color: #ff3b30; }
+#btnStop:active { background: #ff6b63; border-color: #ff6b63; }
+
+#btnClear { background: #ff6b35; color: #000000; border-color: #ff6b35; }
+#btnClear:active { background: #ff8c5a; border-color: #ff8c5a; }
+
+#btnExport { background: #0a84ff; color: #000000; border-color: #0a84ff; }
+#btnExport:active { background: #5cadff; border-color: #5cadff; }
+
+#slotSelect {
+  margin-left: auto;
+  min-width: 100px;
+}
+
+/* ── Scroll wrapper ── */
+#scroll-wrapper {
+  display: flex;
+  height: calc(100vh - 56px);
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+/* ── Piano keys ── */
+#piano-keys {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  border-right: 1px solid #1a1a1a;
+  flex-shrink: 0;
+}
+
+.key {
+  height: 24px;
+  display: flex;
+  align-items: center;
+  padding-left: 6px;
+  font-size: 10px;
+  box-sizing: border-box;
+  width: 44px;
+  flex-shrink: 0;
+}
+
+.key.black {
+  background: #000000;
+  color: #555555;
+  border-bottom: 1px solid #111111;
+}
+
+.key.white {
+  background: #0f0f0f;
+  color: #bbbbbb;
+  border-bottom: 1px solid #1a1a1a;
+}
+
+/* ── Grid ── */
+#grid {
+  display: grid;
+  grid-template-rows: repeat(36, 24px);
+}
+
+.cell {
+  width: 40px;
+  height: 24px;
+  border-right: 1px solid #1a1a1a;
+  border-bottom: 1px solid #1a1a1a;
+  cursor: pointer;
+  user-select: none;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.cell.boundary {
+  border-right: 2px solid #444444;
+}
+
+.cell.playing {
+  background: #1a1a1a;
+}
+
+.cell.active,
+.cell.active.playing {
+  background: #ff9500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #000000;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+/* ── Export modal ── */
+#exportModal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  z-index: 50;
+  flex-direction: column;
+}
+
+#exportModal.open {
+  display: flex;
+}
+
+#exportHeader {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 12px 16px;
+  border-bottom: 1px solid #222222;
+  background: #111111;
+  flex-shrink: 0;
+}
+
+#exportHeader button {
+  height: 36px;
+  padding: 0 16px;
+  background: #1a1a1a;
+  color: #e0e0e0;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+#exportHeader button:active {
+  background: #444444;
+  color: #ffffff;
+}
+
+#exportScroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 16px 24px;
+}
+
+#exportTable {
+  border-collapse: collapse;
+  font-size: 14px;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+#exportTable td {
+  border-bottom: 1px solid #1a1a1a;
+  padding: 6px 10px;
+  text-align: center;
+}
+
+#exportTable tr.boundary td {
+  border-bottom: 2px solid #444444;
+}
+
+#exportTable td.step {
+  color: #666666;
+  background: #111111;
+  width: 40px;
+}
+
+#exportTable td.note {
+  color: #ff9500;
+  font-weight: bold;
+}
+
+#exportTable td.empty {
+  color: #222222;
+}
+
+/* ── Update banner ── */
+#update-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #111111;
+  color: #e0e0e0;
+  border-top: 1px solid #ff9500;
+  padding: 12px 16px;
+  text-align: center;
+  font-size: 14px;
+  z-index: 100;
+}
+
+#update-banner a {
+  color: #ff9500;
+  text-decoration: underline;
+  font-weight: bold;
+}
+
+/* ── Scrollbars ── */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1a1a1a;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #444444;
+}
