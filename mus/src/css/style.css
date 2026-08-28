@@ -93,7 +93,7 @@ html, body {
 }
 
 .key {
-  height: 24px;
+  height: 18px;
   display: flex;
   align-items: center;
   padding-left: 6px;
@@ -115,15 +115,19 @@ html, body {
   border-bottom: 1px solid #1a1a1a;
 }
 
+.key.tonic {
+  color: #ff9500;
+}
+
 /* ── Grid ── */
 #grid {
   display: grid;
-  grid-template-rows: repeat(36, 24px);
+  grid-template-rows: repeat(36, 18px);
 }
 
 .cell {
-  width: 40px;
-  height: 24px;
+  width: 20px;
+  height: 18px;
   border-right: 1px solid #1a1a1a;
   border-bottom: 1px solid #1a1a1a;
   cursor: pointer;
@@ -134,6 +138,14 @@ html, body {
 
 .cell.boundary {
   border-right: 2px solid #444444;
+}
+
+.cell.beat {
+  border-right: 1px solid #303030;
+}
+
+.cell.tonic-row {
+  background: rgba(255, 149, 0, 0.05);
 }
 
 .cell.playing {
@@ -147,8 +159,74 @@ html, body {
   align-items: center;
   justify-content: center;
   color: #000000;
-  font-size: 10px;
+  font-size: 8px;
   font-weight: bold;
+}
+
+/* ── Clear confirmation modal ── */
+#clearModal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  z-index: 60;
+  align-items: center;
+  justify-content: center;
+}
+
+#clearModal.open {
+  display: flex;
+}
+
+#clearDialog {
+  background: #111111;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  padding: 28px 32px;
+  text-align: center;
+  min-width: 200px;
+}
+
+#clearDialog p {
+  margin: 0 0 20px;
+  font-size: 15px;
+  color: #e0e0e0;
+}
+
+#clearActions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+#clearActions button {
+  height: 36px;
+  padding: 0 20px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  border: 1px solid #2a2a2a;
+}
+
+#btnClearConfirm {
+  background: #ff6b35;
+  color: #000000;
+  border-color: #ff6b35;
+}
+
+#btnClearConfirm:active {
+  background: #ff8c5a;
+}
+
+#btnClearCancel {
+  background: #1a1a1a;
+  color: #e0e0e0;
+}
+
+#btnClearCancel:active {
+  background: #444444;
+  color: #ffffff;
 }
 
 /* ── Export modal ── */

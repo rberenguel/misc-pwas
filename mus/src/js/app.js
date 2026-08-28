@@ -1,6 +1,8 @@
 const totalPhrases = 8; // 8 phrases = 128 steps
 const totalSteps = totalPhrases * 16;
 const totalRows = 36; // 3 octaves (C3 to B5)
+const CELL_WIDTH = 20;
+const PREVIEW_TEMPO_MULT = 2.5; // context preview plays faster than composition tempo
 
 const grid = document.getElementById('grid');
 const keys = document.getElementById('piano-keys');
@@ -16,6 +18,9 @@ const stepTimeMs = (60 / tempo) / 4 * 1000;
 // Sustained audio state variables
 let activeVoice = null;
 let activeRow = null;
+let previewInterval = null;
+let contextPreviewTimer = null;
+let lastTappedCol = 0;
 
 // Builds a small two-oscillator, filtered "voice". Two slightly
 // detuned square waves through a lowpass filter round off the
@@ -61,6 +66,12 @@ function getNoteName(row) {
   return note + octave;
 }
 
+function getShortName(row) {
+  const midiNote = 48 + (35 - row);
+  const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  return names[midiNote % 12];
+}
+
 function rowToFreq(row) {
   const midiNote = 48 + (35 - row);
   return 440 * Math.pow(2, (midiNote - 69) / 12);
@@ -71,20 +82,33 @@ for (let r = 0; r < totalRows; r++) {
   const div = document.createElement('div');
   const midiNote = 48 + (35 - r);
   const isBlackKey = [1, 3, 6, 8, 10].includes(midiNote % 12);
+  const isTonic = midiNote % 12 === 0;
 
-  div.className = 'key ' + (isBlackKey ? 'black' : 'white');
+  let cls = 'key ' + (isBlackKey ? 'black' : 'white');
+  if (isTonic) cls += ' tonic';
+  div.className = cls;
   div.innerText = isBlackKey ? '' : getNoteName(r);
   keys.appendChild(div);
 }
 
 // 2. Build the DOM Grid
-grid.style.gridTemplateColumns = `repeat(${totalSteps}, 40px)`;
+grid.style.gridTemplateColumns = `repeat(${totalSteps}, ${CELL_WIDTH}px)`;
 
 for (let r = 0; r < totalRows; r++) {
+  const midiNote = 48 + (35 - r);
+  const isTonic = midiNote % 12 === 0;
+
   for (let c = 0; c < totalSteps; c++) {
     const cell = document.createElement('div');
+    const isPhraseBoundary = (c + 1) % 16 === 0;
+    const isBeatBoundary = (c + 1) % 4 === 0 && !isPhraseBoundary;
 
-    cell.className = 'cell' + ((c + 1) % 16 === 0 ? ' boundary' : '');
+    let cls = 'cell';
+    if (isPhraseBoundary) cls += ' boundary';
+    else if (isBeatBoundary) cls += ' beat';
+    if (isTonic) cls += ' tonic-row';
+
+    cell.className = cls;
     cell.dataset.col = c;
     cell.dataset.row = r;
 
@@ -102,8 +126,9 @@ for (let r = 0; r < totalRows; r++) {
 
       if (!isCurrentlyActive) {
         this.classList.add('active');
-        this.innerText = getNoteName(r);
+        this.innerText = getShortName(r);
         playPreviewTone(r);
+        scheduleContextPreview(c);
       }
 
       saveCurrentSong();
@@ -175,6 +200,67 @@ function stopSequencerTone() {
   activeRow = null;
 }
 
+// 3b. Melodic context preview — plays from first note to the clicked step
+function stopContextPreview() {
+  if (contextPreviewTimer) {
+    clearTimeout(contextPreviewTimer);
+    contextPreviewTimer = null;
+  }
+  if (previewInterval) {
+    clearInterval(previewInterval);
+    previewInterval = null;
+  }
+  document.querySelectorAll('.cell.playing').forEach(el => el.classList.remove('playing'));
+  stopSequencerTone();
+}
+
+function scheduleContextPreview(col) {
+  lastTappedCol = col;
+  if (contextPreviewTimer) clearTimeout(contextPreviewTimer);
+  contextPreviewTimer = setTimeout(() => {
+    contextPreviewTimer = null;
+    playContextPreview(lastTappedCol);
+  }, 500);
+}
+
+function playContextPreview(targetCol) {
+  if (isPlaying) return;
+  stopContextPreview();
+
+  // Start from the first non-empty step so silence isn't played
+  let step = targetCol;
+  for (let c = 0; c <= targetCol; c++) {
+    if (document.querySelector(`.cell.active[data-col="${c}"]`)) { step = c; break; }
+  }
+
+  function tick() {
+    document.querySelectorAll('.cell.playing').forEach(el => el.classList.remove('playing'));
+    document.querySelectorAll(`.cell[data-col="${step}"]`).forEach(el => el.classList.add('playing'));
+
+    const activeCell = document.querySelector(`.cell.active[data-col="${step}"]`);
+    if (activeCell) {
+      const row = parseInt(activeCell.dataset.row);
+      if (row !== activeRow) startSequencerTone(row);
+    } else {
+      stopSequencerTone();
+    }
+
+    if (step >= targetCol) {
+      clearInterval(previewInterval);
+      previewInterval = null;
+      setTimeout(() => {
+        document.querySelectorAll('.cell.playing').forEach(el => el.classList.remove('playing'));
+        stopSequencerTone();
+      }, stepTimeMs / PREVIEW_TEMPO_MULT);
+      return;
+    }
+    step++;
+  }
+
+  tick();
+  previewInterval = setInterval(tick, stepTimeMs / PREVIEW_TEMPO_MULT);
+}
+
 // 4. Sequencer Playback
 function playStep() {
   document.querySelectorAll('.cell.playing').forEach(el => el.classList.remove('playing'));
@@ -200,24 +286,35 @@ function playStep() {
     const colElement = currentCells[0];
     const colLeft = colElement.offsetLeft;
     if (colLeft > scrollWrapper.scrollLeft + scrollWrapper.clientWidth - 100 || colLeft < scrollWrapper.scrollLeft) {
-      scrollWrapper.scrollTo({ left: colLeft - 40, behavior: 'smooth' });
+      scrollWrapper.scrollTo({ left: colLeft - CELL_WIDTH, behavior: 'smooth' });
     }
   }
 
-  currentStep = (currentStep + 1) % totalSteps;
+  currentStep++;
 
-  // If we reach the end of the grid, stop
-  if (currentStep === 0) {
+  if (currentStep > lastNoteStep) {
     document.getElementById('btnStop').click();
   }
 }
 
+function getLastNoteStep() {
+  for (let c = totalSteps - 1; c >= 0; c--) {
+    if (document.querySelector(`.cell.active[data-col="${c}"]`)) return c;
+  }
+  return -1;
+}
+
+let lastNoteStep = -1;
+
 // 5. Toolbar Buttons
 document.getElementById('btnPlay').addEventListener('click', () => {
   initAudio();
+  stopContextPreview();
   if (!isPlaying) {
+    lastNoteStep = getLastNoteStep();
+    if (lastNoteStep === -1) return; // nothing to play
     isPlaying = true;
-    currentStep = Math.floor(scrollWrapper.scrollLeft / 40);
+    currentStep = Math.floor(scrollWrapper.scrollLeft / CELL_WIDTH);
     playStep();
     playInterval = setInterval(playStep, stepTimeMs);
   }
@@ -226,17 +323,25 @@ document.getElementById('btnPlay').addEventListener('click', () => {
 document.getElementById('btnStop').addEventListener('click', () => {
   isPlaying = false;
   clearInterval(playInterval);
-  document.querySelectorAll('.cell.playing').forEach(el => el.classList.remove('playing'));
-  stopSequencerTone();
+  stopContextPreview();
 });
 
 document.getElementById('btnClear').addEventListener('click', () => {
+  document.getElementById('clearModal').classList.add('open');
+});
+
+document.getElementById('btnClearConfirm').addEventListener('click', () => {
+  document.getElementById('clearModal').classList.remove('open');
   document.querySelectorAll('.cell.active').forEach(el => {
     el.classList.remove('active');
     el.innerText = '';
   });
   if (!isPlaying) stopSequencerTone();
   saveCurrentSong();
+});
+
+document.getElementById('btnClearCancel').addEventListener('click', () => {
+  document.getElementById('clearModal').classList.remove('open');
 });
 
 // 6. Export to LSDJ-style note table
@@ -321,7 +426,7 @@ function applyGridState(notes) {
     const cell = document.querySelector(`.cell[data-col="${c}"][data-row="${row}"]`);
     if (cell) {
       cell.classList.add('active');
-      cell.innerText = getNoteName(row);
+      cell.innerText = getShortName(row);
     }
   });
 }
@@ -395,7 +500,7 @@ updateSlotLabels();
 // and a bit of octave 3 remains visible below.
 (function centerViewport() {
   const targetRow = 18;
-  const rowHeight = 24;
+  const rowHeight = 18;
   const viewportHeight = scrollWrapper.clientHeight;
   scrollWrapper.scrollTop = (targetRow * rowHeight) - (viewportHeight / 2) + (rowHeight / 2);
 })();
