@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>reference</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.png" type="image/png">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="upload-screen">
+  <input type="file" id="file-input" accept="image/*" hidden>
+  <button id="upload-btn">
+    <span class="icon">⊕</span>
+    <span>Load image</span>
+  </button>
+</div>
+
+<div id="viewer-screen" hidden>
+  <div id="canvas-wrap">
+    <canvas id="canvas"></canvas>
+    <video id="video" playsinline muted controls></video>
+  </div>
+  <div id="toolbar">
+    <button id="btn-new" title="Load new image">⊕</button>
+    <button id="btn-rotate" title="Rotate 90° clockwise">↻</button>
+    <button id="btn-video" title="Convert to video">✦</button>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
