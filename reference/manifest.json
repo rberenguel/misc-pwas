@@ -1,9 +1,10 @@
 {
   "name": "reference",
+  "version": "1.0.0",
   "short_name": "reference",
   "description": "Drawing reference viewer with Picture-in-Picture",
   "start_url": "./index.html",
-  "display": "standalone",
+  "display": "browser",
   "background_color": "#111111",
   "theme_color": "#111111",
   "icons": [

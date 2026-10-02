@@ -47,6 +47,25 @@ button:disabled {
   opacity: 0.3;
 }
 
+/* Update banner */
+
+#update-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #333;
+  color: #fff;
+  text-align: center;
+  padding: 10px;
+  font-size: 14px;
+  z-index: 100;
+}
+
+#update-banner a {
+  color: #7cf;
+}
+
 /* Upload screen */
 
 #upload-screen {
