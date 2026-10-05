@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Empedrat</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" href="media/icon.png" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <div class="toolbar-group">
+      <button class="tool-btn active" data-tool="pencil"    title="Pencil (p)"><i class="ph-light ph-pencil"></i></button>
+      <button class="tool-btn" data-tool="eraser"           title="Eraser (e)"><i class="ph-light ph-eraser"></i></button>
+      <button class="tool-btn" data-tool="fill"             title="Fill (f)"><i class="ph-light ph-paint-bucket"></i></button>
+      <button class="tool-btn" data-tool="gradient"         title="Gradient (g)"><i class="ph-light ph-gradient"></i></button>
+      <button class="tool-btn" data-tool="eyedropper"       title="Eyedropper (i)"><i class="ph-light ph-eyedropper"></i></button>
+    </div>
+    <div class="toolbar-sep"></div>
+    <div class="toolbar-group">
+      <button id="btn-undo" class="icon-btn" title="Undo (Ctrl+Z)"><i class="ph-light ph-arrow-counter-clockwise"></i></button>
+      <button id="btn-redo" class="icon-btn" title="Redo (Ctrl+Shift+Z)"><i class="ph-light ph-arrow-clockwise"></i></button>
+    </div>
+    <div class="toolbar-sep"></div>
+    <div class="toolbar-group">
+      <button id="btn-zoom-out" class="icon-btn" title="Zoom out (-)"><i class="ph-light ph-magnifying-glass-minus"></i></button>
+      <button id="btn-zoom-fit" class="icon-btn" title="Fit (0)"><i class="ph-light ph-corners-out"></i></button>
+      <button id="btn-zoom-in"  class="icon-btn" title="Zoom in (+)"><i class="ph-light ph-magnifying-glass-plus"></i></button>
+    </div>
+    <div class="toolbar-sep"></div>
+    <div class="toolbar-group">
+      <button id="btn-new"    title="New document">New</button>
+      <button id="btn-resize" title="Resize canvas">Resize</button>
+    </div>
+    <div class="toolbar-sep"></div>
+    <div class="toolbar-group">
+      <button id="btn-export-png"     title="Export PNG">PNG</button>
+      <button id="btn-export-project" title="Export project JSON">Save</button>
+      <button id="btn-import-project" title="Load project JSON">Load</button>
+      <button id="btn-timelapse"      title="Export timelapse video">Timelapse</button>
+    </div>
+    <div class="toolbar-sep"></div>
+    <div class="toolbar-group">
+      <button id="btn-load-ref" class="icon-btn" title="Load reference image"><i class="ph-light ph-image-square"></i></button>
+    </div>
+    <input type="file" id="file-import" accept=".empedrat" style="display:none" />
+    <input type="file" id="file-ref"    accept="image/*" style="display:none" />
+  </div>
+
+  <!-- Left panel: tools options + layers -->
+  <div id="left-panel">
+    <button id="panel-close-btn" title="Collapse panel"><i class="ph-light ph-caret-left"></i></button>
+
+    <!-- Color -->
+    <div id="color-section" class="panel-section">
+      <h3>Colors</h3>
+      <div class="color-swatches">
+        <button id="primary-swatch"   class="color-swatch" title="Primary color (click to edit)"></button>
+        <button id="secondary-swatch" class="color-swatch" title="Secondary color (click to edit)"></button>
+        <button id="swap-colors" title="Swap colors"><i class="ph-light ph-swap"></i></button>
+      </div>
+      <div id="palette-grid"></div>
+      <div style="display:flex;gap:4px;margin-top:4px;">
+        <button id="btn-palette-clear" style="flex:1;font-size:11px;" title="Clear all palette colors">Clear</button>
+      </div>
+      <div style="display:flex;gap:4px;margin-top:4px;">
+        <button id="btn-palette-import"       style="flex:1;font-size:11px;">Import</button>
+        <button id="btn-palette-export-json"  style="flex:1;font-size:11px;">JSON</button>
+        <button id="btn-palette-export-png"   style="flex:1;font-size:11px;">PNG</button>
+      </div>
+      <input type="file" id="file-palette" accept=".json,.png" style="display:none" />
+    </div>
+
+    <!-- Tool options -->
+    <div class="panel-section">
+      <h3>Pattern</h3>
+      <div id="pattern-picker">
+        <button id="pattern-trigger">
+          <canvas id="pattern-current" width="8" height="8"></canvas>
+          <span id="pattern-current-label">Solid</span>
+          <i class="ph-light ph-caret-down"></i>
+        </button>
+        <div id="pattern-dropdown" class="hidden"></div>
+      </div>
+    </div>
+    <div class="panel-section">
+      <h3>Brush</h3>
+      <div class="tool-option">
+        <label>Pencil</label>
+        <input type="range" id="brush-size" min="1" max="32" value="1" style="flex:1" />
+        <span id="brush-size-val" style="color:var(--text-dim);font-size:11px;width:20px;text-align:right">1</span>
+      </div>
+      <div class="tool-option">
+        <label>Eraser</label>
+        <input type="range" id="eraser-size" min="1" max="32" value="1" style="flex:1" />
+        <span id="eraser-size-val" style="color:var(--text-dim);font-size:11px;width:20px;text-align:right">1</span>
+      </div>
+    </div>
+
+    <!-- Layers -->
+    <div class="panel-section" style="flex:1;display:flex;flex-direction:column;overflow:hidden;border-bottom:none;">
+      <h3>Layers</h3>
+      <div id="layer-list"></div>
+      <div class="layer-controls">
+        <button id="btn-add-layer"  class="icon-btn" title="Add layer"><i class="ph-light ph-plus"></i></button>
+        <button id="btn-del-layer"  class="icon-btn" title="Delete layer"><i class="ph-light ph-trash"></i></button>
+        <button id="btn-layer-up"   class="icon-btn" title="Move layer up"><i class="ph-light ph-arrow-up"></i></button>
+        <button id="btn-layer-down" class="icon-btn" title="Move layer down"><i class="ph-light ph-arrow-down"></i></button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Canvas -->
+  <div id="canvas-area">
+    <canvas id="viewport"></canvas>
+  </div>
+
+
+</div>
+
+<!-- Reference image panel -->
+<div id="ref-panel" class="hidden">
+  <div id="ref-header">
+    <span>Reference</span>
+    <button id="btn-close-ref" title="Close"><i class="ph-light ph-x"></i></button>
+  </div>
+  <canvas id="ref-canvas"></canvas>
+</div>
+
+<!-- Timelapse preview panel -->
+<div id="timelapse-panel" class="hidden">
+  <div id="tl-header">
+    <span>Timelapse</span>
+    <span id="tl-frame-counter"></span>
+    <button id="btn-close-tl">×</button>
+  </div>
+  <canvas id="tl-canvas"></canvas>
+  <div id="tl-controls">
+    <div class="tl-row">
+      <button id="tl-btn-play" class="icon-btn" title="Play/Pause"><i class="ph-light ph-play" id="tl-play-icon"></i></button>
+      <input type="range" id="tl-scrub" min="0" value="0" style="flex:1" />
+    </div>
+    <div class="tl-row">
+      <label>Speed</label>
+      <input type="range" id="tl-speed" min="33" max="500" value="80" style="flex:1" />
+      <span id="tl-speed-val">80ms</span>
+    </div>
+    <button id="tl-btn-export" style="width:100%;margin-top:2px">Export .webm</button>
+  </div>
+</div>
+
+<!-- Color picker floating panel -->
+<div id="color-picker-panel" class="hidden">
+  <div id="cp-preview"></div>
+  <div class="cp-row">
+    <label>R</label>
+    <input type="range" id="cp-r-range" min="0" max="255" value="0"
+           oninput="document.getElementById('cp-r').value=this.value;document.getElementById('cp-r').dispatchEvent(new Event('input'))" />
+    <input type="number" id="cp-r" min="0" max="255" value="0" />
+  </div>
+  <div class="cp-row">
+    <label>G</label>
+    <input type="range" id="cp-g-range" min="0" max="255" value="0"
+           oninput="document.getElementById('cp-g').value=this.value;document.getElementById('cp-g').dispatchEvent(new Event('input'))" />
+    <input type="number" id="cp-g" min="0" max="255" value="0" />
+  </div>
+  <div class="cp-row">
+    <label>B</label>
+    <input type="range" id="cp-b-range" min="0" max="255" value="0"
+           oninput="document.getElementById('cp-b').value=this.value;document.getElementById('cp-b').dispatchEvent(new Event('input'))" />
+    <input type="number" id="cp-b" min="0" max="255" value="0" />
+  </div>
+  <div class="cp-hex-row">
+    <label>#</label>
+    <input type="text" id="cp-hex" maxlength="6" placeholder="rrggbb" />
+  </div>
+  <div class="cp-buttons">
+    <button id="cp-cancel">Cancel</button>
+    <button id="cp-apply">Apply</button>
+  </div>
+</div>
+
+<button id="toggle-toolbar" class="icon-btn" title="Toggle toolbar"><i class="ph-light ph-caret-up" id="toggle-toolbar-icon"></i></button>
+<button id="panel-open-tab" title="Show panel"><i class="ph-light ph-caret-right"></i></button>
+
+<script type="module">
+  import { init } from './js/app.js';
+  init();
+</script>
+</body>
+</html>

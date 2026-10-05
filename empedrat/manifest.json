@@ -1,0 +1,17 @@
+{
+  "name": "Empedrat",
+  "short_name": "Empedrat",
+  "description": "Pixel art studio with dithering",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1a1a1a",
+  "theme_color": "#1a1a1a",
+  "icons": [
+    {
+      "src": "media/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
