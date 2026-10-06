@@ -18,20 +18,31 @@ export class History {
     this._pending = { layerId: layer.id, x, y, w: sw, h: sh, docW, before, after: null };
   }
 
-  // Call after a stroke ends — returns true if layer was modified
+  // Revert a stroke in progress (e.g. when a second touch cancels the gesture)
+  cancelStroke(layer) {
+    if (!this._pending) return;
+    const { x, y, w, h, docW, before } = this._pending;
+    layer.buffer.set(before, y * docW + x);
+    this._pending = null;
+  }
+
+  // Call after a stroke ends — returns number of changed pixels (0 = unmodified)
   endStroke(layer) {
-    if (!this._pending) return false;
+    if (!this._pending) return 0;
     const { x, y, w, h, docW } = this._pending;
     const after = layer.buffer.slice(y * docW + x, (y + h - 1) * docW + x + w);
-    const modified = after.some((v, i) => v !== this._pending.before[i]);
-    if (modified) {
+    let changed = 0;
+    for (let i = 0; i < after.length; i++) {
+      if (after[i] !== this._pending.before[i]) changed++;
+    }
+    if (changed > 0) {
       this._pending.after = after;
       this._stack.push(this._pending);
       if (this._stack.length > MAX_HISTORY) this._stack.shift();
       this._future = [];
     }
     this._pending = null;
-    return modified;
+    return changed;
   }
 
   undo(doc) {

@@ -94,6 +94,17 @@ export function moveLayerUp(doc, layerId) {
   }
 }
 
+export function syncIds(doc) {
+  for (const frame of doc.frames) {
+    const fn = parseInt(frame.id.replace('frame_', ''), 10);
+    if (!isNaN(fn) && fn > _frameId) _frameId = fn;
+    for (const layer of frame.layers) {
+      const n = parseInt(layer.id.replace('layer_', ''), 10);
+      if (!isNaN(n) && n > _layerId) _layerId = n;
+    }
+  }
+}
+
 export function moveLayerDown(doc, layerId) {
   const frame = getActiveFrame(doc);
   const idx = frame.layers.findIndex(l => l.id === layerId);

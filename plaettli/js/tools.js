@@ -93,6 +93,68 @@ export function applyDitherGradient(layer, docW, docH, c0, c1, ax, ay, bx, by, p
   }
 }
 
+export function drawRect(layer, x0, y0, x1, y1, docW, docH, color, presetIdx, brushSize, filled) {
+  const minX = Math.min(x0, x1), maxX = Math.max(x0, x1);
+  const minY = Math.min(y0, y1), maxY = Math.max(y0, y1);
+  if (filled) {
+    const buf = layer.buffer;
+    for (let y = minY; y <= maxY; y++)
+      for (let x = minX; x <= maxX; x++)
+        paintPixel(buf, x, y, docW, docH, color, presetIdx);
+  } else {
+    pencilStroke(layer, minX, minY, maxX, minY, docW, docH, color, presetIdx, brushSize);
+    pencilStroke(layer, minX, maxY, maxX, maxY, docW, docH, color, presetIdx, brushSize);
+    pencilStroke(layer, minX, minY, minX, maxY, docW, docH, color, presetIdx, brushSize);
+    pencilStroke(layer, maxX, minY, maxX, maxY, docW, docH, color, presetIdx, brushSize);
+  }
+}
+
+export function drawEllipse(layer, x0, y0, x1, y1, docW, docH, color, presetIdx, brushSize, filled) {
+  const buf = layer.buffer;
+  const minX = Math.min(x0, x1), maxX = Math.max(x0, x1);
+  const minY = Math.min(y0, y1), maxY = Math.max(y0, y1);
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const rx = (maxX - minX) / 2;
+  const ry = (maxY - minY) / 2;
+  const half = Math.floor(brushSize / 2), bEnd = brushSize - half;
+
+  function plotBrush(px, py) {
+    for (let dy = -half; dy < bEnd; dy++)
+      for (let dx = -half; dx < bEnd; dx++)
+        paintPixel(buf, px + dx, py + dy, docW, docH, color, presetIdx);
+  }
+
+  if (filled) {
+    for (let y = minY; y <= maxY; y++) {
+      const t = ry > 0 ? (y - cy) / ry : 0;
+      const span = rx * Math.sqrt(Math.max(0, 1 - t * t));
+      const xLeft = Math.round(cx - span), xRight = Math.round(cx + span);
+      for (let x = xLeft; x <= xRight; x++)
+        paintPixel(buf, x, y, docW, docH, color, presetIdx);
+    }
+  } else {
+    // Horizontal pass: left + right edge per row
+    for (let y = minY; y <= maxY; y++) {
+      const t = ry > 0 ? (y - cy) / ry : 0;
+      if (Math.abs(t) > 1) continue;
+      const span = rx * Math.sqrt(Math.max(0, 1 - t * t));
+      const xL = Math.round(cx - span), xR = Math.round(cx + span);
+      plotBrush(xL, y);
+      if (xR !== xL) plotBrush(xR, y);
+    }
+    // Vertical pass: top + bottom edge per column (fills gaps at poles)
+    for (let x = minX; x <= maxX; x++) {
+      const t = rx > 0 ? (x - cx) / rx : 0;
+      if (Math.abs(t) > 1) continue;
+      const span = ry * Math.sqrt(Math.max(0, 1 - t * t));
+      const yT = Math.round(cy - span), yB = Math.round(cy + span);
+      plotBrush(x, yT);
+      if (yB !== yT) plotBrush(x, yB);
+    }
+  }
+}
+
 export function sampleColor(compositeCanvas, x, y) {
   const ctx = compositeCanvas.getContext('2d');
   const d = ctx.getImageData(x, y, 1, 1).data;

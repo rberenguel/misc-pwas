@@ -2,10 +2,10 @@ import {
   createDocument, getActiveLayer, getActiveFrame,
   addLayer, removeLayer, moveLayerUp, moveLayerDown,
   colorToHex, hexToColor, packColor, unpackColor,
-  serializeDocument, deserializeDocument,
+  serializeDocument, deserializeDocument, syncIds,
 } from './document.js';
 import { Renderer } from './renderer.js';
-import { pencilStroke, eraserStroke, floodFill, applyDitherGradient, sampleColor } from './tools.js';
+import { pencilStroke, eraserStroke, floodFill, applyDitherGradient, sampleColor, bresenham, drawRect, drawEllipse } from './tools.js';
 import { History } from './history.js';
 import { InputHandler } from './input.js';
 import { initPalette, loadLospecPng, exportPaletteJSON, exportPalettePNG, importPaletteJSON } from './palette.js';
@@ -26,6 +26,21 @@ let eraserSize = 1;
 // Gradient tool transient state
 let gradientStart = null;   // {x, y} in doc coords
 let gradientPreview = null; // {ax, ay, bx, by}
+
+// Line tool transient state
+let lineStart = null;   // {x, y} in doc coords
+let linePreview = null; // {x, y} current endpoint
+
+// Rect tool transient state
+let rectStart = null;   // {x, y} in doc coords
+let rectPreview = null; // {x, y} opposite corner
+
+// Ellipse tool transient state
+let ellipseStart = null;
+let ellipsePreview = null;
+
+// Shared shape option
+let shapeFilled = false;
 
 const renderer = new Renderer(document.getElementById('viewport'));
 const history = new History();
@@ -68,6 +83,15 @@ function onStrokeStart(x, y, pressure) {
     markDirty();
   } else if (currentTool === 'gradient') {
     gradientStart = { x, y };
+  } else if (currentTool === 'line') {
+    lineStart = { x, y };
+    linePreview = { x, y };
+  } else if (currentTool === 'rect') {
+    rectStart = { x, y };
+    rectPreview = { x, y };
+  } else if (currentTool === 'ellipse') {
+    ellipseStart = { x, y };
+    ellipsePreview = { x, y };
   }
 }
 
@@ -87,6 +111,15 @@ function onStrokeMove(x0, y0, x1, y1, pressure) {
   } else if (currentTool === 'gradient' && gradientStart) {
     gradientPreview = { ax: gradientStart.x, ay: gradientStart.y, bx: x1, by: y1 };
     markDirty();
+  } else if (currentTool === 'line' && lineStart) {
+    linePreview = { x: x1, y: y1 };
+    markDirty();
+  } else if (currentTool === 'rect' && rectStart) {
+    rectPreview = { x: x1, y: y1 };
+    markDirty();
+  } else if (currentTool === 'ellipse' && ellipseStart) {
+    ellipsePreview = { x: x1, y: y1 };
+    markDirty();
   }
 }
 
@@ -94,10 +127,6 @@ async function onStrokeEnd() {
   const layer = getActiveLayer(doc);
 
   if (currentTool === 'gradient' && gradientStart && gradientPreview) {
-    const stops = [
-      { color: primaryColor, pos: 0 },
-      { color: secondaryColor, pos: 1 },
-    ];
     applyDitherGradient(
       layer, doc.width, doc.height, primaryColor, secondaryColor,
       gradientPreview.ax, gradientPreview.ay,
@@ -109,11 +138,50 @@ async function onStrokeEnd() {
     markDirty();
   }
 
-  const modified = history.endStroke(layer);
-  if (modified) {
-    await history.captureSnapshot(renderer.getCompositeCanvas(doc));
-    saveToIDB();
+  if (currentTool === 'line' && lineStart && linePreview) {
+    pencilStroke(layer, lineStart.x, lineStart.y, linePreview.x, linePreview.y,
+                 doc.width, doc.height, primaryColor, ditherPresetIdx, brushSize);
+    lineStart = null;
+    linePreview = null;
+    markDirty();
   }
+
+  if (currentTool === 'rect' && rectStart && rectPreview) {
+    drawRect(layer, rectStart.x, rectStart.y, rectPreview.x, rectPreview.y,
+             doc.width, doc.height, primaryColor, ditherPresetIdx, brushSize, shapeFilled);
+    rectStart = null;
+    rectPreview = null;
+    markDirty();
+  }
+
+  if (currentTool === 'ellipse' && ellipseStart && ellipsePreview) {
+    drawEllipse(layer, ellipseStart.x, ellipseStart.y, ellipsePreview.x, ellipsePreview.y,
+                doc.width, doc.height, primaryColor, ditherPresetIdx, brushSize, shapeFilled);
+    ellipseStart = null;
+    ellipsePreview = null;
+    markDirty();
+  }
+
+  const changed = history.endStroke(layer);
+  if (changed > 0) {
+    refreshLayerThumbs();
+    saveToIDB();
+    if (changed >= doc.width * doc.height * 0.001) {
+      await history.captureSnapshot(renderer.getCompositeCanvas(doc));
+    }
+  }
+}
+
+function onStrokeCancel() {
+  // Revert any partial paint from a stroke interrupted by a two-finger gesture
+  const layer = getActiveLayer(doc);
+  history.cancelStroke(layer);
+  // Clear any shape preview state
+  gradientStart = null; gradientPreview = null;
+  lineStart = null; linePreview = null;
+  rectStart = null; rectPreview = null;
+  ellipseStart = null; ellipsePreview = null;
+  markDirty();
 }
 
 function onEyedrop(x, y) {
@@ -125,24 +193,112 @@ function onEyedrop(x, y) {
   updateColorUI();
 }
 
-// --- Overlay drawing (cursor, gradient preview) ---
+// --- Overlay drawing (cursor, gradient preview, line preview) ---
+// All overlays use r.applyDocTransform(vctx) so coordinates are in doc-pixel * scale space,
+// i.e. doc pixel (px,py) lives at (px*scale, py*scale) — rotation handled by the transform.
 function drawOverlay(vctx, r) {
   if (currentTool === 'gradient' && gradientPreview) {
     const { ax, ay, bx, by } = gradientPreview;
-    const toVX = dx => r.tx + dx * r.scale + r.scale / 2;
-    const toVY = dy => r.ty + dy * r.scale + r.scale / 2;
+    const s = r.scale;
     vctx.save();
+    r.applyDocTransform(vctx);
     vctx.strokeStyle = '#fff';
     vctx.lineWidth = 2;
     vctx.setLineDash([4, 4]);
     vctx.beginPath();
-    vctx.moveTo(toVX(ax), toVY(ay));
-    vctx.lineTo(toVX(bx), toVY(by));
+    vctx.moveTo((ax + 0.5) * s, (ay + 0.5) * s);
+    vctx.lineTo((bx + 0.5) * s, (by + 0.5) * s);
     vctx.stroke();
     vctx.strokeStyle = '#000';
     vctx.setLineDash([4, 4]);
     vctx.lineDashOffset = 4;
     vctx.stroke();
+    vctx.restore();
+  }
+
+  if (currentTool === 'line' && lineStart && linePreview) {
+    const s = r.scale;
+    const half = Math.floor(brushSize / 2);
+    const end = brushSize - half;
+    vctx.save();
+    r.applyDocTransform(vctx);
+    vctx.fillStyle = colorToHex(primaryColor);
+    vctx.globalAlpha = 0.85;
+    for (const p of bresenham(lineStart.x, lineStart.y, linePreview.x, linePreview.y)) {
+      for (let dy = -half; dy < end; dy++) {
+        for (let dx = -half; dx < end; dx++) {
+          const px = p.x + dx, py = p.y + dy;
+          if (px < 0 || py < 0 || px >= doc.width || py >= doc.height) continue;
+          if (!shouldDraw(px, py, ditherPresetIdx)) continue;
+          vctx.fillRect(px * s, py * s, s, s);
+        }
+      }
+    }
+    vctx.restore();
+  }
+
+  if (currentTool === 'rect' && rectStart && rectPreview) {
+    const s = r.scale;
+    const minX = Math.min(rectStart.x, rectPreview.x), maxX = Math.max(rectStart.x, rectPreview.x);
+    const minY = Math.min(rectStart.y, rectPreview.y), maxY = Math.max(rectStart.y, rectPreview.y);
+    vctx.save();
+    r.applyDocTransform(vctx);
+    vctx.strokeStyle = colorToHex(primaryColor);
+    vctx.fillStyle   = colorToHex(primaryColor);
+    vctx.globalAlpha = 0.85;
+    if (shapeFilled) {
+      vctx.fillRect(minX * s, minY * s, (maxX - minX + 1) * s, (maxY - minY + 1) * s);
+    } else {
+      vctx.lineWidth = Math.max(1, brushSize * s);
+      vctx.strokeRect(
+        minX * s + vctx.lineWidth / 2,
+        minY * s + vctx.lineWidth / 2,
+        (maxX - minX + 1) * s - vctx.lineWidth,
+        (maxY - minY + 1) * s - vctx.lineWidth
+      );
+    }
+    vctx.restore();
+  }
+
+  if (currentTool === 'ellipse' && ellipseStart && ellipsePreview) {
+    const s = r.scale;
+    const minX = Math.min(ellipseStart.x, ellipsePreview.x);
+    const maxX = Math.max(ellipseStart.x, ellipsePreview.x);
+    const minY = Math.min(ellipseStart.y, ellipsePreview.y);
+    const maxY = Math.max(ellipseStart.y, ellipsePreview.y);
+    const isCircle = Math.abs((maxX - minX) - (maxY - minY)) <= 1;
+    const overlayColor = isCircle ? '#00d5ff' : colorToHex(primaryColor);
+    const vcx = (minX + maxX + 1) / 2 * s;
+    const vcy = (minY + maxY + 1) / 2 * s;
+    const vrx = Math.max(0.5, (maxX - minX + 1) / 2 * s);
+    const vry = Math.max(0.5, (maxY - minY + 1) / 2 * s);
+    vctx.save();
+    r.applyDocTransform(vctx);
+    vctx.strokeStyle = overlayColor;
+    vctx.fillStyle   = overlayColor;
+    vctx.globalAlpha = 0.85;
+    vctx.beginPath();
+    vctx.ellipse(vcx, vcy, vrx, vry, 0, 0, Math.PI * 2);
+    if (shapeFilled) {
+      vctx.fill();
+    } else {
+      vctx.lineWidth = Math.max(1, brushSize * s);
+      vctx.stroke();
+    }
+    // Badge: small filled circle beside the bounding box when near-circular
+    if (isCircle) {
+      const badgeR = Math.max(4, s * 0.7);
+      const badgeX = (maxX + 1) * s + badgeR + 3;
+      const badgeY = minY * s + badgeR;
+      vctx.globalAlpha = 1;
+      vctx.fillStyle = '#00d5ff';
+      vctx.strokeStyle = '#000';
+      vctx.lineWidth = 1.5;
+      vctx.beginPath();
+      vctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2);
+      vctx.fill();
+      vctx.stroke();
+    }
     vctx.restore();
   }
 }
@@ -151,6 +307,42 @@ function drawOverlay(vctx, r) {
 function loop() {
   renderIfDirty();
   requestAnimationFrame(loop);
+}
+
+// --- Layer thumbnails ---
+function renderLayerThumb(canvas, layer, w, h) {
+  canvas.width = w;
+  canvas.height = h;
+  const maxSide = 32;
+  const ratio = w / h;
+  if (ratio >= 1) {
+    canvas.style.width  = maxSide + 'px';
+    canvas.style.height = Math.round(maxSide / ratio) + 'px';
+  } else {
+    canvas.style.height = maxSide + 'px';
+    canvas.style.width  = Math.round(maxSide * ratio) + 'px';
+  }
+  const ctx = canvas.getContext('2d');
+  const id  = ctx.createImageData(w, h);
+  const out = new Uint32Array(id.data.buffer);
+  for (let i = 0; i < out.length; i++) {
+    const src = layer.buffer[i];
+    const sa  = ((src >>> 24) / 255) * layer.opacity;
+    if (sa === 0) { out[i] = 0xffffffff; continue; }
+    const r = Math.round((src & 0xff)         * sa + 255 * (1 - sa));
+    const g = Math.round(((src >>> 8) & 0xff) * sa + 255 * (1 - sa));
+    const b = Math.round(((src >>> 16) & 0xff) * sa + 255 * (1 - sa));
+    out[i] = (0xff << 24) | (b << 16) | (g << 8) | r;
+  }
+  ctx.putImageData(id, 0, 0);
+}
+
+function refreshLayerThumbs() {
+  const frame = getActiveFrame(doc);
+  const layers = [...frame.layers].reverse();
+  document.querySelectorAll('#layer-list .layer-thumb').forEach((canvas, i) => {
+    if (layers[i]) renderLayerThumb(canvas, layers[i], doc.width, doc.height);
+  });
 }
 
 // --- Layer UI ---
@@ -163,6 +355,10 @@ function renderLayerPanel() {
   for (const layer of layers) {
     const el = document.createElement('div');
     el.className = 'layer-item' + (layer.id === doc.activeLayerId ? ' active' : '');
+
+    const thumb = document.createElement('canvas');
+    thumb.className = 'layer-thumb';
+    renderLayerThumb(thumb, layer, doc.width, doc.height);
 
     const vis = document.createElement('button');
     vis.className = 'layer-vis ph-light ' + (layer.visible ? 'ph-eye' : 'ph-eye-slash');
@@ -190,18 +386,33 @@ function renderLayerPanel() {
     opacity.title = 'Opacity';
     opacity.oninput = () => { layer.opacity = parseFloat(opacity.value); markDirty(); };
 
+    el.appendChild(thumb);
     el.appendChild(vis);
     el.appendChild(name);
     el.appendChild(opacity);
-    el.onclick = () => { doc.activeLayerId = layer.id; renderLayerPanel(); };
+    el.onclick = () => { doc.activeLayerId = layer.id; renderLayerPanel(); markDirty(); };
     list.appendChild(el);
   }
 }
 
 // --- Tool UI ---
+function updateShapeFilledUI() {
+  const isShape = currentTool === 'rect' || currentTool === 'ellipse';
+  ['rect', 'ellipse'].forEach(t => {
+    document.querySelector(`[data-tool="${t}"]`)
+      ?.classList.toggle('shape-filled', isShape && shapeFilled);
+  });
+}
+
 function selectTool(tool) {
+  if ((tool === 'rect' || tool === 'ellipse') && currentTool === tool) {
+    shapeFilled = !shapeFilled;
+    updateShapeFilledUI();
+    return;
+  }
   currentTool = tool;
   document.querySelectorAll('.tool-btn').forEach(b => b.classList.toggle('active', b.dataset.tool === tool));
+  updateShapeFilledUI();
 }
 
 // --- Pattern picker ---
@@ -275,7 +486,7 @@ function renderPaletteSwatches() {
   const grid = document.getElementById('palette-grid');
   grid.innerHTML = '';
   const used = doc.palette.length;
-  const total = Math.ceil((used + 1) / 8) * 8;
+  const total = Math.ceil((used + 1) / 4) * 4;
   for (let i = 0; i < total; i++) {
     const c = i < used ? doc.palette[i] : 0;
     const swatch = document.createElement('button');
@@ -338,6 +549,68 @@ function applyPickerColor() {
   document.getElementById('color-picker-panel').classList.add('hidden');
 }
 
+// --- Modal dialog ---
+let _modalResolve = null;
+
+function showModal({ title, message = '', inputs = [], okLabel = 'OK', danger = false }) {
+  return new Promise(resolve => {
+    _modalResolve = resolve;
+    document.getElementById('modal-title-bar').textContent = title;
+    const body = document.getElementById('modal-body-area');
+    body.innerHTML = '';
+    if (message) {
+      const p = document.createElement('p');
+      p.textContent = message;
+      body.appendChild(p);
+    }
+    for (const inp of inputs) {
+      const row = document.createElement('div');
+      row.className = 'modal-row';
+      const label = document.createElement('label');
+      label.textContent = inp.label;
+      const field = document.createElement('input');
+      field.type = inp.type || 'text';
+      field.value = inp.default ?? '';
+      if (inp.min !== undefined) field.min = inp.min;
+      if (inp.max !== undefined) field.max = inp.max;
+      field.dataset.key = inp.key;
+      field.addEventListener('keydown', e => { if (e.key === 'Enter') _modalOk(); });
+      row.appendChild(label);
+      row.appendChild(field);
+      body.appendChild(row);
+    }
+    const okBtn = document.getElementById('modal-ok-btn');
+    okBtn.textContent = okLabel;
+    okBtn.className = danger ? 'danger' : '';
+    document.getElementById('modal-overlay').classList.remove('hidden');
+    setTimeout(() => {
+      const first = body.querySelector('input');
+      (first ?? okBtn).focus();
+      first?.select();
+    }, 0);
+  });
+}
+
+function _modalOk() {
+  if (!_modalResolve) return;
+  const values = {};
+  document.querySelectorAll('#modal-body-area input').forEach(inp => {
+    values[inp.dataset.key] = inp.value;
+  });
+  const resolve = _modalResolve;
+  _modalResolve = null;
+  document.getElementById('modal-overlay').classList.add('hidden');
+  resolve({ ok: true, values });
+}
+
+function _modalCancel() {
+  if (!_modalResolve) return;
+  const resolve = _modalResolve;
+  _modalResolve = null;
+  document.getElementById('modal-overlay').classList.add('hidden');
+  resolve({ ok: false, values: {} });
+}
+
 // --- Save / Load ---
 async function saveToIDB() {
   try {
@@ -350,9 +623,20 @@ function scheduleSessionSave() {
   clearTimeout(_sessionSaveTimer);
   _sessionSaveTimer = setTimeout(() => {
     _sessionSaveTimer = null;
+    const pp = document.getElementById('palette-panel');
+    const lp = document.getElementById('layers-panel');
+    const ppRect = pp.getBoundingClientRect();
+    const lpRect = lp.getBoundingClientRect();
     idbSet('empedrat-session', {
       primaryColor, secondaryColor,
       refTx, refTy, refScale, hasRef: !!refImage,
+      rotation: renderer.angle,
+      palettePanelX: ppRect.left,
+      palettePanelY: ppRect.top,
+      paletteFolded: pp.classList.contains('folded'),
+      layersPanelX: lpRect.left,
+      layersPanelY: lpRect.top,
+      layersFolded: lp.classList.contains('folded'),
     }).catch(() => {});
   }, 300);
 }
@@ -373,6 +657,7 @@ async function loadFromIDB() {
     if (json) {
       const { doc: loadedDoc, snapshots } = await deserializeDocument(json);
       doc = loadedDoc;
+      syncIds(doc);
       history.setSnapshots(snapshots);
       renderer.resize(doc.width, doc.height);
       renderer.fitToView(doc.width, doc.height);
@@ -384,7 +669,30 @@ async function loadFromIDB() {
     if (session) {
       primaryColor   = session.primaryColor   ?? primaryColor;
       secondaryColor = session.secondaryColor ?? secondaryColor;
+      renderer.angle = session.rotation ?? 0;
       updateColorUI();
+      const maxX = window.innerWidth  - 40;
+      const maxY = window.innerHeight - 40;
+      if (session.palettePanelX !== undefined) {
+        const pp = document.getElementById('palette-panel');
+        pp.style.left  = Math.max(0, Math.min(session.palettePanelX, maxX)) + 'px';
+        pp.style.top   = Math.max(0, Math.min(session.palettePanelY, maxY)) + 'px';
+        pp.style.right = 'auto';
+        if (session.paletteFolded) {
+          pp.classList.add('folded');
+          document.getElementById('fold-palette-icon').className = 'ph-light ph-caret-down';
+        }
+      }
+      if (session.layersPanelX !== undefined) {
+        const lp = document.getElementById('layers-panel');
+        lp.style.left  = Math.max(0, Math.min(session.layersPanelX, maxX)) + 'px';
+        lp.style.top   = Math.max(0, Math.min(session.layersPanelY, maxY)) + 'px';
+        lp.style.right = 'auto';
+        if (session.layersFolded) {
+          lp.classList.add('folded');
+          document.getElementById('fold-layers-icon').className = 'ph-light ph-caret-down';
+        }
+      }
     }
     const refDataUrl = await idbGet('empedrat-ref');
     if (refDataUrl && session?.hasRef) {
@@ -400,6 +708,8 @@ async function loadFromIDB() {
       img.src = refDataUrl;
     }
   } catch (_) {}
+  document.getElementById('palette-panel').style.visibility = '';
+  document.getElementById('layers-panel').style.visibility = '';
 }
 
 function exportPNG(scale = 8) {
@@ -559,12 +869,24 @@ function setupTimelapsePanel() {
   document.getElementById('tl-btn-export').addEventListener('click', () => {
     exportTimelapse(tlDelay);
   });
+
+  document.getElementById('tl-btn-clear').addEventListener('click', async () => {
+    const { ok } = await showModal({ title: 'Clear Timelapse', message: 'Remove all timelapse frames?', okLabel: 'Clear', danger: true });
+    if (!ok) return;
+    history.clearSnapshots();
+    tlSnaps = [];
+    tlPlaying = false;
+    clearTimeout(tlTimer);
+    panel.classList.add('hidden');
+    saveToIDB();
+  });
 }
 
 async function importProject(file) {
   const data = new Uint8Array(await file.arrayBuffer());
   const { doc: loadedDoc, snapshots } = await deserializeDocument(data);
   doc = loadedDoc;
+  syncIds(doc);
   history.setSnapshots(snapshots);
   renderer.resize(doc.width, doc.height);
   renderer.fitToView(doc.width, doc.height);
@@ -614,6 +936,7 @@ function newDoc(w, h) {
   renderer.fitToView(w, h);
   renderLayerPanel();
   renderPaletteSwatches();
+  updateColorUI();
   markDirty();
   saveToIDB();
 }
@@ -674,6 +997,64 @@ function sampleFromRef(e) {
   if (d[3] === 0) return;
   primaryColor = packColor(d[0], d[1], d[2], 255);
   updateColorUI();
+}
+
+function setupPalettePanel() {
+  const panel  = document.getElementById('palette-panel');
+  const header = document.getElementById('palette-header');
+  let drag = false, dsx, dsy, dsl, dst;
+  header.addEventListener('pointerdown', e => {
+    if (e.target.closest('button')) return;
+    e.stopPropagation();
+    const rect = panel.getBoundingClientRect();
+    panel.style.right = 'auto';
+    panel.style.left = rect.left + 'px';
+    panel.style.top  = rect.top  + 'px';
+    drag = true;
+    dsx = e.clientX; dsy = e.clientY;
+    dsl = rect.left; dst = rect.top;
+    header.setPointerCapture(e.pointerId);
+  });
+  header.addEventListener('pointermove', e => {
+    if (!drag) return;
+    panel.style.left = (dsl + e.clientX - dsx) + 'px';
+    panel.style.top  = (dst + e.clientY - dsy) + 'px';
+  });
+  header.addEventListener('pointerup', () => { drag = false; scheduleSessionSave(); });
+  document.getElementById('btn-fold-palette').addEventListener('click', () => {
+    const folded = panel.classList.toggle('folded');
+    document.getElementById('fold-palette-icon').className = `ph-light ${folded ? 'ph-caret-down' : 'ph-caret-up'}`;
+    scheduleSessionSave();
+  });
+}
+
+function setupLayersPanel() {
+  const panel  = document.getElementById('layers-panel');
+  const header = document.getElementById('layers-header');
+  let drag = false, dsx, dsy, dsl, dst;
+  header.addEventListener('pointerdown', e => {
+    if (e.target.closest('button')) return;
+    e.stopPropagation();
+    const rect = panel.getBoundingClientRect();
+    panel.style.right = 'auto';
+    panel.style.left = rect.left + 'px';
+    panel.style.top  = rect.top  + 'px';
+    drag = true;
+    dsx = e.clientX; dsy = e.clientY;
+    dsl = rect.left; dst = rect.top;
+    header.setPointerCapture(e.pointerId);
+  });
+  header.addEventListener('pointermove', e => {
+    if (!drag) return;
+    panel.style.left = (dsl + e.clientX - dsx) + 'px';
+    panel.style.top  = (dst + e.clientY - dsy) + 'px';
+  });
+  header.addEventListener('pointerup', () => { drag = false; scheduleSessionSave(); });
+  document.getElementById('btn-fold-layers').addEventListener('click', () => {
+    const folded = panel.classList.toggle('folded');
+    document.getElementById('fold-layers-icon').className = `ph-light ${folded ? 'ph-caret-down' : 'ph-caret-up'}`;
+    scheduleSessionSave();
+  });
 }
 
 function setupRefPanel() {
@@ -794,7 +1175,7 @@ function setupRefPanel() {
 // --- Init ---
 export function init() {
   resizeViewport();
-  window.addEventListener('resize', () => { resizeViewport(); });
+  new ResizeObserver(() => resizeViewport()).observe(document.getElementById('viewport'));
 
   const input = new InputHandler(
     document.getElementById('viewport'),
@@ -803,8 +1184,9 @@ export function init() {
       onStrokeStart,
       onStrokeMove,
       onStrokeEnd,
+      onStrokeCancel,
       onEyedrop,
-      onPanZoom: () => markDirty(),
+      onPanZoom: () => { markDirty(); scheduleSessionSave(); },
     }
   );
 
@@ -887,6 +1269,12 @@ export function init() {
     document.getElementById('color-picker-panel').classList.add('hidden');
   });
 
+  // Palette panel
+  setupPalettePanel();
+
+  // Layers panel
+  setupLayersPanel();
+
   // Reference image
   setupRefPanel();
   document.getElementById('btn-load-ref').addEventListener('click', () => {
@@ -899,9 +1287,13 @@ export function init() {
   });
 
   // Export/Import buttons
-  document.getElementById('btn-export-png').addEventListener('click', () => {
-    const scale = parseInt(prompt('Export scale (1-20)?', '8')) || 8;
-    exportPNG(Math.max(1, Math.min(20, scale)));
+  document.getElementById('btn-export-png').addEventListener('click', async () => {
+    const { ok, values } = await showModal({
+      title: 'Export PNG',
+      inputs: [{ key: 'scale', label: 'Scale', type: 'number', default: '8', min: 1, max: 20 }],
+    });
+    if (!ok) return;
+    exportPNG(Math.max(1, Math.min(20, parseInt(values.scale) || 8)));
   });
   document.getElementById('btn-export-project').addEventListener('click', exportProject);
   document.getElementById('btn-import-project').addEventListener('click', () => {
@@ -934,16 +1326,28 @@ export function init() {
   });
 
   // Resize / New doc modal
-  document.getElementById('btn-new').addEventListener('click', () => {
-    const dim = prompt('New document (WxH)?', `${doc.width}x${doc.height}`);
-    if (!dim) return;
-    const [w, h] = dim.split('x').map(Number);
+  document.getElementById('btn-new').addEventListener('click', async () => {
+    const { ok, values } = await showModal({
+      title: 'New Document',
+      inputs: [
+        { key: 'w', label: 'Width',  type: 'number', default: String(doc.width),  min: 1, max: 4096 },
+        { key: 'h', label: 'Height', type: 'number', default: String(doc.height), min: 1, max: 4096 },
+      ],
+    });
+    if (!ok) return;
+    const w = parseInt(values.w), h = parseInt(values.h);
     if (w > 0 && h > 0) newDoc(w, h);
   });
-  document.getElementById('btn-resize').addEventListener('click', () => {
-    const dim = prompt('Resize canvas (WxH)?', `${doc.width}x${doc.height}`);
-    if (!dim) return;
-    const [w, h] = dim.split('x').map(Number);
+  document.getElementById('btn-resize').addEventListener('click', async () => {
+    const { ok, values } = await showModal({
+      title: 'Resize Canvas',
+      inputs: [
+        { key: 'w', label: 'Width',  type: 'number', default: String(doc.width),  min: 1, max: 4096 },
+        { key: 'h', label: 'Height', type: 'number', default: String(doc.height), min: 1, max: 4096 },
+      ],
+    });
+    if (!ok) return;
+    const w = parseInt(values.w), h = parseInt(values.h);
     if (w > 0 && h > 0) resizeDoc(w, h);
   });
 
@@ -960,6 +1364,11 @@ export function init() {
     renderer.fitToView(doc.width, doc.height);
     markDirty();
   });
+  document.getElementById('btn-reset-rotation').addEventListener('click', () => {
+    renderer.angle = 0;
+    scheduleSessionSave();
+    markDirty();
+  });
 
   // Undo / Redo
   document.getElementById('btn-undo').addEventListener('click', () => {
@@ -969,8 +1378,16 @@ export function init() {
     if (history.redo(doc)) markDirty();
   });
 
+  // Modal buttons
+  document.getElementById('modal-ok-btn').addEventListener('click', _modalOk);
+  document.getElementById('modal-cancel-btn').addEventListener('click', _modalCancel);
+  document.getElementById('modal-overlay').addEventListener('click', e => {
+    if (e.target.id === 'modal-overlay') _modalCancel();
+  });
+
   // Keyboard shortcuts
   document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && _modalResolve) { e.preventDefault(); _modalCancel(); return; }
     if (e.target.tagName === 'INPUT') return;
     const key = e.key.toLowerCase();
     if (key === 'p') selectTool('pencil');
@@ -978,6 +1395,10 @@ export function init() {
     else if (key === 'f') selectTool('fill');
     else if (key === 'g') selectTool('gradient');
     else if (key === 'i') selectTool('eyedropper');
+    else if (key === 'l') selectTool('line');
+    else if (key === 'r' && !e.shiftKey) selectTool('rect');
+    else if (key === 'r' && e.shiftKey) { renderer.angle = 0; scheduleSessionSave(); markDirty(); }
+    else if (key === 'o') selectTool('ellipse');
     else if (key === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
       e.preventDefault(); if (history.undo(doc)) markDirty();
     } else if ((key === 'z' && (e.ctrlKey || e.metaKey) && e.shiftKey) ||
@@ -992,6 +1413,19 @@ export function init() {
     } else if (key === 'm') {
       document.getElementById('app').classList.toggle('sidebar-collapsed');
     }
+  });
+
+  // Hamburger menu
+  const hamburgerDrop = document.getElementById('hamburger-dropdown');
+  document.getElementById('btn-hamburger').addEventListener('click', e => {
+    e.stopPropagation();
+    hamburgerDrop.classList.toggle('hidden');
+  });
+  hamburgerDrop.addEventListener('click', () => {
+    hamburgerDrop.classList.add('hidden');
+  });
+  document.addEventListener('click', () => {
+    hamburgerDrop.classList.add('hidden');
   });
 
   // Mobile toggles
@@ -1010,9 +1444,11 @@ export function init() {
   setupTimelapsePanel();
   document.getElementById('btn-timelapse').addEventListener('click', openTimelapsePanel);
 
+
   // Palette add/clear
-  document.getElementById('btn-palette-clear').addEventListener('click', () => {
-    if (!confirm('Clear all palette colors?')) return;
+  document.getElementById('btn-palette-clear').addEventListener('click', async () => {
+    const { ok } = await showModal({ title: 'Clear Palette', message: 'Remove all palette colors?', okLabel: 'Clear', danger: true });
+    if (!ok) return;
     doc.palette = [];
     renderPaletteSwatches();
     saveToIDB();

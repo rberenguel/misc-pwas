@@ -1,4 +1,4 @@
-const CACHE = 'empedrat-v0.9';
+const CACHE = 'plaettli-v1.8';
 const FILES = [
   './index.html',
   './manifest.json',
