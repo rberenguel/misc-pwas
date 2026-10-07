@@ -5,11 +5,11 @@ import {
   serializeDocument, deserializeDocument, syncIds,
 } from './document.js';
 import { Renderer } from './renderer.js';
-import { pencilStroke, eraserStroke, floodFill, applyDitherGradient, sampleColor, bresenham, drawRect, drawEllipse } from './tools.js';
+import { pencilStroke, eraserStroke, floodFill, applyDitherGradient, applyDitherRadialGradient, sampleColor, bresenham, drawRect, drawEllipse } from './tools.js';
 import { History } from './history.js';
 import { InputHandler } from './input.js';
 import { initPalette, loadLospecPng, exportPaletteJSON, exportPalettePNG, importPaletteJSON } from './palette.js';
-import { DITHER_PRESETS, shouldDraw } from './dither.js';
+import { DITHER_PRESETS, shouldDraw, ditherGradientPx, projectOntoSegment } from './dither.js';
 import { set as idbSet, get as idbGet } from '../libs/idb-keyval.js';
 
 // --- State ---
@@ -18,7 +18,7 @@ initPalette(doc);
 
 let primaryColor = doc.palette[0]; // black
 let secondaryColor = doc.palette[1]; // white
-let currentTool = 'pencil'; // pencil | eraser | fill | gradient | eyedropper
+let currentTool = 'pencil';
 let ditherPresetIdx = 0;   // 0 = Solid, 1-13 = Bayer8 densities
 let brushSize = 1;
 let eraserSize = 1;
@@ -26,6 +26,12 @@ let eraserSize = 1;
 // Gradient tool transient state
 let gradientStart = null;   // {x, y} in doc coords
 let gradientPreview = null; // {ax, ay, bx, by}
+let gradientType = 'linear'; // 'linear' | 'radial'
+const _gradientOffscreen = document.createElement('canvas');
+let gradientStops = [
+  { color: packColor(0, 0, 0, 255), pos: 0.0 },
+  { color: packColor(255, 255, 255, 255), pos: 1.0 },
+];
 
 // Line tool transient state
 let lineStart = null;   // {x, y} in doc coords
@@ -39,8 +45,46 @@ let rectPreview = null; // {x, y} opposite corner
 let ellipseStart = null;
 let ellipsePreview = null;
 
-// Shared shape option
-let shapeFilled = false;
+// Selection tool state
+let selection     = null; // { x, y, w, h } in doc coords, or null
+let selStart      = null; // {x, y} drag start (new selection)
+let selPreview    = null; // {x, y} current drag end (new selection)
+let selMoving     = false;
+let selMoveStart  = null; // {x, y} where move drag began
+let selMoveOrigin = null; // selection rect at start of move
+let selMoveBuffer = null; // Uint32Array of lifted pixels
+let selectionClipboard = null; // { w, h, pixels: Uint32Array, srcX, srcY }
+let _selDashOffset = 0;
+
+// Symmetry mode
+let symH = false;
+let symV = false;
+let symHAxis = null; // null = doc center; float doc-space column boundary
+let symVAxis = null;
+let draggingAxis = null; // null | 'h' | 'v'
+
+function getSymHAxis() { return symHAxis ?? doc.width  / 2; }
+function getSymVAxis() { return symVAxis ?? doc.height / 2; }
+function resetSymAxes() { symHAxis = null; symVAxis = null; }
+
+function mirrorCoord(x, ax) { return Math.floor(2 * ax - x - 0.5); }
+
+function symPoints(x0, y0, x1, y1) {
+  const pts = [[x0, y0, x1, y1]];
+  if (symH) {
+    const ax = getSymHAxis();
+    pts.push([mirrorCoord(x0, ax), y0, mirrorCoord(x1, ax), y1]);
+  }
+  if (symV) {
+    const ay = getSymVAxis();
+    pts.push([x0, mirrorCoord(y0, ay), x1, mirrorCoord(y1, ay)]);
+  }
+  if (symH && symV) {
+    const ax = getSymHAxis(), ay = getSymVAxis();
+    pts.push([mirrorCoord(x0, ax), mirrorCoord(y0, ay), mirrorCoord(x1, ax), mirrorCoord(y1, ay)]);
+  }
+  return pts;
+}
 
 const renderer = new Renderer(document.getElementById('viewport'));
 const history = new History();
@@ -64,8 +108,48 @@ function resizeViewport() {
 
 // --- Tool callbacks ---
 function onStrokeStart(x, y, pressure) {
+  // Axis drag takes priority over drawing
+  if (symH || symV) {
+    const threshold = Math.max(1.5, 5 / renderer.scale);
+    if (symH && Math.abs(x + 0.5 - getSymHAxis()) < threshold) {
+      draggingAxis = 'h'; markDirty(); return;
+    }
+    if (symV && Math.abs(y + 0.5 - getSymVAxis()) < threshold) {
+      draggingAxis = 'v'; markDirty(); return;
+    }
+  }
+
   if (currentTool === 'eyedropper') {
     onEyedrop(x, y);
+    return;
+  }
+
+  if (currentTool === 'select-rect') {
+    if (selection && x >= selection.x && x < selection.x + selection.w &&
+                     y >= selection.y && y < selection.y + selection.h) {
+      // Inside existing selection: lift pixels and start move
+      const layer = getActiveLayer(doc);
+      selMoveBuffer = new Uint32Array(selection.w * selection.h);
+      for (let py = 0; py < selection.h; py++)
+        for (let px = 0; px < selection.w; px++)
+          selMoveBuffer[py * selection.w + px] =
+            layer.buffer[(selection.y + py) * doc.width + (selection.x + px)];
+      history.beginStroke(layer, doc.width, doc.height);
+      for (let py = selection.y; py < selection.y + selection.h; py++)
+        for (let px = selection.x; px < selection.x + selection.w; px++)
+          layer.buffer[py * doc.width + px] = 0;
+      selMoving = true;
+      selMoveStart = { x, y };
+      selMoveOrigin = { ...selection };
+    } else {
+      // Outside: start new selection
+      selMoving = false; selMoveBuffer = null; selMoveStart = null; selMoveOrigin = null;
+      selStart = { x, y };
+      selPreview = { x, y };
+      selection = null;
+      updateToolOptions();
+    }
+    markDirty();
     return;
   }
 
@@ -73,40 +157,63 @@ function onStrokeStart(x, y, pressure) {
   history.beginStroke(layer, doc.width, doc.height);
 
   if (currentTool === 'pencil') {
-    pencilStroke(layer, x, y, x, y, doc.width, doc.height, primaryColor, ditherPresetIdx, brushSize);
+    for (const [a,b,c,d] of symPoints(x, y, x, y))
+      pencilStroke(layer, a, b, c, d, doc.width, doc.height, primaryColor, ditherPresetIdx, brushSize);
     markDirty();
   } else if (currentTool === 'eraser') {
-    eraserStroke(layer, x, y, x, y, doc.width, doc.height, eraserSize);
+    for (const [a,b,c,d] of symPoints(x, y, x, y))
+      eraserStroke(layer, a, b, c, d, doc.width, doc.height, eraserSize);
     markDirty();
   } else if (currentTool === 'fill') {
-    floodFill(layer, x, y, primaryColor, doc.width, doc.height);
+    for (const [a,b] of symPoints(x, y, x, y))
+      floodFill(layer, a, b, primaryColor, doc.width, doc.height);
     markDirty();
   } else if (currentTool === 'gradient') {
     gradientStart = { x, y };
   } else if (currentTool === 'line') {
     lineStart = { x, y };
     linePreview = { x, y };
-  } else if (currentTool === 'rect') {
+  } else if (currentTool === 'rect' || currentTool === 'rect-filled') {
     rectStart = { x, y };
     rectPreview = { x, y };
-  } else if (currentTool === 'ellipse') {
+  } else if (currentTool === 'ellipse' || currentTool === 'ellipse-filled') {
     ellipseStart = { x, y };
     ellipsePreview = { x, y };
   }
 }
 
 function onStrokeMove(x0, y0, x1, y1, pressure) {
+  if (draggingAxis === 'h') {
+    symHAxis = Math.max(0, Math.min(doc.width,  x1 + 0.5)); markDirty(); return;
+  }
+  if (draggingAxis === 'v') {
+    symVAxis = Math.max(0, Math.min(doc.height, y1 + 0.5)); markDirty(); return;
+  }
+
   if (currentTool === 'eyedropper') {
     onEyedrop(x1, y1);
     return;
   }
 
+  if (currentTool === 'select-rect') {
+    if (selMoving && selMoveOrigin) {
+      const dx = x1 - selMoveStart.x, dy = y1 - selMoveStart.y;
+      selection = { x: selMoveOrigin.x + dx, y: selMoveOrigin.y + dy, w: selMoveOrigin.w, h: selMoveOrigin.h };
+    } else if (selStart) {
+      selPreview = { x: x1, y: y1 };
+    }
+    markDirty();
+    return;
+  }
+
   const layer = getActiveLayer(doc);
   if (currentTool === 'pencil') {
-    pencilStroke(layer, x0, y0, x1, y1, doc.width, doc.height, primaryColor, ditherPresetIdx, brushSize);
+    for (const [a,b,c,d] of symPoints(x0, y0, x1, y1))
+      pencilStroke(layer, a, b, c, d, doc.width, doc.height, primaryColor, ditherPresetIdx, brushSize);
     markDirty();
   } else if (currentTool === 'eraser') {
-    eraserStroke(layer, x0, y0, x1, y1, doc.width, doc.height, eraserSize);
+    for (const [a,b,c,d] of symPoints(x0, y0, x1, y1))
+      eraserStroke(layer, a, b, c, d, doc.width, doc.height, eraserSize);
     markDirty();
   } else if (currentTool === 'gradient' && gradientStart) {
     gradientPreview = { ax: gradientStart.x, ay: gradientStart.y, bx: x1, by: y1 };
@@ -114,49 +221,82 @@ function onStrokeMove(x0, y0, x1, y1, pressure) {
   } else if (currentTool === 'line' && lineStart) {
     linePreview = { x: x1, y: y1 };
     markDirty();
-  } else if (currentTool === 'rect' && rectStart) {
+  } else if ((currentTool === 'rect' || currentTool === 'rect-filled') && rectStart) {
     rectPreview = { x: x1, y: y1 };
     markDirty();
-  } else if (currentTool === 'ellipse' && ellipseStart) {
+  } else if ((currentTool === 'ellipse' || currentTool === 'ellipse-filled') && ellipseStart) {
     ellipsePreview = { x: x1, y: y1 };
     markDirty();
   }
 }
 
 async function onStrokeEnd() {
+  if (draggingAxis) { draggingAxis = null; markDirty(); return; }
+
+  if (currentTool === 'select-rect') {
+    if (selMoving && selMoveBuffer && selection) {
+      // Commit lifted pixels at new position
+      const layer = getActiveLayer(doc);
+      const { x, y, w, h } = selection;
+      for (let py = 0; py < h; py++)
+        for (let px = 0; px < w; px++) {
+          const nx = x + px, ny = y + py;
+          if (nx >= 0 && ny >= 0 && nx < doc.width && ny < doc.height)
+            layer.buffer[ny * doc.width + nx] = selMoveBuffer[py * w + px];
+        }
+      history.endStroke(layer);
+      refreshLayerThumbs();
+      saveToIDB();
+      selMoving = false; selMoveStart = null; selMoveOrigin = null; selMoveBuffer = null;
+    } else {
+      if (selStart && selPreview) {
+        const x  = Math.max(0, Math.min(selStart.x, selPreview.x));
+        const y  = Math.max(0, Math.min(selStart.y, selPreview.y));
+        const x2 = Math.min(doc.width  - 1, Math.max(selStart.x, selPreview.x));
+        const y2 = Math.min(doc.height - 1, Math.max(selStart.y, selPreview.y));
+        selection = (x2 >= x && y2 >= y) ? { x, y, w: x2 - x + 1, h: y2 - y + 1 } : null;
+      }
+      selStart = null; selPreview = null;
+    }
+    updateToolOptions();
+    markDirty();
+    return;
+  }
+
   const layer = getActiveLayer(doc);
 
   if (currentTool === 'gradient' && gradientStart && gradientPreview) {
-    applyDitherGradient(
-      layer, doc.width, doc.height, primaryColor, secondaryColor,
-      gradientPreview.ax, gradientPreview.ay,
-      gradientPreview.bx, gradientPreview.by,
-      ditherPresetIdx
-    );
+    const { ax, ay, bx, by } = gradientPreview;
+    if (gradientType === 'radial') {
+      const radius = Math.sqrt((bx - ax) ** 2 + (by - ay) ** 2);
+      applyDitherRadialGradient(layer, doc.width, doc.height, gradientStops, ax, ay, radius, true, ditherPresetIdx);
+    } else {
+      applyDitherGradient(layer, doc.width, doc.height, gradientStops, ax, ay, bx, by, ditherPresetIdx);
+    }
     gradientStart = null;
     gradientPreview = null;
     markDirty();
   }
 
   if (currentTool === 'line' && lineStart && linePreview) {
-    pencilStroke(layer, lineStart.x, lineStart.y, linePreview.x, linePreview.y,
-                 doc.width, doc.height, primaryColor, ditherPresetIdx, brushSize);
+    for (const [a,b,c,d] of symPoints(lineStart.x, lineStart.y, linePreview.x, linePreview.y))
+      pencilStroke(layer, a, b, c, d, doc.width, doc.height, primaryColor, ditherPresetIdx, brushSize);
     lineStart = null;
     linePreview = null;
     markDirty();
   }
 
-  if (currentTool === 'rect' && rectStart && rectPreview) {
-    drawRect(layer, rectStart.x, rectStart.y, rectPreview.x, rectPreview.y,
-             doc.width, doc.height, primaryColor, ditherPresetIdx, brushSize, shapeFilled);
+  if ((currentTool === 'rect' || currentTool === 'rect-filled') && rectStart && rectPreview) {
+    for (const [a,b,c,d] of symPoints(rectStart.x, rectStart.y, rectPreview.x, rectPreview.y))
+      drawRect(layer, a, b, c, d, doc.width, doc.height, primaryColor, ditherPresetIdx, brushSize, currentTool === 'rect-filled');
     rectStart = null;
     rectPreview = null;
     markDirty();
   }
 
-  if (currentTool === 'ellipse' && ellipseStart && ellipsePreview) {
-    drawEllipse(layer, ellipseStart.x, ellipseStart.y, ellipsePreview.x, ellipsePreview.y,
-                doc.width, doc.height, primaryColor, ditherPresetIdx, brushSize, shapeFilled);
+  if ((currentTool === 'ellipse' || currentTool === 'ellipse-filled') && ellipseStart && ellipsePreview) {
+    for (const [a,b,c,d] of symPoints(ellipseStart.x, ellipseStart.y, ellipsePreview.x, ellipsePreview.y))
+      drawEllipse(layer, a, b, c, d, doc.width, doc.height, primaryColor, ditherPresetIdx, brushSize, currentTool === 'ellipse-filled');
     ellipseStart = null;
     ellipsePreview = null;
     markDirty();
@@ -173,10 +313,22 @@ async function onStrokeEnd() {
 }
 
 function onStrokeCancel() {
+  if (draggingAxis) { draggingAxis = null; markDirty(); return; }
+
+  if (currentTool === 'select-rect') {
+    if (selMoving) {
+      history.cancelStroke(getActiveLayer(doc));
+      selection = selMoveOrigin ? { ...selMoveOrigin } : null;
+      selMoving = false; selMoveStart = null; selMoveOrigin = null; selMoveBuffer = null;
+    } else {
+      selStart = null; selPreview = null;
+    }
+    markDirty();
+    return;
+  }
   // Revert any partial paint from a stroke interrupted by a two-finger gesture
   const layer = getActiveLayer(doc);
   history.cancelStroke(layer);
-  // Clear any shape preview state
   gradientStart = null; gradientPreview = null;
   lineStart = null; linePreview = null;
   rectStart = null; rectPreview = null;
@@ -200,19 +352,67 @@ function drawOverlay(vctx, r) {
   if (currentTool === 'gradient' && gradientPreview) {
     const { ax, ay, bx, by } = gradientPreview;
     const s = r.scale;
+    const W = doc.width, H = doc.height;
+    _gradientOffscreen.width = W; _gradientOffscreen.height = H;
+    const octx = _gradientOffscreen.getContext('2d');
+    const id = octx.createImageData(W, H);
+    const out = new Uint32Array(id.data.buffer);
+
+    if (gradientType === 'radial') {
+      const radius = Math.sqrt((bx - ax) ** 2 + (by - ay) ** 2);
+      for (let y = 0; y < H; y++)
+        for (let x = 0; x < W; x++) {
+          const dist = Math.sqrt((x - ax) ** 2 + (y - ay) ** 2);
+          if (dist > radius) continue;
+          const t = radius <= 0 ? 0 : Math.min(1, dist / radius);
+          out[y * W + x] = ditherGradientPx(x, y, t, gradientStops, ditherPresetIdx);
+        }
+    } else {
+      for (let y = 0; y < H; y++)
+        for (let x = 0; x < W; x++)
+          out[y * W + x] = ditherGradientPx(x, y, projectOntoSegment(x, y, ax, ay, bx, by), gradientStops, ditherPresetIdx);
+    }
+    octx.putImageData(id, 0, 0);
+
     vctx.save();
     r.applyDocTransform(vctx);
+    vctx.globalAlpha = 0.75;
+    vctx.imageSmoothingEnabled = false;
+    vctx.drawImage(_gradientOffscreen, 0, 0, W * s, H * s);
+    vctx.globalAlpha = 1;
     vctx.strokeStyle = '#fff';
     vctx.lineWidth = 2;
     vctx.setLineDash([4, 4]);
-    vctx.beginPath();
-    vctx.moveTo((ax + 0.5) * s, (ay + 0.5) * s);
-    vctx.lineTo((bx + 0.5) * s, (by + 0.5) * s);
-    vctx.stroke();
-    vctx.strokeStyle = '#000';
-    vctx.setLineDash([4, 4]);
-    vctx.lineDashOffset = 4;
-    vctx.stroke();
+
+    if (gradientType === 'radial') {
+      const radius = Math.sqrt((bx - ax) ** 2 + (by - ay) ** 2);
+      vctx.beginPath();
+      vctx.arc((ax + 0.5) * s, (ay + 0.5) * s, radius * s, 0, Math.PI * 2);
+      vctx.stroke();
+      vctx.strokeStyle = '#000';
+      vctx.lineDashOffset = 4;
+      vctx.stroke();
+      // Center crosshair
+      vctx.setLineDash([]);
+      vctx.globalAlpha = 0.9;
+      const cx = (ax + 0.5) * s, cy = (ay + 0.5) * s;
+      for (const [col, off] of [['#fff', 0], ['#000', 1]]) {
+        vctx.strokeStyle = col;
+        vctx.lineWidth = off ? 1 : 2;
+        vctx.beginPath();
+        vctx.moveTo(cx - 4, cy); vctx.lineTo(cx + 4, cy);
+        vctx.moveTo(cx, cy - 4); vctx.lineTo(cx, cy + 4);
+        vctx.stroke();
+      }
+    } else {
+      vctx.beginPath();
+      vctx.moveTo((ax + 0.5) * s, (ay + 0.5) * s);
+      vctx.lineTo((bx + 0.5) * s, (by + 0.5) * s);
+      vctx.stroke();
+      vctx.strokeStyle = '#000';
+      vctx.lineDashOffset = 4;
+      vctx.stroke();
+    }
     vctx.restore();
   }
 
@@ -237,7 +437,8 @@ function drawOverlay(vctx, r) {
     vctx.restore();
   }
 
-  if (currentTool === 'rect' && rectStart && rectPreview) {
+  if ((currentTool === 'rect' || currentTool === 'rect-filled') && rectStart && rectPreview) {
+    const filled = currentTool === 'rect-filled';
     const s = r.scale;
     const minX = Math.min(rectStart.x, rectPreview.x), maxX = Math.max(rectStart.x, rectPreview.x);
     const minY = Math.min(rectStart.y, rectPreview.y), maxY = Math.max(rectStart.y, rectPreview.y);
@@ -246,7 +447,7 @@ function drawOverlay(vctx, r) {
     vctx.strokeStyle = colorToHex(primaryColor);
     vctx.fillStyle   = colorToHex(primaryColor);
     vctx.globalAlpha = 0.85;
-    if (shapeFilled) {
+    if (filled) {
       vctx.fillRect(minX * s, minY * s, (maxX - minX + 1) * s, (maxY - minY + 1) * s);
     } else {
       vctx.lineWidth = Math.max(1, brushSize * s);
@@ -260,7 +461,7 @@ function drawOverlay(vctx, r) {
     vctx.restore();
   }
 
-  if (currentTool === 'ellipse' && ellipseStart && ellipsePreview) {
+  if ((currentTool === 'ellipse' || currentTool === 'ellipse-filled') && ellipseStart && ellipsePreview) {
     const s = r.scale;
     const minX = Math.min(ellipseStart.x, ellipsePreview.x);
     const maxX = Math.max(ellipseStart.x, ellipsePreview.x);
@@ -279,7 +480,7 @@ function drawOverlay(vctx, r) {
     vctx.globalAlpha = 0.85;
     vctx.beginPath();
     vctx.ellipse(vcx, vcy, vrx, vry, 0, 0, Math.PI * 2);
-    if (shapeFilled) {
+    if (currentTool === 'ellipse-filled') {
       vctx.fill();
     } else {
       vctx.lineWidth = Math.max(1, brushSize * s);
@@ -301,10 +502,91 @@ function drawOverlay(vctx, r) {
     }
     vctx.restore();
   }
+
+  // Lifted pixels preview during move
+  if (selMoving && selMoveBuffer && selection) {
+    const { x: sx, y: sy, w: sw, h: sh } = selection;
+    const tmp = document.createElement('canvas');
+    tmp.width = sw; tmp.height = sh;
+    const tctx = tmp.getContext('2d');
+    const id = tctx.createImageData(sw, sh);
+    new Uint32Array(id.data.buffer).set(selMoveBuffer);
+    tctx.putImageData(id, 0, 0);
+    const s = r.scale;
+    vctx.save();
+    r.applyDocTransform(vctx);
+    vctx.scale(s, s);
+    vctx.imageSmoothingEnabled = false;
+    vctx.drawImage(tmp, sx, sy);
+    vctx.restore();
+  }
+
+  // Symmetry axis guides
+  if (symH || symV) {
+    const s = r.scale;
+    const W = doc.width * s, H = doc.height * s;
+    vctx.save();
+    r.applyDocTransform(vctx);
+
+    function drawAxis(x1, y1, x2, y2, hx, hy) {
+      // Double dashed line (white + red, offset by 4)
+      vctx.lineWidth = 1.5;
+      vctx.setLineDash([5, 5]);
+      vctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      vctx.lineDashOffset = 0;
+      vctx.beginPath(); vctx.moveTo(x1, y1); vctx.lineTo(x2, y2); vctx.stroke();
+      vctx.strokeStyle = 'rgba(255,70,70,0.85)';
+      vctx.lineDashOffset = 5;
+      vctx.beginPath(); vctx.moveTo(x1, y1); vctx.lineTo(x2, y2); vctx.stroke();
+      // Handle circle
+      vctx.setLineDash([]);
+      vctx.fillStyle = 'rgba(255,70,70,0.9)';
+      vctx.strokeStyle = '#fff';
+      vctx.lineWidth = 1.5;
+      vctx.beginPath(); vctx.arc(hx, hy, Math.max(4, s * 0.4), 0, Math.PI * 2);
+      vctx.fill(); vctx.stroke();
+    }
+
+    if (symH) {
+      const cx = getSymHAxis() * s;
+      drawAxis(cx, 0, cx, H,   cx,    H / 2);
+    }
+    if (symV) {
+      const cy = getSymVAxis() * s;
+      drawAxis(0, cy, W,  cy,  W / 2, cy);
+    }
+    vctx.restore();
+  }
+
+  // Selection marquee (active selection or in-progress drag)
+  const selDraw = selection
+    ?? (currentTool === 'select-rect' && selStart && selPreview ? {
+        x: Math.max(0, Math.min(selStart.x, selPreview.x)),
+        y: Math.max(0, Math.min(selStart.y, selPreview.y)),
+        w: Math.abs(selPreview.x - selStart.x) + 1,
+        h: Math.abs(selPreview.y - selStart.y) + 1,
+       } : null);
+  if (selDraw) {
+    const { x: sx, y: sy, w: sw, h: sh } = selDraw;
+    const s = r.scale;
+    vctx.save();
+    r.applyDocTransform(vctx);
+    vctx.lineWidth = 1;
+    vctx.setLineDash([4, 4]);
+    vctx.strokeStyle = '#fff';
+    vctx.lineDashOffset = -_selDashOffset;
+    vctx.strokeRect(sx * s + 0.5, sy * s + 0.5, sw * s, sh * s);
+    vctx.strokeStyle = '#000';
+    vctx.lineDashOffset = -_selDashOffset + 4;
+    vctx.strokeRect(sx * s + 0.5, sy * s + 0.5, sw * s, sh * s);
+    vctx.restore();
+  }
 }
 
 // --- Render loop ---
 function loop() {
+  _selDashOffset = (_selDashOffset + 0.15) % 8;
+  if (selection || (currentTool === 'select-rect' && selPreview)) markDirty();
   renderIfDirty();
   requestAnimationFrame(loop);
 }
@@ -365,19 +647,14 @@ function renderLayerPanel() {
     vis.title = layer.visible ? 'Hide layer' : 'Show layer';
     vis.onclick = (e) => { e.stopPropagation(); layer.visible = !layer.visible; markDirty(); renderLayerPanel(); };
 
+    const alphaLockBtn = document.createElement('button');
+    alphaLockBtn.className = 'layer-vis ph-light ph-checkerboard' + (layer.alphaLocked ? ' layer-alpha-locked' : '');
+    alphaLockBtn.title = layer.alphaLocked ? 'Alpha lock on' : 'Alpha lock off';
+    alphaLockBtn.onclick = (e) => { e.stopPropagation(); layer.alphaLocked = !layer.alphaLocked; renderLayerPanel(); saveToIDB(); };
+
     const name = document.createElement('span');
     name.className = 'layer-name';
     name.textContent = layer.name;
-    name.ondblclick = () => {
-      const input = document.createElement('input');
-      input.value = layer.name;
-      input.className = 'layer-name-input';
-      name.replaceWith(input);
-      input.focus();
-      input.select();
-      input.onblur = () => { layer.name = input.value || layer.name; renderLayerPanel(); };
-      input.onkeydown = e => { if (e.key === 'Enter' || e.key === 'Escape') input.blur(); };
-    };
 
     const opacity = document.createElement('input');
     opacity.type = 'range'; opacity.min = 0; opacity.max = 1; opacity.step = 0.05;
@@ -388,31 +665,415 @@ function renderLayerPanel() {
 
     el.appendChild(thumb);
     el.appendChild(vis);
+    el.appendChild(alphaLockBtn);
     el.appendChild(name);
     el.appendChild(opacity);
-    el.onclick = () => { doc.activeLayerId = layer.id; renderLayerPanel(); markDirty(); };
+    el.onclick = (e) => {
+      if (doc.activeLayerId === layer.id && e.target.classList.contains('layer-name')) {
+        const nameEl = e.target;
+        const input = document.createElement('input');
+        input.value = layer.name;
+        input.className = 'layer-name-input';
+        nameEl.replaceWith(input);
+        input.focus();
+        input.select();
+        input.onblur = () => { layer.name = input.value.trim() || layer.name; renderLayerPanel(); saveToIDB(); };
+        input.onkeydown = ev => {
+          if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); }
+          else if (ev.key === 'Escape') { input.value = layer.name; input.blur(); }
+        };
+        return;
+      }
+      doc.activeLayerId = layer.id;
+      renderLayerPanel();
+      markDirty();
+    };
     list.appendChild(el);
   }
 }
 
-// --- Tool UI ---
-function updateShapeFilledUI() {
-  const isShape = currentTool === 'rect' || currentTool === 'ellipse';
-  ['rect', 'ellipse'].forEach(t => {
-    document.querySelector(`[data-tool="${t}"]`)
-      ?.classList.toggle('shape-filled', isShape && shapeFilled);
+// --- Tool metadata ---
+const SLOTS = {
+  draw:    ['pencil'],
+  erase:   ['eraser'],
+  fill:    ['fill', 'gradient'],
+  shape:   ['line', 'rect', 'rect-filled', 'ellipse', 'ellipse-filled'],
+  select:  ['select-rect'],
+  utility: ['eyedropper'],
+};
+const TOOL_META = {
+  pencil:           { slot: 'draw',    icon: 'ph-pencil',           label: 'Pencil' },
+  eraser:           { slot: 'erase',   icon: 'ph-eraser',           label: 'Eraser' },
+  fill:             { slot: 'fill',    icon: 'ph-paint-bucket',     label: 'Fill' },
+  gradient:         { slot: 'fill',    icon: 'ph-gradient',         label: 'Gradient' },
+  line:             { slot: 'shape',   icon: 'ph-line-segment',     label: 'Line' },
+  rect:             { slot: 'shape',   icon: 'ph-rectangle-dashed', label: 'Rect' },
+  'rect-filled':    { slot: 'shape',   icon: 'ph-rectangle',        label: 'Rect filled' },
+  ellipse:          { slot: 'shape',   icon: 'ph-circle-dashed',    label: 'Ellipse' },
+  'ellipse-filled': { slot: 'shape',   icon: 'ph-circle',           label: 'Ellipse filled' },
+  'select-rect':    { slot: 'select',  icon: 'ph-selection',        label: 'Select' },
+  eyedropper:       { slot: 'utility', icon: 'ph-eyedropper',       label: 'Eyedrop' },
+};
+const slotLastTool = { draw: 'pencil', erase: 'eraser', fill: 'fill', shape: 'line', select: 'select-rect', utility: 'eyedropper' };
+let activeFlyoutSlot = null;
+
+const SHOW_PATTERN  = new Set(['pencil', 'fill', 'gradient', 'line', 'rect', 'rect-filled', 'ellipse', 'ellipse-filled']);
+const SHOW_BRUSH    = new Set(['pencil', 'line', 'rect', 'ellipse']);
+const SHOW_ERASER   = new Set(['eraser']);
+const SHOW_SYMMETRY = new Set(['pencil', 'eraser', 'line', 'rect', 'rect-filled', 'ellipse', 'ellipse-filled', 'fill']);
+
+function updateToolOptions() {
+  document.getElementById('opt-pattern').classList.toggle('hidden', !SHOW_PATTERN.has(currentTool));
+  document.getElementById('opt-brush').classList.toggle('hidden', !SHOW_BRUSH.has(currentTool));
+  document.getElementById('opt-eraser').classList.toggle('hidden', !SHOW_ERASER.has(currentTool));
+  document.getElementById('opt-symmetry').classList.toggle('hidden', !SHOW_SYMMETRY.has(currentTool));
+  document.getElementById('opt-gradient').classList.toggle('hidden', currentTool !== 'gradient');
+  const showSel = currentTool === 'select-rect' && (selection || selectionClipboard);
+  document.getElementById('opt-selection').classList.toggle('hidden', !showSel);
+  const hasSelection = !!selection;
+  ['btn-sel-delete','btn-sel-fliph','btn-sel-flipv','btn-sel-clear','btn-sel-copy','btn-sel-cut'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.disabled = !hasSelection;
   });
+  const btnPaste = document.getElementById('btn-sel-paste');
+  if (btnPaste) btnPaste.disabled = !selectionClipboard;
+}
+
+function openFlyout(slotId, anchorBtn) {
+  const flyout = document.getElementById('subtool-flyout');
+  flyout.innerHTML = '';
+  for (const toolId of SLOTS[slotId]) {
+    const m = TOOL_META[toolId];
+    const b = document.createElement('button');
+    b.className = 'tool-btn' + (toolId === currentTool ? ' active' : '');
+    b.title = m.label;
+    b.innerHTML = `<i class="ph-light ${m.icon}"></i>`;
+    b.addEventListener('click', e => { e.stopPropagation(); selectTool(toolId); closeFlyout(); });
+    flyout.appendChild(b);
+  }
+  const rect = anchorBtn.getBoundingClientRect();
+  flyout.style.left = rect.left + 'px';
+  flyout.style.top  = (rect.bottom + 4) + 'px';
+  flyout.classList.remove('hidden');
+  activeFlyoutSlot = slotId;
+}
+
+function closeFlyout() {
+  document.getElementById('subtool-flyout').classList.add('hidden');
+  activeFlyoutSlot = null;
 }
 
 function selectTool(tool) {
-  if ((tool === 'rect' || tool === 'ellipse') && currentTool === tool) {
-    shapeFilled = !shapeFilled;
-    updateShapeFilledUI();
-    return;
+  if (currentTool === 'select-rect' && tool !== 'select-rect') {
+    selection = null; selStart = null; selPreview = null;
   }
   currentTool = tool;
-  document.querySelectorAll('.tool-btn').forEach(b => b.classList.toggle('active', b.dataset.tool === tool));
-  updateShapeFilledUI();
+  const slot = TOOL_META[tool]?.slot;
+  if (slot) {
+    slotLastTool[slot] = tool;
+    document.querySelectorAll('[data-slot]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.slot === slot);
+      if (btn.dataset.slot === slot)
+        btn.querySelector('i').className = `ph-light ${TOOL_META[tool].icon}`;
+    });
+  }
+  if (tool === 'gradient') {
+    gradientStops[0].color = primaryColor;
+    gradientStops[gradientStops.length - 1].color = secondaryColor;
+    renderGradientStops();  // also calls renderGradientPreview
+  }
+  updateToolOptions();
+}
+
+// --- Selection actions ---
+function mergeLayerDown() {
+  const frame = getActiveFrame(doc);
+  const idx = frame.layers.findIndex(l => l.id === doc.activeLayerId);
+  if (idx <= 0) return;
+  const top = frame.layers[idx];
+  const bot = frame.layers[idx - 1];
+  const n = doc.width * doc.height;
+  for (let i = 0; i < n; i++) {
+    const s = top.buffer[i];
+    const sa = (s >>> 24) & 0xff;
+    if (sa === 0) continue;
+    if (sa === 255) { bot.buffer[i] = s; continue; }
+    const d = bot.buffer[i];
+    const da = (d >>> 24) & 0xff;
+    const oa = sa + da * (255 - sa) / 255;
+    if (oa === 0) continue;
+    const inv = (255 - sa) / 255;
+    bot.buffer[i] = packColor(
+      Math.round(((s & 0xff) * sa / 255 + (d & 0xff) * da * inv / 255) * 255 / oa),
+      Math.round((((s >>> 8) & 0xff) * sa / 255 + ((d >>> 8) & 0xff) * da * inv / 255) * 255 / oa),
+      Math.round((((s >>> 16) & 0xff) * sa / 255 + ((d >>> 16) & 0xff) * da * inv / 255) * 255 / oa),
+      Math.round(oa),
+    );
+  }
+  frame.layers.splice(idx, 1);
+  doc.activeLayerId = bot.id;
+  renderLayerPanel();
+  markDirty(); refreshLayerThumbs(); saveToIDB();
+}
+
+function selectionDelete() {
+  if (!selection) return;
+  const layer = getActiveLayer(doc);
+  history.beginStroke(layer, doc.width, doc.height);
+  const { x, y, w, h } = selection;
+  for (let py = y; py < y + h; py++)
+    for (let px = x; px < x + w; px++)
+      layer.buffer[py * doc.width + px] = 0;
+  history.endStroke(layer);
+  markDirty(); refreshLayerThumbs(); saveToIDB();
+}
+
+function selectionFlipH() {
+  if (!selection) return;
+  const layer = getActiveLayer(doc);
+  history.beginStroke(layer, doc.width, doc.height);
+  const { x, y, w, h } = selection;
+  const buf = layer.buffer, W = doc.width;
+  for (let py = y; py < y + h; py++)
+    for (let px = x; px < x + Math.floor(w / 2); px++) {
+      const mx = x + w - 1 - (px - x);
+      [buf[py * W + px], buf[py * W + mx]] = [buf[py * W + mx], buf[py * W + px]];
+    }
+  history.endStroke(layer);
+  markDirty(); refreshLayerThumbs(); saveToIDB();
+}
+
+function selectionFlipV() {
+  if (!selection) return;
+  const layer = getActiveLayer(doc);
+  history.beginStroke(layer, doc.width, doc.height);
+  const { x, y, w, h } = selection;
+  const buf = layer.buffer, W = doc.width;
+  for (let py = y; py < y + Math.floor(h / 2); py++) {
+    const my = y + h - 1 - (py - y);
+    for (let px = x; px < x + w; px++)
+      [buf[py * W + px], buf[my * W + px]] = [buf[my * W + px], buf[py * W + px]];
+  }
+  history.endStroke(layer);
+  markDirty(); refreshLayerThumbs(); saveToIDB();
+}
+
+function selectionClear() {
+  selection = null;
+  updateToolOptions();
+  markDirty();
+}
+
+function selectionCopy() {
+  if (!selection) return;
+  const { x, y, w, h } = selection;
+  const layer = getActiveLayer(doc);
+  const pixels = new Uint32Array(w * h);
+  for (let py = 0; py < h; py++)
+    for (let px = 0; px < w; px++)
+      pixels[py * w + px] = layer.buffer[(y + py) * doc.width + (x + px)];
+  selectionClipboard = { w, h, pixels, srcX: x, srcY: y };
+  updateToolOptions();
+}
+
+function selectionCut() {
+  if (!selection) return;
+  selectionCopy();
+  selectionDelete();
+}
+
+function selectionPaste() {
+  if (!selectionClipboard) return;
+  const { w, h, pixels, srcX, srcY } = selectionClipboard;
+  const px = Math.max(0, Math.min(doc.width  - w, srcX));
+  const py = Math.max(0, Math.min(doc.height - h, srcY));
+  const layer = addLayer(doc);
+  layer.name = 'Paste';
+  for (let dy = 0; dy < h; dy++)
+    for (let dx = 0; dx < w; dx++)
+      if (pixels[dy * w + dx] !== 0)
+        layer.buffer[(py + dy) * doc.width + (px + dx)] = pixels[dy * w + dx];
+  selection = { x: px, y: py, w, h };
+  selectTool('select-rect');
+  updateToolOptions();
+  renderLayerPanel();
+  markDirty(); refreshLayerThumbs(); saveToIDB();
+}
+
+// --- Gradient stop editor ---
+
+function stopSwatchBg(color) {
+  const { r, g, b, a } = unpackColor(color);
+  const c = `rgba(${r},${g},${b},${a / 255})`;
+  return a >= 255
+    ? `rgb(${r},${g},${b})`
+    : `linear-gradient(${c},${c}),linear-gradient(45deg,#888 25%,transparent 25%) 0 0/6px 6px,linear-gradient(-45deg,#888 25%,transparent 25%) 0 3px/6px 6px,linear-gradient(45deg,transparent 75%,#888 75%) 3px -3px/6px 6px,linear-gradient(-45deg,transparent 75%,#888 75%) -3px 0/6px 6px,#555`;
+}
+
+function renderGradientPreview() {
+  const canvas = document.getElementById('gradient-preview');
+  if (!canvas) return;
+  const W = Math.max(1, canvas.offsetWidth || 72);
+  const H = Math.max(1, canvas.offsetHeight || 80);
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const id = ctx.createImageData(W, H);
+  const out = new Uint32Array(id.data.buffer);
+  if (gradientType === 'radial') {
+    const cx = W / 2, cy = H / 2, radius = Math.min(W, H) / 2 - 2;
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
+        const t = radius <= 0 ? 0 : Math.min(1, dist / radius);
+        out[y * W + x] = ditherGradientPx(x, y, t, gradientStops, ditherPresetIdx);
+      }
+  } else {
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++)
+        out[y * W + x] = ditherGradientPx(x, y, H <= 1 ? 0 : y / (H - 1), gradientStops, ditherPresetIdx);
+  }
+  ctx.putImageData(id, 0, 0);
+}
+
+function renderGradientStops() {
+  const list = document.getElementById('gradient-stops-list');
+  list.innerHTML = '';
+  const n = gradientStops.length;
+  gradientStops.forEach((stop, idx) => {
+    const row = document.createElement('div');
+    row.className = 'gradient-stop-row';
+
+    const swatch = document.createElement('button');
+    swatch.className = 'gradient-stop-swatch';
+    swatch.style.background = stopSwatchBg(stop.color);
+    swatch.title = 'Set to primary color & edit';
+    swatch.onclick = () => {
+      gradientStops[idx].color = primaryColor;
+      renderGradientStops();
+      openColorPicker({ type: 'gradient-stop', idx }, primaryColor);
+    };
+
+    const isEnd = idx === 0 || idx === n - 1;
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.className = 'gradient-stop-slider';
+    slider.min = '0'; slider.max = '100'; slider.step = '1';
+    slider.value = Math.round(stop.pos * 100);
+    slider.disabled = isEnd;
+    slider.oninput = () => {
+      gradientStops[idx].pos = parseInt(slider.value) / 100;
+      numInput.value = slider.value;
+      gradientStops.sort((a, b) => a.pos - b.pos);
+      renderGradientStops();
+      renderGradientPreview();
+    };
+
+    const numInput = document.createElement('input');
+    numInput.type = 'number';
+    numInput.className = 'gradient-stop-pos';
+    numInput.min = '0'; numInput.max = '100'; numInput.step = '1';
+    numInput.value = Math.round(stop.pos * 100);
+    numInput.disabled = isEnd;
+    numInput.oninput = () => {
+      const v = Math.max(0, Math.min(100, parseInt(numInput.value) || 0));
+      gradientStops[idx].pos = v / 100;
+      slider.value = v;
+      gradientStops.sort((a, b) => a.pos - b.pos);
+      renderGradientStops();
+      renderGradientPreview();
+    };
+
+    const upBtn = document.createElement('button');
+    upBtn.className = 'icon-btn reorder-btn';
+    upBtn.innerHTML = '<i class="ph-light ph-arrow-up"></i>';
+    upBtn.title = 'Move color up';
+    upBtn.disabled = idx === 0;
+    upBtn.onclick = () => {
+      [gradientStops[idx].color, gradientStops[idx - 1].color] =
+        [gradientStops[idx - 1].color, gradientStops[idx].color];
+      renderGradientStops();
+      renderGradientPreview();
+    };
+
+    const downBtn = document.createElement('button');
+    downBtn.className = 'icon-btn reorder-btn';
+    downBtn.innerHTML = '<i class="ph-light ph-arrow-down"></i>';
+    downBtn.title = 'Move color down';
+    downBtn.disabled = idx === n - 1;
+    downBtn.onclick = () => {
+      [gradientStops[idx].color, gradientStops[idx + 1].color] =
+        [gradientStops[idx + 1].color, gradientStops[idx].color];
+      renderGradientStops();
+      renderGradientPreview();
+    };
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'icon-btn';
+    removeBtn.innerHTML = '<i class="ph-light ph-x"></i>';
+    removeBtn.title = 'Remove stop';
+    removeBtn.disabled = n <= 2;
+    removeBtn.onclick = () => {
+      if (gradientStops.length > 2) {
+        gradientStops.splice(idx, 1);
+        renderGradientStops();
+        renderGradientPreview();
+      }
+    };
+
+    row.appendChild(swatch);
+    row.appendChild(slider);
+    row.appendChild(numInput);
+    row.appendChild(upBtn);
+    row.appendChild(downBtn);
+    row.appendChild(removeBtn);
+    list.appendChild(row);
+  });
+  renderGradientPreview();
+}
+
+// --- Gradient type toggle & clip ---
+
+function setupGradientOptions() {
+  const btnLinear = document.getElementById('btn-grad-linear');
+  const btnRadial = document.getElementById('btn-grad-radial');
+
+  function updateToggle() {
+    btnLinear.classList.toggle('toggled', gradientType === 'linear');
+    btnRadial.classList.toggle('toggled', gradientType === 'radial');
+    renderGradientPreview();
+  }
+
+  btnLinear.addEventListener('click', () => { gradientType = 'linear'; updateToggle(); });
+  btnRadial.addEventListener('click', () => { gradientType = 'radial'; updateToggle(); });
+
+  updateToggle();
+}
+
+// --- Gradient modal ---
+
+function setupGradientModal() {
+  const modal = document.getElementById('gradient-modal');
+  const header = document.getElementById('gradient-modal-header');
+  let drag = false, dsx, dsy, dsl, dst;
+  header.addEventListener('pointerdown', e => {
+    if (e.target.closest('button')) return;
+    e.stopPropagation();
+    const rect = modal.getBoundingClientRect();
+    modal.style.transform = 'none';
+    modal.style.left = rect.left + 'px';
+    modal.style.top  = rect.top  + 'px';
+    drag = true; dsx = e.clientX; dsy = e.clientY; dsl = rect.left; dst = rect.top;
+    header.setPointerCapture(e.pointerId);
+  });
+  header.addEventListener('pointermove', e => {
+    if (!drag) return;
+    modal.style.left = (dsl + e.clientX - dsx) + 'px';
+    modal.style.top  = (dst + e.clientY - dsy) + 'px';
+  });
+  header.addEventListener('pointerup', () => { drag = false; });
+  document.getElementById('btn-close-gradient-modal').addEventListener('click', () => {
+    modal.classList.add('hidden');
+  });
 }
 
 // --- Pattern picker ---
@@ -459,6 +1120,7 @@ function initPatternPicker() {
         b.classList.toggle('active', +b.dataset.idx === idx));
       updatePatternTrigger();
       dropdown.classList.add('hidden');
+      if (currentTool === 'gradient') renderGradientPreview();
     };
     dropdown.appendChild(btn);
   });
@@ -477,8 +1139,8 @@ function initPatternPicker() {
 
 // --- Color UI ---
 function updateColorUI() {
-  document.getElementById('primary-swatch').style.background = colorToHex(primaryColor);
-  document.getElementById('secondary-swatch').style.background = colorToHex(secondaryColor);
+  document.getElementById('primary-swatch').style.background = stopSwatchBg(primaryColor);
+  document.getElementById('secondary-swatch').style.background = stopSwatchBg(secondaryColor);
   scheduleSessionSave();
 }
 
@@ -491,7 +1153,7 @@ function renderPaletteSwatches() {
     const c = i < used ? doc.palette[i] : 0;
     const swatch = document.createElement('button');
     swatch.className = 'palette-swatch' + (c === 0 ? ' empty' : '');
-    swatch.style.background = c ? colorToHex(c) : '';
+    swatch.style.background = c ? stopSwatchBg(c) : '';
     swatch.title = c ? colorToHex(c) : 'Empty — click to add primary color';
     if (c) {
       swatch.onclick = (e) => {
@@ -512,29 +1174,40 @@ function renderPaletteSwatches() {
 }
 
 // --- Color picker panel ---
-let pickerTarget = 'primary'; // 'primary' | 'secondary' | palette index
+let pickerTarget = 'primary'; // 'primary' | 'secondary' | palette index | {type:'gradient-stop', idx}
 function openColorPicker(target, initialColor) {
   pickerTarget = target;
   const panel = document.getElementById('color-picker-panel');
   panel.classList.remove('hidden');
+  document.getElementById('cp-remove').classList.toggle('hidden', typeof target !== 'number');
   const hex = colorToHex(initialColor);
   document.getElementById('cp-hex').value = hex.replace('#', '');
-  const { r, g, b } = unpackColor(initialColor);
+  const { r, g, b, a } = unpackColor(initialColor);
   document.getElementById('cp-r').value = r;
   document.getElementById('cp-g').value = g;
   document.getElementById('cp-b').value = b;
-  updatePickerPreview(r, g, b);
+  document.getElementById('cp-a').value = a;
+  document.getElementById('cp-r-range').value = r;
+  document.getElementById('cp-g-range').value = g;
+  document.getElementById('cp-b-range').value = b;
+  document.getElementById('cp-a-range').value = a;
+  updatePickerPreview(r, g, b, a);
 }
 
-function updatePickerPreview(r, g, b) {
-  document.getElementById('cp-preview').style.background = `rgb(${r},${g},${b})`;
+function updatePickerPreview(r, g, b, a = 255) {
+  const el = document.getElementById('cp-preview');
+  const c = `rgba(${r},${g},${b},${a / 255})`;
+  el.style.background = a >= 255
+    ? `rgb(${r},${g},${b})`
+    : `linear-gradient(${c},${c}),linear-gradient(45deg,#888 25%,transparent 25%) 0 0/8px 8px,linear-gradient(-45deg,#888 25%,transparent 25%) 0 4px/8px 8px,linear-gradient(45deg,transparent 75%,#888 75%) 4px -4px/8px 8px,linear-gradient(-45deg,transparent 75%,#888 75%) -4px 0/8px 8px,#555`;
 }
 
 function applyPickerColor() {
   const r = parseInt(document.getElementById('cp-r').value) || 0;
   const g = parseInt(document.getElementById('cp-g').value) || 0;
   const b = parseInt(document.getElementById('cp-b').value) || 0;
-  const color = packColor(r, g, b, 255);
+  const a = parseInt(document.getElementById('cp-a').value) || 0;
+  const color = packColor(r, g, b, a);
   if (pickerTarget === 'primary') {
     primaryColor = color;
     updateColorUI();
@@ -545,6 +1218,9 @@ function applyPickerColor() {
     doc.palette[pickerTarget] = color;
     renderPaletteSwatches();
     saveToIDB();
+  } else if (pickerTarget?.type === 'gradient-stop') {
+    gradientStops[pickerTarget.idx].color = color;
+    renderGradientStops();  // also calls renderGradientPreview
   }
   document.getElementById('color-picker-panel').classList.add('hidden');
 }
@@ -888,6 +1564,7 @@ async function importProject(file) {
   doc = loadedDoc;
   syncIds(doc);
   history.setSnapshots(snapshots);
+  resetSymAxes();
   renderer.resize(doc.width, doc.height);
   renderer.fitToView(doc.width, doc.height);
   renderLayerPanel();
@@ -928,6 +1605,7 @@ function resizeDoc(w, h) {
 // --- New document ---
 function newDoc(w, h) {
   history.clearSnapshots();
+  resetSymAxes();
   doc = createDocument(w, h);
   initPalette(doc);
   primaryColor = doc.palette[0];
@@ -1187,13 +1865,37 @@ export function init() {
       onStrokeCancel,
       onEyedrop,
       onPanZoom: () => { markDirty(); scheduleSessionSave(); },
+      onUndo: () => { if (history.undo(doc)) markDirty(); },
+      onRedo: () => { if (history.redo(doc)) markDirty(); },
     }
   );
 
-  // Tool buttons
-  document.querySelectorAll('.tool-btn').forEach(btn => {
-    btn.addEventListener('click', () => selectTool(btn.dataset.tool));
+  // Cursor hint when hovering near a symmetry axis
+  document.getElementById('viewport').addEventListener('mousemove', e => {
+    if (!symH && !symV) return;
+    const vp = document.getElementById('viewport');
+    const rect = vp.getBoundingClientRect();
+    const pt = renderer.viewToDoc(e.clientX - rect.left, e.clientY - rect.top);
+    const thr = Math.max(1.5, 5 / renderer.scale);
+    const nearH = symH && Math.abs(pt.x + 0.5 - getSymHAxis()) < thr;
+    const nearV = symV && Math.abs(pt.y + 0.5 - getSymVAxis()) < thr;
+    vp.style.cursor = (nearH && nearV) ? 'move' : nearH ? 'ew-resize' : nearV ? 'ns-resize' : '';
   });
+
+  // Slot buttons + subtool flyout
+  document.querySelectorAll('[data-slot]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const slotId = btn.dataset.slot;
+      if (TOOL_META[currentTool]?.slot === slotId) {
+        activeFlyoutSlot === slotId ? closeFlyout() : openFlyout(slotId, btn);
+      } else {
+        closeFlyout();
+        selectTool(slotLastTool[slotId]);
+      }
+      e.stopPropagation();
+    });
+  });
+  document.addEventListener('click', () => closeFlyout());
 
   // Pattern picker
   initPatternPicker();
@@ -1209,6 +1911,15 @@ export function init() {
     eraserSize = parseInt(e.target.value) || 1;
     document.getElementById('eraser-size-val').textContent = eraserSize;
   });
+
+  // Selection actions
+  document.getElementById('btn-sel-copy').addEventListener('click', selectionCopy);
+  document.getElementById('btn-sel-cut').addEventListener('click', selectionCut);
+  document.getElementById('btn-sel-paste').addEventListener('click', selectionPaste);
+  document.getElementById('btn-sel-delete').addEventListener('click', selectionDelete);
+  document.getElementById('btn-sel-fliph').addEventListener('click', selectionFlipH);
+  document.getElementById('btn-sel-flipv').addEventListener('click', selectionFlipV);
+  document.getElementById('btn-sel-clear').addEventListener('click', selectionClear);
 
   // Layer controls
   document.getElementById('btn-add-layer').addEventListener('click', () => {
@@ -1230,6 +1941,33 @@ export function init() {
     renderLayerPanel();
     markDirty();
   });
+  document.getElementById('btn-merge-down').addEventListener('click', mergeLayerDown);
+
+  // Gradient modal
+  document.getElementById('gradient-preview').addEventListener('click', () => {
+    document.getElementById('gradient-modal').classList.remove('hidden');
+  });
+  document.getElementById('btn-gradient-add-stop').addEventListener('click', () => {
+    const prev = gradientStops[gradientStops.length - 2];
+    const last = gradientStops[gradientStops.length - 1];
+    const pos = (prev.pos + last.pos) / 2;
+    gradientStops.splice(gradientStops.length - 1, 0, { color: primaryColor, pos });
+    renderGradientStops();
+  });
+  setupGradientModal();
+  setupGradientOptions();
+
+  // Symmetry toggles
+  document.getElementById('btn-sym-h').addEventListener('click', () => {
+    symH = !symH;
+    document.getElementById('btn-sym-h').classList.toggle('toggled', symH);
+    markDirty();
+  });
+  document.getElementById('btn-sym-v').addEventListener('click', () => {
+    symV = !symV;
+    document.getElementById('btn-sym-v').classList.toggle('toggled', symV);
+    markDirty();
+  });
 
   // Color swatches
   document.getElementById('primary-swatch').addEventListener('click', () => {
@@ -1249,23 +1987,42 @@ export function init() {
       const r = parseInt(document.getElementById('cp-r').value) || 0;
       const g = parseInt(document.getElementById('cp-g').value) || 0;
       const b = parseInt(document.getElementById('cp-b').value) || 0;
+      const a = parseInt(document.getElementById('cp-a').value) || 0;
       document.getElementById('cp-hex').value =
         [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
-      updatePickerPreview(r, g, b);
+      updatePickerPreview(r, g, b, a);
     });
+  });
+  document.getElementById('cp-a').addEventListener('input', () => {
+    const a = parseInt(document.getElementById('cp-a').value) || 0;
+    document.getElementById('cp-a-range').value = a;
+    const r = parseInt(document.getElementById('cp-r').value) || 0;
+    const g = parseInt(document.getElementById('cp-g').value) || 0;
+    const b = parseInt(document.getElementById('cp-b').value) || 0;
+    updatePickerPreview(r, g, b, a);
   });
   document.getElementById('cp-hex').addEventListener('input', e => {
     const hex = e.target.value.replace(/[^0-9a-fA-F]/g,'').slice(0,6);
     if (hex.length === 6) {
       const v = parseInt(hex, 16);
-      document.getElementById('cp-r').value = (v >> 16) & 0xff;
-      document.getElementById('cp-g').value = (v >> 8) & 0xff;
-      document.getElementById('cp-b').value = v & 0xff;
-      updatePickerPreview((v>>16)&0xff, (v>>8)&0xff, v&0xff);
+      const r = (v >> 16) & 0xff, g = (v >> 8) & 0xff, b = v & 0xff;
+      document.getElementById('cp-r').value = r;
+      document.getElementById('cp-g').value = g;
+      document.getElementById('cp-b').value = b;
+      const a = parseInt(document.getElementById('cp-a').value) || 0;
+      updatePickerPreview(r, g, b, a);
     }
   });
   document.getElementById('cp-apply').addEventListener('click', applyPickerColor);
   document.getElementById('cp-cancel').addEventListener('click', () => {
+    document.getElementById('color-picker-panel').classList.add('hidden');
+  });
+  document.getElementById('cp-remove').addEventListener('click', () => {
+    if (typeof pickerTarget === 'number') {
+      doc.palette.splice(pickerTarget, 1);
+      renderPaletteSwatches();
+      saveToIDB();
+    }
     document.getElementById('color-picker-panel').classList.add('hidden');
   });
 
@@ -1399,7 +2156,15 @@ export function init() {
     else if (key === 'r' && !e.shiftKey) selectTool('rect');
     else if (key === 'r' && e.shiftKey) { renderer.angle = 0; scheduleSessionSave(); markDirty(); }
     else if (key === 'o') selectTool('ellipse');
-    else if (key === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+    else if (key === 's') selectTool('select-rect');
+    else if (key === 'escape') { closeFlyout(); if (selection) selectionClear(); }
+    else if (key === 'c' && (e.ctrlKey || e.metaKey) && selection) {
+      e.preventDefault(); selectionCopy();
+    } else if (key === 'x' && (e.ctrlKey || e.metaKey) && selection) {
+      e.preventDefault(); selectionCut();
+    } else if (key === 'v' && (e.ctrlKey || e.metaKey) && selectionClipboard) {
+      e.preventDefault(); selectionPaste();
+    } else if (key === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
       e.preventDefault(); if (history.undo(doc)) markDirty();
     } else if ((key === 'z' && (e.ctrlKey || e.metaKey) && e.shiftKey) ||
                (key === 'y' && (e.ctrlKey || e.metaKey))) {
@@ -1460,6 +2225,7 @@ export function init() {
   renderLayerPanel();
   renderPaletteSwatches();
   updateColorUI();
+  selectTool('pencil');
   markDirty();
 
   // Load saved state

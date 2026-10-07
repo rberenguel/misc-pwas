@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Plaettli</title>
+  <title>Tuepfli</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="icon" type="image/png" href="media/icon.png" />
   <link rel="stylesheet" href="css/style.css" />
@@ -30,14 +30,12 @@
     </div>
     <div class="toolbar-sep"></div>
     <div class="toolbar-group">
-      <button class="tool-btn active" data-tool="pencil"    title="Pencil (p)"><i class="ph-light ph-pencil"></i></button>
-      <button class="tool-btn" data-tool="eraser"           title="Eraser (e)"><i class="ph-light ph-eraser"></i></button>
-      <button class="tool-btn" data-tool="fill"             title="Fill (f)"><i class="ph-light ph-paint-bucket"></i></button>
-      <button class="tool-btn" data-tool="gradient"         title="Gradient (g)"><i class="ph-light ph-gradient"></i></button>
-      <button class="tool-btn" data-tool="eyedropper"       title="Eyedropper (i)"><i class="ph-light ph-eyedropper"></i></button>
-      <button class="tool-btn" data-tool="line"             title="Line (l)"><i class="ph-light ph-line-segment"></i></button>
-      <button class="tool-btn" data-tool="rect"             title="Rectangle (r)"><i class="ph-light ph-rectangle"></i></button>
-      <button class="tool-btn" data-tool="ellipse"          title="Ellipse (o)"><i class="ph-light ph-circle"></i></button>
+      <button class="tool-btn active" data-slot="draw"    title="Draw (p)"><i class="ph-light ph-pencil"></i></button>
+      <button class="tool-btn"        data-slot="erase"   title="Erase (e)"><i class="ph-light ph-eraser"></i></button>
+      <button class="tool-btn"        data-slot="fill"    title="Fill (f)"><i class="ph-light ph-paint-bucket"></i></button>
+      <button class="tool-btn"        data-slot="shape"   title="Shape (l)"><i class="ph-light ph-line-segment"></i></button>
+      <button class="tool-btn"        data-slot="select"  title="Select (s)"><i class="ph-light ph-selection"></i></button>
+      <button class="tool-btn"        data-slot="utility" title="Utility (i)"><i class="ph-light ph-eyedropper"></i></button>
     </div>
     <div class="toolbar-sep"></div>
     <div class="toolbar-group">
@@ -72,32 +70,64 @@
       </div>
     </div>
 
-    <!-- Tool options -->
-    <div class="panel-section">
-      <h3>Pattern</h3>
-      <div id="pattern-picker">
-        <button id="pattern-trigger">
-          <canvas id="pattern-current" width="8" height="8"></canvas>
-          <span class="pattern-label-row">
-            <span id="pattern-current-label">Solid</span>
-            <i class="ph-light ph-caret-down"></i>
-          </span>
-        </button>
-        <div id="pattern-dropdown" class="hidden"></div>
-      </div>
-    </div>
-    <div class="panel-section">
-      <h3>Brush</h3>
-      <div class="brush-sliders">
-        <div class="brush-col">
-          <span id="brush-size-val">1</span>
-          <input type="range" id="brush-size" class="v-slider" orient="vertical" min="1" max="32" value="1" />
-          <label>Pencil</label>
+    <!-- Tool options (context-sensitive) -->
+    <div id="tool-options">
+      <div id="opt-pattern" class="panel-section hidden">
+        <h3>Pattern</h3>
+        <div id="pattern-picker">
+          <button id="pattern-trigger">
+            <canvas id="pattern-current" width="8" height="8"></canvas>
+            <span class="pattern-label-row">
+              <span id="pattern-current-label">Solid</span>
+              <i class="ph-light ph-caret-down"></i>
+            </span>
+          </button>
+          <div id="pattern-dropdown" class="hidden"></div>
         </div>
-        <div class="brush-col">
-          <span id="eraser-size-val">1</span>
-          <input type="range" id="eraser-size" class="v-slider" orient="vertical" min="1" max="32" value="1" />
-          <label>Eraser</label>
+      </div>
+      <div id="opt-brush" class="panel-section hidden">
+        <h3>Brush</h3>
+        <div class="brush-sliders">
+          <div class="brush-col">
+            <span id="brush-size-val">1</span>
+            <input type="range" id="brush-size" class="v-slider" orient="vertical" min="1" max="32" value="1" />
+          </div>
+        </div>
+      </div>
+      <div id="opt-eraser" class="panel-section hidden">
+        <h3>Eraser</h3>
+        <div class="brush-sliders">
+          <div class="brush-col">
+            <span id="eraser-size-val">1</span>
+            <input type="range" id="eraser-size" class="v-slider" orient="vertical" min="1" max="32" value="1" />
+          </div>
+        </div>
+      </div>
+      <div id="opt-symmetry" class="panel-section hidden">
+        <h3>Symmetry</h3>
+        <div class="sym-buttons">
+          <button id="btn-sym-h" class="icon-btn" title="Mirror left-right"><i class="ph-light ph-arrows-left-right"></i></button>
+          <button id="btn-sym-v" class="icon-btn" title="Mirror top-bottom"><i class="ph-light ph-arrows-down-up"></i></button>
+        </div>
+      </div>
+      <div id="opt-gradient" class="panel-section hidden">
+        <h3>Gradient</h3>
+        <canvas id="gradient-preview" title="Click to edit gradient"></canvas>
+        <div class="gradient-type-row">
+          <button id="btn-grad-linear" class="icon-btn toggled" title="Linear gradient"><i class="ph-light ph-gradient"></i></button>
+          <button id="btn-grad-radial" class="icon-btn" title="Radial gradient"><i class="ph-light ph-target"></i></button>
+        </div>
+      </div>
+      <div id="opt-selection" class="panel-section hidden">
+        <h3>Selection</h3>
+        <div class="sel-actions">
+          <button id="btn-sel-copy"   class="icon-btn" title="Copy (Ctrl+C)"><i class="ph-light ph-copy"></i></button>
+          <button id="btn-sel-cut"    class="icon-btn" title="Cut (Ctrl+X)"><i class="ph-light ph-scissors"></i></button>
+          <button id="btn-sel-paste"  class="icon-btn" title="Paste (Ctrl+V)"><i class="ph-light ph-clipboard-text"></i></button>
+          <button id="btn-sel-delete" class="icon-btn" title="Delete"><i class="ph-light ph-trash"></i></button>
+          <button id="btn-sel-fliph"  class="icon-btn" title="Flip H"><i class="ph-light ph-flip-horizontal"></i></button>
+          <button id="btn-sel-flipv"  class="icon-btn" title="Flip V"><i class="ph-light ph-flip-vertical"></i></button>
+          <button id="btn-sel-clear"  class="icon-btn" title="Deselect"><i class="ph-light ph-selection-slash"></i></button>
         </div>
       </div>
     </div>
@@ -110,8 +140,9 @@
     <canvas id="viewport"></canvas>
   </div>
 
-
 </div>
+
+<div id="subtool-flyout" class="hidden"></div>
 
 <!-- Palette panel -->
 <div id="palette-panel" style="visibility:hidden">
@@ -139,10 +170,13 @@
   </div>
   <div id="layer-list"></div>
   <div class="layer-controls">
-    <button id="btn-add-layer"  class="icon-btn" title="Add layer"><i class="ph-light ph-plus"></i></button>
-    <button id="btn-del-layer"  class="icon-btn" title="Delete layer"><i class="ph-light ph-trash"></i></button>
-    <button id="btn-layer-up"   class="icon-btn" title="Move layer up"><i class="ph-light ph-arrow-up"></i></button>
-    <button id="btn-layer-down" class="icon-btn" title="Move layer down"><i class="ph-light ph-arrow-down"></i></button>
+    <button id="btn-add-layer"    class="icon-btn" title="Add layer"><i class="ph-light ph-plus"></i></button>
+    <button id="btn-del-layer"    class="icon-btn" title="Delete layer"><i class="ph-light ph-trash"></i></button>
+    <button id="btn-layer-up"     class="icon-btn" title="Move layer up"><i class="ph-light ph-arrow-up"></i></button>
+    <button id="btn-layer-down"   class="icon-btn" title="Move layer down"><i class="ph-light ph-arrow-down"></i></button>
+  </div>
+  <div class="layer-controls">
+    <button id="btn-merge-down"   class="icon-btn" title="Merge down"><i class="ph-light ph-arrow-line-down"></i></button>
   </div>
 </div>
 
@@ -178,6 +212,18 @@
   </div>
 </div>
 
+<!-- Gradient editor modal -->
+<div id="gradient-modal" class="hidden">
+  <div id="gradient-modal-header">
+    <span>Gradient</span>
+    <button id="btn-close-gradient-modal" class="icon-btn"><i class="ph-light ph-x"></i></button>
+  </div>
+  <div id="gradient-modal-body">
+    <div id="gradient-stops-list"></div>
+    <button id="btn-gradient-add-stop" style="width:100%;margin-top:4px">+ Add stop</button>
+  </div>
+</div>
+
 <!-- Color picker floating panel -->
 <div id="color-picker-panel" class="hidden">
   <div id="cp-preview"></div>
@@ -199,11 +245,18 @@
            oninput="document.getElementById('cp-b').value=this.value;document.getElementById('cp-b').dispatchEvent(new Event('input'))" />
     <input type="number" id="cp-b" min="0" max="255" value="0" />
   </div>
+  <div class="cp-row">
+    <label>A</label>
+    <input type="range" id="cp-a-range" min="0" max="255" value="255"
+           oninput="document.getElementById('cp-a').value=this.value;document.getElementById('cp-a').dispatchEvent(new Event('input'))" />
+    <input type="number" id="cp-a" min="0" max="255" value="255" />
+  </div>
   <div class="cp-hex-row">
     <label>#</label>
     <input type="text" id="cp-hex" maxlength="6" placeholder="rrggbb" />
   </div>
   <div class="cp-buttons">
+    <button id="cp-remove" class="hidden">Remove</button>
     <button id="cp-cancel">Cancel</button>
     <button id="cp-apply">Apply</button>
   </div>

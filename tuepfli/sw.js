@@ -1,4 +1,4 @@
-const CACHE = 'plaettli-v1.8';
+const CACHE = 'tuepfli-v0.8';
 const FILES = [
   './index.html',
   './manifest.json',

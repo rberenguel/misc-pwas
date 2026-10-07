@@ -33,6 +33,7 @@ export function createLayer(width, height, name = 'Layer') {
     visible: true,
     opacity: 1.0,
     blendMode: 'source-over',
+    alphaLocked: false,
     buffer: new Uint32Array(width * height),
   };
 }
@@ -149,7 +150,7 @@ export async function serializeDocument(doc, snapshots = []) {
       durationMs: f.durationMs,
       layers: f.layers.map(l => ({
         id: l.id, name: l.name, visible: l.visible,
-        opacity: l.opacity, blendMode: l.blendMode,
+        opacity: l.opacity, blendMode: l.blendMode, alphaLocked: l.alphaLocked ?? false,
       })),
     })),
   };
@@ -194,7 +195,7 @@ export async function deserializeDocument(data) {
       bmp.close();
       layers.push({
         id: lm.id, name: lm.name, visible: lm.visible,
-        opacity: lm.opacity, blendMode: lm.blendMode,
+        opacity: lm.opacity, blendMode: lm.blendMode, alphaLocked: lm.alphaLocked ?? false,
         buffer: new Uint32Array(ctx.getImageData(0, 0, meta.width, meta.height).data.buffer),
       });
     }

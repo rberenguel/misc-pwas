@@ -1,7 +1,7 @@
 {
-  "name": "Plaettli",
-  "short_name": "Plaettli",
-  "version": "1.8",
+  "name": "Tuepfli",
+  "short_name": "Tuepfli",
+  "version": "0.8",
   "description": "Pixel art studio with dithering",
   "start_url": "./index.html",
   "display": "standalone",

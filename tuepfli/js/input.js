@@ -2,6 +2,8 @@
 
 const LONG_PRESS_MS = 250;
 const LONG_PRESS_DRIFT_PX = 3;
+const TAP_MAX_MS = 350;
+const TAP_DRIFT_PX = 10;
 
 export class InputHandler {
   constructor(canvas, renderer, callbacks) {
@@ -15,7 +17,10 @@ export class InputHandler {
     this._lastDoc = null;  // last doc-space coord for interpolation
     this._longPressTimer = null;
     this._longPressStart = null;
-    this._pinchScaleAcc = null; // accumulated float scale for pinch-to-zoom
+    this._tapMaxPointers = 0;
+    this._tapDrifted = false;
+    this._tapStartTime = null;
+    this._tapDownPos = new Map();
 
     canvas.addEventListener('pointerdown', this._onDown.bind(this));
     canvas.addEventListener('pointermove', this._onMove.bind(this));
@@ -33,7 +38,17 @@ export class InputHandler {
     e.preventDefault();
     this.canvas.setPointerCapture(e.pointerId);
     const pos = this._canvasXY(e);
+
+    if (this._pointers.size === 0) {
+      this._tapMaxPointers = 0;
+      this._tapDrifted = false;
+      this._tapStartTime = performance.now();
+      this._tapDownPos = new Map();
+    }
+
     this._pointers.set(e.pointerId, pos);
+    this._tapDownPos.set(e.pointerId, pos);
+    this._tapMaxPointers = Math.max(this._tapMaxPointers, this._pointers.size);
 
     if (this._pointers.size === 1) {
       const docPt = this.renderer.viewToDoc(pos.x, pos.y);
@@ -59,6 +74,12 @@ export class InputHandler {
     e.preventDefault();
     if (!this._pointers.has(e.pointerId)) return;
     const pos = this._canvasXY(e);
+
+    if (!this._tapDrifted && this._tapDownPos.has(e.pointerId)) {
+      const dp = this._tapDownPos.get(e.pointerId);
+      if (Math.hypot(pos.x - dp.x, pos.y - dp.y) > TAP_DRIFT_PX) this._tapDrifted = true;
+    }
+
     this._pointers.set(e.pointerId, pos);
 
     if (this._pointers.size >= 2) {
@@ -93,6 +114,15 @@ export class InputHandler {
     if (this._drawing && this._pointers.size === 0) {
       this._drawing = false;
       this.cb.onStrokeEnd?.();
+    }
+
+    if (this._pointers.size === 0 && this._tapStartTime != null) {
+      const elapsed = performance.now() - this._tapStartTime;
+      if (!this._tapDrifted && elapsed < TAP_MAX_MS) {
+        if (this._tapMaxPointers === 2) this.cb.onUndo?.();
+        else if (this._tapMaxPointers === 3) this.cb.onRedo?.();
+      }
+      this._tapStartTime = null;
     }
   }
 
@@ -135,17 +165,11 @@ export class InputHandler {
       r.tx += dx;
       r.ty += dy;
 
-      // Zoom: accumulate fractional scale so small per-frame dScale values
-      // eventually cross integer boundaries instead of rounding to nothing.
-      if (this._pinchScaleAcc == null) this._pinchScaleAcc = r.scale;
-      this._pinchScaleAcc *= dScale;
-      this._pinchScaleAcc = Math.max(1, Math.min(64, this._pinchScaleAcc));
-      const newScale = Math.round(this._pinchScaleAcc);
-      if (newScale !== r.scale) {
-        r.tx = Math.round(midX - (midX - r.tx) * (newScale / r.scale));
-        r.ty = Math.round(midY - (midY - r.ty) * (newScale / r.scale));
-        r.scale = newScale;
-      }
+      // Zoom: scale continuously around pinch midpoint
+      const newScale = Math.max(1, Math.min(64, r.scale * dScale));
+      r.tx = midX - (midX - r.tx) * (newScale / r.scale);
+      r.ty = midY - (midY - r.ty) * (newScale / r.scale);
+      r.scale = newScale;
     }
     this._prevPinch = { mx: midX, my: midY, dist, angle };
     this.cb.onPanZoom?.();
@@ -154,12 +178,15 @@ export class InputHandler {
   _onWheel(e) {
     e.preventDefault();
     const r = this.renderer;
-    const oldScale = r.scale;
-    const newScale = Math.max(1, Math.min(64, oldScale + (e.deltaY < 0 ? 1 : -1)));
-    if (newScale === oldScale) return;
+    let dy = e.deltaY;
+    if (e.deltaMode === 1) dy *= 24; // lines → pixels
+    if (e.deltaMode === 2) dy *= 400; // pages → pixels
+    const factor = Math.pow(0.998, dy);
+    const newScale = Math.max(1, Math.min(64, r.scale * factor));
+    if (newScale === r.scale) return;
     const { x: cx, y: cy } = this._canvasXY(e);
-    r.tx = Math.round(cx - (cx - r.tx) * (newScale / oldScale));
-    r.ty = Math.round(cy - (cy - r.ty) * (newScale / oldScale));
+    r.tx = cx - (cx - r.tx) * (newScale / r.scale);
+    r.ty = cy - (cy - r.ty) * (newScale / r.scale);
     r.scale = newScale;
     this.cb.onPanZoom?.();
   }
@@ -170,6 +197,5 @@ export class InputHandler {
       this._longPressTimer = null;
     }
     this._prevPinch = null;
-    this._pinchScaleAcc = null;
   }
 }

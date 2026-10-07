@@ -1,6 +1,7 @@
 @import url('../fonts/phosphor/phosphor.css');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+.hidden { display: none !important; }
 
 :root {
   --bg:       #1a1a1a;
@@ -235,6 +236,8 @@ button.icon-btn i { font-size: 16px; line-height: 1; }
   flex-shrink: 0;
 }
 
+.layer-alpha-locked { color: var(--accent); }
+
 .layer-name {
   flex: 1;
   overflow: hidden;
@@ -245,6 +248,7 @@ button.icon-btn i { font-size: 16px; line-height: 1; }
 
 .layer-name-input {
   flex: 1;
+  min-width: 0;
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--accent);
@@ -321,10 +325,30 @@ button.icon-btn i { font-size: 16px; line-height: 1; }
   padding: 0;
 }
 
-/* ---- Shape fill indicator (inset underline when filled mode on) ---- */
-.tool-btn.shape-filled {
-  box-shadow: inset 0 -2px 0 rgba(255,255,255,0.55);
+/* ---- Subtool flyout ---- */
+#subtool-flyout {
+  position: fixed;
+  z-index: 200;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px;
+  display: flex;
+  gap: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
 }
+#subtool-flyout.hidden { display: none; }
+
+/* ---- Context-sensitive tool options ---- */
+#tool-options { display: flex; flex-direction: column; }
+
+/* ---- Selection action buttons ---- */
+.sel-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+
+/* ---- Symmetry toggle buttons ---- */
+.sym-buttons { display: flex; gap: 4px; }
+.sym-buttons .icon-btn { flex: 1; }
+button.toggled { background: var(--btn-act); border-color: var(--accent); color: #fff; }
 
 /* ---- Color picker panel ---- */
 #color-picker-panel {
@@ -408,6 +432,99 @@ button.icon-btn i { font-size: 16px; line-height: 1; }
   gap: 6px;
   justify-content: flex-end;
 }
+
+/* ---- Gradient preview (sidebar) ---- */
+#gradient-preview {
+  width: 100%;
+  height: 80px;
+  display: block;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  image-rendering: pixelated;
+}
+
+/* ---- Gradient type toggle ---- */
+.gradient-type-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+.gradient-type-row .icon-btn { flex: 1; }
+
+/* ---- Gradient editor modal ---- */
+#gradient-modal {
+  position: fixed;
+  z-index: 90;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  width: 300px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+#gradient-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  cursor: move;
+  user-select: none;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#gradient-modal-body {
+  padding: 10px;
+}
+
+.gradient-stop-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.gradient-stop-swatch {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: 0;
+}
+
+.gradient-stop-slider {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.gradient-stop-pos {
+  width: 40px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3px 4px;
+  font-size: 12px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.gradient-stop-row .reorder-btn {
+  padding: 1px 3px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.gradient-stop-row .reorder-btn i { font-size: 11px; }
 
 /* ---- Pattern picker ---- */
 #pattern-picker {
@@ -539,7 +656,7 @@ button.icon-btn i { font-size: 16px; line-height: 1; }
   z-index: 200;
   top: 60px;
   right: 16px;
-  width: 200px;
+  width: 220px;
   max-height: 60vh;
   background: var(--panel);
   border: 1px solid var(--border);

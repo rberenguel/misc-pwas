@@ -33,10 +33,15 @@ export function projectOntoSegment(px, py, ax, ay, bx, by) {
   return Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
 }
 
-// Gradient dither between two colors using preset
-export function ditherGradientPx(x, y, t, c0, c1, presetIdx) {
-  const p = DITHER_PRESETS[presetIdx];
-  if (!p || p.solid) return t > 0.5 ? c1 : c0;
+// Gradient dither across N stops [{color, pos}] — always uses Bayer8 regardless of drawing preset
+export function ditherGradientPx(x, y, t, stops, presetIdx) {
+  let ai = 0;
+  for (let i = 0; i < stops.length - 2; i++) {
+    if (t >= stops[i + 1].pos) ai = i + 1;
+  }
+  const a = stops[ai], b = stops[ai + 1];
+  const segLen = b.pos - a.pos;
+  const localT = segLen <= 0 ? 0 : Math.max(0, Math.min(1, (t - a.pos) / segLen));
   const threshold = (BAYER8[(y & 7) * 8 + (x & 7)] + 0.5) / 64;
-  return t > threshold ? c1 : c0;
+  return localT > threshold ? b.color : a.color;
 }
