@@ -1,0 +1,69 @@
+* {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+body, html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #030305;
+  font-family: 'Courier New', Courier, monospace;
+}
+#game-canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+.scanlines {
+  background: linear-gradient(
+    rgba(10, 8, 12, 0) 50%,
+    rgba(0, 0, 0, 0.42) 50%
+  ), linear-gradient(
+    90deg,
+    rgba(255, 120, 0, 0.02),
+    rgba(0, 255, 200, 0.015),
+    rgba(255, 0, 100, 0.02)
+  );
+  background-size: 100% 3px, 6px 100%;
+  pointer-events: none;
+}
+.hud-glow {
+  text-shadow: 2px 2px 0px #000, -1px -1px 0px #000, 1px -1px 0px #000, -1px 1px 0px #000, 0 0 12px rgba(245, 158, 11, 0.8);
+}
+.shell-active {
+  box-shadow: 0 0 10px #ef4444, inset 0 0 4px #fca5a5;
+}
+.shell-empty {
+  background: #1c1917 !important;
+  border-color: #44403c !important;
+  opacity: 0.35;
+}
+.touch-thumb-ring {
+  position: absolute;
+  width: 86px;
+  height: 86px;
+  margin-left: -43px;
+  margin-top: -43px;
+  border: 2px solid rgba(245, 158, 11, 0.7);
+  border-radius: 50%;
+  pointer-events: none;
+  transform: scale(0.9);
+  transition: opacity 0.15s ease-out;
+  background: radial-gradient(circle, rgba(245,158,11,0.25) 0%, rgba(245,158,11,0) 70%);
+}
+.touch-thumb-dot {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  margin-left: -16px;
+  margin-top: -16px;
+  background-color: #f59e0b;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  pointer-events: none;
+}
