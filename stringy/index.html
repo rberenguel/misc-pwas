@@ -1,0 +1,2309 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full select-none">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Filament — Needlepoint & String Art Studio</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            studio: {
+              950: '#07090e',
+              900: '#0d111a',
+              850: '#121724',
+              800: '#192032',
+              700: '#232d45',
+              600: '#33415f'
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(13, 17, 26, 0.6);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.18);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.32);
+    }
+
+    /* Range input slider styling */
+    input[type=range] {
+      -webkit-appearance: none;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 9999px;
+      height: 5px;
+      outline: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #38bdf8;
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.5);
+      transition: transform 0.1s ease;
+    }
+    input[type=range]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    /* Canvas crosshair cursor for tools */
+    .canvas-tool-hole { cursor: crosshair; }
+    .canvas-tool-thread { cursor: crosshair; }
+    .canvas-tool-ruler { cursor: crosshair; }
+    .canvas-tool-circle { cursor: crosshair; }
+    .canvas-tool-erase { cursor: pointer; }
+    .canvas-tool-eyedropper { cursor: cell; }
+    .canvas-tool-select { cursor: grab; }
+    .canvas-tool-select.panning { cursor: grabbing; }
+
+    /* Animated Drawer Transitions */
+    .drawer-transition {
+      transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+    }
+  </style>
+</head>
+
+<body class="h-full w-full bg-studio-950 text-slate-100 flex overflow-hidden font-sans">
+
+  <div id="canvasContainer" class="relative flex-1 h-full w-full overflow-hidden bg-[#111216]">
+    <canvas id="mainCanvas" class="block w-full h-full"></canvas>
+
+    <!-- Top Floating Left Bar: Settings Hamburger & Undo/Redo Controls -->
+    <div class="absolute top-3 left-3 z-30 flex items-center gap-2 pointer-events-auto">
+      <button id="openSettingsBtn" title="Project Settings & Export" class="w-10 h-10 rounded-xl bg-studio-900/90 hover:bg-studio-800 text-slate-200 hover:text-white flex items-center justify-center border border-white/10 shadow-xl backdrop-blur-md transition-all active:scale-95">
+        <i class="fa-solid fa-bars text-base"></i>
+      </button>
+
+      <div class="flex items-center bg-studio-900/90 rounded-xl border border-white/10 shadow-xl backdrop-blur-md p-0.5">
+        <button id="undoBtn" title="Undo (Ctrl+Z)" class="w-9 h-9 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 flex items-center justify-center transition disabled:opacity-30 disabled:pointer-events-none">
+          <i class="fa-solid fa-rotate-left text-xs"></i>
+        </button>
+        <button id="redoBtn" title="Redo (Ctrl+Y)" class="w-9 h-9 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 flex items-center justify-center transition disabled:opacity-30 disabled:pointer-events-none">
+          <i class="fa-solid fa-rotate-right text-xs"></i>
+        </button>
+      </div>
+
+      <!-- Quick Craft Mode Badge -->
+      <button id="quickModeBadge" title="Click to toggle Needlepoint vs Nail Art" class="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl bg-studio-900/80 hover:bg-studio-800 border border-white/10 text-[11px] text-slate-300 backdrop-blur-md shadow-xl transition">
+        <i id="quickModeIcon" class="fa-solid fa-needle text-cyan-400"></i>
+        <span id="quickModeText" class="font-medium tracking-wide">Needlepoint Card</span>
+      </button>
+    </div>
+
+    <div class="absolute top-3 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+      <div id="toolPropertiesBar" class="pointer-events-auto flex items-center bg-studio-900/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 shadow-2xl text-xs gap-3">
+        
+        <!-- Properties: HOLE / NEEDLE GAUGE TOOL -->
+        <div id="propSectionHole" class="hidden flex items-center gap-2.5">
+          <span class="text-[11px] text-cyan-400 font-medium flex items-center gap-1">
+            <i class="fa-solid fa-needle"></i> Needle Gauge:
+          </span>
+          <div class="flex items-center bg-studio-950 p-0.5 rounded-lg border border-white/10 text-[10px]">
+            <button data-gauge="1.2" class="gauge-btn px-2 py-0.5 rounded text-slate-300 hover:text-white transition">Fine (1.2)</button>
+            <button data-gauge="1.8" class="gauge-btn active px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-semibold border border-cyan-500/40 transition">Standard (1.8)</button>
+            <button data-gauge="2.8" class="gauge-btn px-2 py-0.5 rounded text-slate-300 hover:text-white transition">Crewel (2.8)</button>
+          </div>
+          <span class="text-[10px] text-slate-400 pl-1 hidden md:inline">Perforates cardstock flush</span>
+        </div>
+
+        <!-- Properties: THREAD TOOL -->
+        <div id="propSectionThread" class="flex items-center gap-3">
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] text-slate-300 font-medium whitespace-nowrap">Strand Weight:</span>
+            <input id="threadThicknessInput" type="range" min="0.6" max="6.0" step="0.2" value="1.5" class="w-20 accent-cyan-400">
+            <span id="thicknessValDisplay" class="text-[11px] font-mono text-cyan-400 w-9 text-right">1.5px</span>
+            <div id="threadSampleLine" class="w-7 h-0.5 rounded-full ml-1" style="background:#f8fafc; height:2px;"></div>
+          </div>
+          <div class="h-4 w-[1px] bg-white/15"></div>
+          <label class="flex items-center gap-1.5 cursor-pointer text-slate-300 hover:text-white transition text-[11px]">
+            <input type="checkbox" id="continuousWindingCheckbox" checked class="w-3.5 h-3.5 accent-cyan-400 cursor-pointer">
+            <span class="whitespace-nowrap">Continuous Stitch</span>
+          </label>
+        </div>
+
+        <!-- Properties: RULER STRAIGHT-EDGE TOOL -->
+        <div id="propSectionRuler" class="hidden flex items-center gap-2.5">
+          <span class="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
+            <i class="fa-solid fa-ruler-horizontal"></i> Divisions:
+          </span>
+          <input id="rulerDivisionsSlider" type="range" min="3" max="64" step="1" value="16" class="w-20 accent-emerald-400">
+          <span id="rulerDivisionsVal" class="text-[11px] font-mono text-emerald-400 w-6">16</span>
+          <span class="text-[10px] text-slate-400 hidden sm:inline">Click Point A then Point B to scaffold holes</span>
+        </div>
+
+        <!-- Properties: CIRCLE / MANDALA TOOL -->
+        <div id="propSectionCircle" class="hidden flex items-center gap-2.5">
+          <span class="text-[11px] text-purple-400 font-medium flex items-center gap-1">
+            <i class="fa-solid fa-circle-notch"></i> Pins:
+          </span>
+          <input id="circlePinsSlider" type="range" min="8" max="72" step="2" value="32" class="w-16 accent-purple-400">
+          <span id="circlePinsVal" class="text-[11px] font-mono text-purple-400 w-5">32</span>
+          
+          <div class="h-4 w-[1px] bg-white/15"></div>
+          
+          <span class="text-[11px] text-purple-400 font-medium">Radius:</span>
+          <input id="circleRadiusSlider" type="range" min="30" max="500" step="10" value="200" class="w-16 accent-purple-400">
+          <span id="circleRadiusVal" class="text-[11px] font-mono text-purple-400 w-10">200px</span>
+
+          <button id="stampCircleCenterBtn" class="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 border border-purple-500/30 text-[10px] font-semibold transition ml-1">
+            Stamp Center
+          </button>
+        </div>
+
+        <!-- Properties: GENERIC HINT -->
+        <div id="propSectionGeneric" class="hidden text-[11px] text-slate-300 py-0.5">
+          <span id="genericPropText">Select a tool</span>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="absolute left-3 top-1/2 -translate-y-1/2 z-30 flex flex-col gap-1.5 p-1.5 bg-studio-900/90 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl">
+      <button data-tool="thread" class="tool-btn active w-10 h-10 rounded-xl flex items-center justify-center text-cyan-400 bg-cyan-500/20 border border-cyan-500/40 hover:bg-cyan-500/30 transition relative group" title="Thread / Stitch Tool (T)">
+        <i class="fa-solid fa-bezier-curve text-sm"></i>
+        <span class="absolute left-full ml-2 px-2 py-1 bg-studio-900 text-[10px] text-slate-200 rounded-md border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition shadow-lg">Thread String (T)</span>
+      </button>
+
+      <button data-tool="hole" class="tool-btn w-10 h-10 rounded-xl flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition relative group" title="Needle Hole Punch (H)">
+        <i class="fa-solid fa-circle-dot text-sm"></i>
+        <span class="absolute left-full ml-2 px-2 py-1 bg-studio-900 text-[10px] text-slate-200 rounded-md border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition shadow-lg">Piercing Hole (H)</span>
+      </button>
+
+      <button data-tool="ruler" class="tool-btn w-10 h-10 rounded-xl flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition relative group" title="Straight Edge Line Divider (L)">
+        <i class="fa-solid fa-ruler-combined text-sm"></i>
+        <span class="absolute left-full ml-2 px-2 py-1 bg-studio-900 text-[10px] text-slate-200 rounded-md border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition shadow-lg">Line Divider (L)</span>
+      </button>
+
+      <button data-tool="circle" class="tool-btn w-10 h-10 rounded-xl flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition relative group" title="Circle Mandala Stamp (C)">
+        <i class="fa-solid fa-circle-notch text-sm"></i>
+        <span class="absolute left-full ml-2 px-2 py-1 bg-studio-900 text-[10px] text-slate-200 rounded-md border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition shadow-lg">Mandala Ring (C)</span>
+      </button>
+
+      <div class="h-[1px] w-full bg-white/10 my-0.5"></div>
+
+      <button data-tool="erase" class="tool-btn w-10 h-10 rounded-xl flex items-center justify-center text-slate-300 hover:text-rose-400 hover:bg-rose-500/20 transition relative group" title="Eraser (E)">
+        <i class="fa-solid fa-eraser text-sm"></i>
+        <span class="absolute left-full ml-2 px-2 py-1 bg-studio-900 text-[10px] text-slate-200 rounded-md border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition shadow-lg">Eraser (E)</span>
+      </button>
+
+      <button data-tool="eyedropper" class="tool-btn w-10 h-10 rounded-xl flex items-center justify-center text-slate-300 hover:text-amber-400 hover:bg-amber-500/20 transition relative group" title="Raw Image Eyedropper (I)">
+        <i class="fa-solid fa-eye-dropper text-sm"></i>
+        <span class="absolute left-full ml-2 px-2 py-1 bg-studio-900 text-[10px] text-slate-200 rounded-md border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition shadow-lg">Sample Unmuted Image Color (I)</span>
+      </button>
+
+      <button data-tool="select" class="tool-btn w-10 h-10 rounded-xl flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition relative group" title="Pan Canvas (Space+Drag)">
+        <i class="fa-solid fa-hand text-sm"></i>
+        <span class="absolute left-full ml-2 px-2 py-1 bg-studio-900 text-[10px] text-slate-200 rounded-md border border-white/10 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition shadow-lg">Pan View (Space)</span>
+      </button>
+    </div>
+
+    <div class="absolute bottom-3 left-3 z-30 flex items-center gap-1.5 p-1 bg-studio-900/90 backdrop-blur-md rounded-xl border border-white/10 shadow-xl text-xs">
+      <button id="zoomOutBtn" class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition" title="Zoom Out (-)">
+        <i class="fa-solid fa-minus text-[11px]"></i>
+      </button>
+      <span id="zoomDisplay" class="font-mono text-[11px] text-slate-300 px-1 w-11 text-center">100%</span>
+      <button id="zoomInBtn" class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition" title="Zoom In (+)">
+        <i class="fa-solid fa-plus text-[11px]"></i>
+      </button>
+      <div class="h-4 w-[1px] bg-white/15"></div>
+      <button id="zoomResetBtn" class="px-2 h-8 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition text-[11px] font-medium" title="Reset View">
+        Fit
+      </button>
+    </div>
+
+    <!-- Live Metrics HUD -->
+    <div class="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none hidden md:flex items-center gap-4 px-3 py-1 bg-studio-900/75 backdrop-blur-sm rounded-full border border-white/10 text-[10px] text-slate-400 font-mono shadow-lg">
+      <span id="hudHoleCount"><i class="fa-solid fa-circle-dot text-cyan-400 mr-1"></i>0 Holes</span>
+      <span id="hudThreadCount"><i class="fa-solid fa-lines-leaning text-emerald-400 mr-1"></i>0 Strands</span>
+      <span id="hudModeName"><i class="fa-solid fa-layer-group text-slate-400 mr-1"></i>Embroidery Mode</span>
+    </div>
+
+    <div id="paletteWindow" class="absolute bottom-3 right-3 z-30 bg-studio-900/95 backdrop-blur-md rounded-2xl border border-white/15 shadow-2xl transition-all duration-300 overflow-hidden w-64">
+      <!-- Fold Header -->
+      <div id="paletteHeader" class="flex items-center justify-between px-3.5 py-2.5 cursor-pointer bg-studio-850/70 hover:bg-studio-850 border-b border-white/10 transition">
+        <div class="flex items-center gap-2">
+          <div id="activeColorIndicator" class="w-4 h-4 rounded-full border border-white/30 shadow-sm" style="background-color: #f8fafc;"></div>
+          <span class="text-xs font-semibold tracking-wide text-slate-200">Thread Palette</span>
+        </div>
+        <div class="flex items-center gap-1.5 text-slate-400">
+          <span id="activeHexLabel" class="font-mono text-[10px] uppercase text-slate-300">#F8FAFC</span>
+          <i id="paletteFoldIcon" class="fa-solid fa-chevron-down text-[11px] transition-transform duration-200"></i>
+        </div>
+      </div>
+
+      <!-- Foldable Body -->
+      <div id="paletteBody" class="p-3 space-y-3">
+        <!-- Native Color Picker & Quick Eyedropper -->
+        <div class="flex items-center gap-2">
+          <div class="relative flex-1 flex items-center bg-studio-950 border border-white/10 rounded-xl px-2 py-1">
+            <input type="color" id="nativeColorPicker" value="#f8fafc" class="w-6 h-6 rounded cursor-pointer border-0 p-0 bg-transparent">
+            <input type="text" id="hexTextInput" value="#f8fafc" class="ml-2 font-mono text-xs uppercase bg-transparent text-slate-200 w-20 outline-none">
+          </div>
+          <button id="paletteEyedropperBtn" title="Pick from unmuted image (I)" class="w-8 h-8 rounded-xl bg-studio-800 hover:bg-amber-500/20 hover:text-amber-400 text-slate-300 flex items-center justify-center border border-white/10 transition">
+            <i class="fa-solid fa-eye-dropper text-xs"></i>
+          </button>
+          <button id="addSwatchBtn" title="Save current color as swatch" class="w-8 h-8 rounded-xl bg-studio-800 hover:bg-cyan-500/20 hover:text-cyan-400 text-slate-300 flex items-center justify-center border border-white/10 transition">
+            <i class="fa-solid fa-plus text-xs"></i>
+          </button>
+        </div>
+
+        <!-- Swatch Grid -->
+        <div class="space-y-1">
+          <div class="flex items-center justify-between text-[10px] text-slate-400 font-medium">
+            <span>Swatches</span>
+            <span class="text-[9px] text-slate-400">Right-click swatch to remove</span>
+          </div>
+          <div id="swatchGrid" class="grid grid-cols-6 gap-1.5 pt-0.5 max-h-32 overflow-y-auto pr-0.5">
+            <!-- Dynamic swatches inserted via JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="settingsOverlay" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 hidden opacity-0 transition-opacity duration-250"></div>
+
+  <aside id="settingsDrawer" class="fixed top-0 left-0 bottom-0 w-80 max-w-[85vw] bg-studio-900 border-r border-white/10 shadow-2xl z-50 flex flex-col -translate-x-full drawer-transition">
+    <!-- Drawer Header -->
+    <div class="p-4 border-b border-white/10 flex items-center justify-between bg-studio-950/60">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-500 flex items-center justify-center text-white shadow-lg">
+          <i class="fa-solid fa-lines-leaning text-sm"></i>
+        </div>
+        <div>
+          <h2 class="font-bold text-sm text-slate-100 tracking-wide">Project Settings</h2>
+          <p class="text-[10px] text-slate-400">Filament Craft Studio</p>
+        </div>
+      </div>
+      <button id="closeSettingsBtn" class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-studio-800 transition">
+        <i class="fa-solid fa-xmark text-sm"></i>
+      </button>
+    </div>
+
+    <!-- Drawer Content Scrollable -->
+    <div class="flex-1 overflow-y-auto p-4 space-y-5 text-xs">
+      
+      <!-- 1. Craft Mode Selection -->
+      <div>
+        <label class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2 block flex items-center gap-1.5">
+          <i class="fa-solid fa-wand-magic-sparkles text-cyan-400"></i> Craft Fabrication Style
+        </label>
+        <div class="grid grid-cols-2 gap-2">
+          <button id="modeEmbroideryBtn" class="p-2.5 rounded-xl border border-cyan-500/50 bg-cyan-500/10 text-cyan-300 font-medium flex flex-col items-center gap-1 transition text-center shadow-sm">
+            <i class="fa-solid fa-needle text-base"></i>
+            <span class="text-[11px]">Needlepoint Perforations</span>
+            <span class="text-[9px] text-slate-400 leading-tight">Flush punctured cardstock</span>
+          </button>
+          <button id="modeNailsBtn" class="p-2.5 rounded-xl border border-white/10 bg-studio-950 text-slate-400 hover:text-slate-200 font-medium flex flex-col items-center gap-1 transition text-center">
+            <i class="fa-solid fa-thumbtack text-base"></i>
+            <span class="text-[11px]">Raised String Nails</span>
+            <span class="text-[9px] text-slate-400 leading-tight">Elevated pins & depth</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. Board Background Texture / Theme -->
+      <div>
+        <label class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2 block flex items-center gap-1.5">
+          <i class="fa-solid fa-palette text-amber-400"></i> Board Surface Texture
+        </label>
+        <div class="grid grid-cols-2 gap-1.5">
+          <button data-theme="black-card" class="theme-btn active p-2 rounded-lg border border-cyan-500/40 bg-studio-950 text-slate-200 flex items-center gap-2 transition text-left">
+            <span class="w-3.5 h-3.5 rounded-full bg-[#17181c] border border-white/20"></span>
+            <span class="text-[11px]">Dark Cardstock</span>
+          </button>
+          <button data-theme="deep-slate" class="theme-btn p-2 rounded-lg border border-white/10 bg-studio-950 text-slate-400 hover:text-white flex items-center gap-2 transition text-left">
+            <span class="w-3.5 h-3.5 rounded-full bg-[#0d141e] border border-white/20"></span>
+            <span class="text-[11px]">Deep Slate</span>
+          </button>
+          <button data-theme="walnut" class="theme-btn p-2 rounded-lg border border-white/10 bg-studio-950 text-slate-400 hover:text-white flex items-center gap-2 transition text-left">
+            <span class="w-3.5 h-3.5 rounded-full bg-[#20150e] border border-white/20"></span>
+            <span class="text-[11px]">Dark Walnut</span>
+          </button>
+          <button data-theme="birch" class="theme-btn p-2 rounded-lg border border-white/10 bg-studio-950 text-slate-400 hover:text-white flex items-center gap-2 transition text-left">
+            <span class="w-3.5 h-3.5 rounded-full bg-[#cfc3a8] border border-black/20"></span>
+            <span class="text-[11px]">Birch Wood</span>
+          </button>
+          <button data-theme="linen" class="theme-btn p-2 rounded-lg border border-white/10 bg-studio-950 text-slate-400 hover:text-white flex items-center gap-2 transition text-left">
+            <span class="w-3.5 h-3.5 rounded-full bg-[#eae5d9] border border-black/20"></span>
+            <span class="text-[11px]">Cream Linen</span>
+          </button>
+          <button data-theme="pitch" class="theme-btn p-2 rounded-lg border border-white/10 bg-studio-950 text-slate-400 hover:text-white flex items-center gap-2 transition text-left">
+            <span class="w-3.5 h-3.5 rounded-full bg-[#050608] border border-white/20"></span>
+            <span class="text-[11px]">Pure Obsidian</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 3. Reference Image Layer -->
+      <div class="space-y-2.5">
+        <div class="flex items-center justify-between">
+          <label class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+            <i class="fa-solid fa-image text-indigo-400"></i> Reference Blueprint
+          </label>
+          <button id="toggleRefVisibleBtn" class="text-[10px] text-cyan-400 hover:underline">
+            Hide Image
+          </button>
+        </div>
+
+        <div class="flex gap-2">
+          <label class="flex-1 py-2 px-3 rounded-lg bg-studio-800 hover:bg-studio-700 border border-white/10 text-center cursor-pointer text-slate-200 transition font-medium flex items-center justify-center gap-2">
+            <i class="fa-solid fa-cloud-arrow-up text-cyan-400"></i>
+            <span>Load Image...</span>
+            <input type="file" id="imageFileInput" accept="image/*" class="hidden">
+          </label>
+          <button id="loadSamplePatternBtn" title="Load sample geometric star pattern" class="py-2 px-3 rounded-lg bg-studio-800 hover:bg-studio-700 border border-white/10 text-slate-300 transition">
+            <i class="fa-solid fa-dice-d20"></i> Sample
+          </button>
+        </div>
+
+        <!-- Opacity Slider -->
+        <div class="bg-studio-950 p-2.5 rounded-xl border border-white/10 space-y-1.5">
+          <div class="flex items-center justify-between text-[11px]">
+            <span class="text-slate-400">Reference Opacity:</span>
+            <span id="refOpacityDisplay" class="font-mono text-cyan-400">40%</span>
+          </div>
+          <input type="range" id="refOpacitySlider" min="0" max="100" value="40" class="w-full accent-cyan-400">
+          <p class="text-[9px] text-slate-400 leading-tight">
+            Color Eyedropper always samples unmuted high-fidelity colors, regardless of dimming.
+          </p>
+        </div>
+      </div>
+
+      <!-- 4. Visual Guides & 3D Depth -->
+      <div class="space-y-2">
+        <label class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block flex items-center gap-1.5">
+          <i class="fa-solid fa-sliders text-emerald-400"></i> Optics & Aids
+        </label>
+        <div class="bg-studio-950 p-2.5 rounded-xl border border-white/10 space-y-2">
+          <label class="flex items-center justify-between text-slate-300 cursor-pointer">
+            <span>Realistic Thread Shadows</span>
+            <input type="checkbox" id="threadShadowCheck" checked class="w-3.5 h-3.5 accent-cyan-400 cursor-pointer">
+          </label>
+          <label class="flex items-center justify-between text-slate-300 cursor-pointer">
+            <span>Show Hole Indices (#1, #2...)</span>
+            <input type="checkbox" id="showNumbersCheck" class="w-3.5 h-3.5 accent-cyan-400 cursor-pointer">
+          </label>
+          <label class="flex items-center justify-between text-slate-300 cursor-pointer">
+            <span>Subtle Layout Grid</span>
+            <input type="checkbox" id="showGridCheck" class="w-3.5 h-3.5 accent-cyan-400 cursor-pointer">
+          </label>
+        </div>
+      </div>
+
+      <!-- 5. Export Blueprint & Artwork -->
+      <div>
+        <h3 class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
+          <i class="fa-solid fa-file-export text-cyan-400"></i> Export & Fabrication
+        </h3>
+        <div class="space-y-1.5">
+          <button id="exportArtBtn" class="w-full text-left bg-studio-800 hover:bg-studio-700 p-2 rounded-lg border border-white/10 flex items-center gap-2.5 transition text-slate-200">
+            <i class="fa-solid fa-image text-cyan-400 text-sm"></i>
+            <div>
+              <p class="font-medium text-[11px]">Export Artwork (PNG)</p>
+              <p class="text-[9px] text-slate-400">High-resolution textured rendering</p>
+            </div>
+          </button>
+          <button id="exportTemplateBtn" class="w-full text-left bg-studio-800 hover:bg-studio-700 p-2 rounded-lg border border-white/10 flex items-center gap-2.5 transition text-slate-200">
+            <i class="fa-solid fa-print text-emerald-400 text-sm"></i>
+            <div>
+              <p class="font-medium text-[11px]">Needlepoint Piercing Blueprint (PNG)</p>
+              <p class="text-[9px] text-slate-400">Fine pricking template for needle & awl piercing</p>
+            </div>
+          </button>
+          <div class="grid grid-cols-2 gap-1.5 pt-0.5">
+            <button id="saveJsonBtn" class="bg-studio-800 hover:bg-studio-700 p-2 rounded-lg border border-white/10 flex items-center justify-center gap-1.5 text-slate-300 transition">
+              <i class="fa-solid fa-download text-xs text-indigo-400"></i>
+              <span>Save File</span>
+            </button>
+            <label class="bg-studio-800 hover:bg-studio-700 p-2 rounded-lg border border-white/10 flex items-center justify-center gap-1.5 text-slate-300 transition cursor-pointer">
+              <i class="fa-solid fa-upload text-xs text-indigo-400"></i>
+              <span>Open File</span>
+              <input type="file" id="loadJsonInput" accept=".json" class="hidden">
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. Danger Zone -->
+      <div class="pt-2 border-t border-white/10">
+        <button id="clearAllBtn" class="w-full py-2 px-3 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 font-medium transition flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-trash-can"></i>
+          <span>Clear Canvas & Reset</span>
+        </button>
+      </div>
+
+    </div>
+  </aside>
+
+  <div id="blueprintModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-studio-900 border border-white/15 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-white/10 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+            <i class="fa-solid fa-print text-xs"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-slate-100">Piercing Pattern Blueprint</h3>
+            <p class="text-[10px] text-slate-400">1:1 template to tape onto cardstock or fabric</p>
+          </div>
+        </div>
+        <button id="closeBlueprintModalBtn" class="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-studio-800 transition">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+
+      <!-- Mark Style -->
+      <div class="space-y-1.5">
+        <label class="text-[11px] font-semibold text-slate-300">Pricking Mark Style</label>
+        <div class="grid grid-cols-3 gap-2 text-[10px]">
+          <button data-bstyle="crosshair" class="bstyle-btn active p-2 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-medium text-center">
+            <span class="block text-sm mb-0.5 font-mono">+</span>
+            Hairline Cross (+)
+          </button>
+          <button data-bstyle="dot" class="bstyle-btn p-2 rounded-lg bg-studio-950 border border-white/10 text-slate-400 hover:text-white font-medium text-center">
+            <span class="block text-sm mb-0.5">•</span>
+            Micro-Prick Dot
+          </button>
+          <button data-bstyle="both" class="bstyle-btn p-2 rounded-lg bg-studio-950 border border-white/10 text-slate-400 hover:text-white font-medium text-center">
+            <span class="block text-sm mb-0.5 font-mono">✛</span>
+            Dot & Cross
+          </button>
+        </div>
+      </div>
+
+      <!-- Background & Resolution Options -->
+      <div class="grid grid-cols-2 gap-3 text-xs">
+        <div>
+          <label class="text-[11px] font-semibold text-slate-300 block mb-1">Sheet Background</label>
+          <select id="blueprintBgSelect" class="w-full bg-studio-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-slate-200 text-[11px] focus:outline-none focus:border-cyan-400">
+            <option value="white">Clean White (Printer-Friendly)</option>
+            <option value="dark">Inverted Dark Cardstock</option>
+            <option value="transparent">Transparent (Digital Overlay)</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[11px] font-semibold text-slate-300 block mb-1">Print Resolution</label>
+          <select id="blueprintDpiSelect" class="w-full bg-studio-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-slate-200 text-[11px] focus:outline-none focus:border-cyan-400">
+            <option value="300">300 DPI Ultra-Fine Print</option>
+            <option value="150">150 DPI Standard Draft</option>
+            <option value="72">1:1 Screen Scale</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="bg-studio-950 p-2.5 rounded-xl border border-white/10 space-y-2">
+        <label class="flex items-center justify-between text-slate-300 cursor-pointer text-xs">
+          <span>Include sequential hole indices (#1, #2...)</span>
+          <input type="checkbox" id="blueprintNumbersCheck" class="w-3.5 h-3.5 accent-emerald-400 cursor-pointer">
+        </label>
+        <label class="flex items-center justify-between text-slate-300 cursor-pointer text-xs">
+          <span>Include stitch paths as ultra-light hairline guides</span>
+          <input type="checkbox" id="blueprintGuidesCheck" checked class="w-3.5 h-3.5 accent-emerald-400 cursor-pointer">
+        </label>
+      </div>
+
+      <div class="pt-2 flex items-center gap-2">
+        <button id="cancelBlueprintBtn" class="flex-1 py-2 rounded-lg bg-studio-800 hover:bg-studio-700 text-slate-300 text-xs font-medium transition">
+          Cancel
+        </button>
+        <button id="downloadBlueprintFinalBtn" class="flex-2 py-2 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5 shadow-lg transition">
+          <i class="fa-solid fa-download"></i>
+          <span>Download Blueprint PNG</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmation Reset Modal -->
+  <div id="confirmResetModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-studio-900 border border-white/15 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-3">
+      <div class="flex items-center gap-3 text-rose-400">
+        <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+        <h3 class="font-bold text-sm text-slate-100">Reset Canvas?</h3>
+      </div>
+      <p class="text-xs text-slate-300 leading-relaxed">
+        This will clear all pierced holes, string connections, and the active reference image. This action cannot be undone.
+      </p>
+      <div class="pt-2 flex items-center justify-end gap-2">
+        <button id="cancelResetBtn" class="px-3 py-1.5 rounded-lg bg-studio-800 text-slate-300 hover:text-white text-xs font-medium transition">
+          Cancel
+        </button>
+        <button id="executeResetBtn" class="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-lg transition">
+          Yes, Reset All
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Badge -->
+  <div id="toastNotification" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 opacity-0 translate-y-2">
+    <div class="bg-studio-900/95 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/15 shadow-2xl flex items-center gap-2 text-xs text-slate-200">
+      <i id="toastIcon" class="fa-solid fa-circle-check text-cyan-400 text-xs"></i>
+      <span id="toastMsg" class="font-medium text-[11px]">Action Completed</span>
+    </div>
+  </div>
+
+  <script>
+    // --- GLOBAL APPLICATION STATE ---
+    const state = {
+      // Craft Mode: 'embroidery' (flush perforated holes) or 'nails' (raised metallic pins)
+      craftMode: 'embroidery',
+      
+      // Board Surface Theme
+      surfaceTheme: 'black-card',
+
+      // Tool State: 'thread', 'hole', 'ruler', 'circle', 'erase', 'eyedropper', 'select'
+      tool: 'thread',
+      
+      // Canvas Transform
+      panX: 0,
+      panY: 0,
+      zoom: 1.0,
+      isPanning: false,
+      lastMouseX: 0,
+      lastMouseY: 0,
+
+      // Reference Image & Unmuted Sampling Buffer
+      refImage: null,
+      refImageOffscreen: null,
+      refOpacity: 0.40,
+      refVisible: true,
+      refX: 0,
+      refY: 0,
+      refWidth: 0,
+      refHeight: 0,
+
+      // Visual Depth & Guides
+      threadShadow: true,
+      showHoleNumbers: false,
+      showGrid: false,
+
+      // Needle Gauge (Diameter in world units: 1.2 = Fine, 1.8 = Standard, 2.8 = Crewel)
+      needleGauge: 1.8,
+
+      // Blueprint Pattern Options
+      blueprintStyle: 'crosshair', // 'crosshair', 'dot', 'both'
+
+      // Thread & Hole Geometries
+      holes: [], // Array of { id, x, y, gauge }
+      threads: [], // Array of { id, fromId, toId, color, thickness }
+
+      // Active Thread Parameters
+      activeColor: '#f8fafc',
+      activeThickness: 1.5,
+      continuousWinding: true,
+      threadStartHole: null,
+
+      // Ruler / Straight Edge Scaffolding
+      rulerDivisions: 16,
+      rulerStartHole: null,
+
+      // Circle Mandala Scaffolding
+      circlePins: 32,
+      circleRadius: 200,
+
+      // Hover and Snapping
+      hoveredHole: null,
+      hoveredThread: null,
+      snapThresholdPx: 16,
+
+      // Palette
+      paletteFolded: false,
+      palette: [
+        '#f8fafc',
+        '#facc15',
+        '#fb923c',
+        '#ef4444',
+        '#f43f5e',
+        '#d946ef',
+        '#818cf8',
+        '#38bdf8',
+        '#10b981',
+        '#a3e635',
+        '#e2e8f0',
+        '#94a3b8'
+      ],
+
+      // History Undo/Redo Stacks
+      undoStack: [],
+      redoStack: []
+    };
+
+    // DOM Element Handles
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('canvasContainer');
+
+    // UI Tools & Properties
+    const toolBtns = document.querySelectorAll('.tool-btn');
+    const toolPropertiesBar = document.getElementById('toolPropertiesBar');
+    const propSectionHole = document.getElementById('propSectionHole');
+    const propSectionThread = document.getElementById('propSectionThread');
+    const propSectionRuler = document.getElementById('propSectionRuler');
+    const propSectionCircle = document.getElementById('propSectionCircle');
+    const propSectionGeneric = document.getElementById('propSectionGeneric');
+    const genericPropText = document.getElementById('genericPropText');
+
+    const gaugeBtns = document.querySelectorAll('.gauge-btn');
+    const threadThicknessInput = document.getElementById('threadThicknessInput');
+    const thicknessValDisplay = document.getElementById('thicknessValDisplay');
+    const threadSampleLine = document.getElementById('threadSampleLine');
+    const continuousWindingCheckbox = document.getElementById('continuousWindingCheckbox');
+
+    const rulerDivisionsSlider = document.getElementById('rulerDivisionsSlider');
+    const rulerDivisionsVal = document.getElementById('rulerDivisionsVal');
+    const circlePinsSlider = document.getElementById('circlePinsSlider');
+    const circlePinsVal = document.getElementById('circlePinsVal');
+    const circleRadiusSlider = document.getElementById('circleRadiusSlider');
+    const circleRadiusVal = document.getElementById('circleRadiusVal');
+    const stampCircleCenterBtn = document.getElementById('stampCircleCenterBtn');
+
+    // Quick Mode Badge
+    const quickModeBadge = document.getElementById('quickModeBadge');
+    const quickModeIcon = document.getElementById('quickModeIcon');
+    const quickModeText = document.getElementById('quickModeText');
+    const hudModeName = document.getElementById('hudModeName');
+
+    // Blueprint Modal Handles
+    const blueprintModal = document.getElementById('blueprintModal');
+    const closeBlueprintModalBtn = document.getElementById('closeBlueprintModalBtn');
+    const cancelBlueprintBtn = document.getElementById('cancelBlueprintBtn');
+    const downloadBlueprintFinalBtn = document.getElementById('downloadBlueprintFinalBtn');
+    const bstyleBtns = document.querySelectorAll('.bstyle-btn');
+    const blueprintBgSelect = document.getElementById('blueprintBgSelect');
+    const blueprintDpiSelect = document.getElementById('blueprintDpiSelect');
+    const blueprintNumbersCheck = document.getElementById('blueprintNumbersCheck');
+    const blueprintGuidesCheck = document.getElementById('blueprintGuidesCheck');
+
+    // Palette Handles
+    const paletteWindow = document.getElementById('paletteWindow');
+    const paletteHeader = document.getElementById('paletteHeader');
+    const paletteBody = document.getElementById('paletteBody');
+    const paletteFoldIcon = document.getElementById('paletteFoldIcon');
+    const activeColorIndicator = document.getElementById('activeColorIndicator');
+    const activeHexLabel = document.getElementById('activeHexLabel');
+    const nativeColorPicker = document.getElementById('nativeColorPicker');
+    const hexTextInput = document.getElementById('hexTextInput');
+    const paletteEyedropperBtn = document.getElementById('paletteEyedropperBtn');
+    const addSwatchBtn = document.getElementById('addSwatchBtn');
+    const swatchGrid = document.getElementById('swatchGrid');
+
+    // Settings Drawer Handles
+    const openSettingsBtn = document.getElementById('openSettingsBtn');
+    const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+    const settingsDrawer = document.getElementById('settingsDrawer');
+    const settingsOverlay = document.getElementById('settingsOverlay');
+
+    const modeEmbroideryBtn = document.getElementById('modeEmbroideryBtn');
+    const modeNailsBtn = document.getElementById('modeNailsBtn');
+    const themeBtns = document.querySelectorAll('.theme-btn');
+
+    const imageFileInput = document.getElementById('imageFileInput');
+    const loadSamplePatternBtn = document.getElementById('loadSamplePatternBtn');
+    const toggleRefVisibleBtn = document.getElementById('toggleRefVisibleBtn');
+    const refOpacitySlider = document.getElementById('refOpacitySlider');
+    const refOpacityDisplay = document.getElementById('refOpacityDisplay');
+
+    const threadShadowCheck = document.getElementById('threadShadowCheck');
+    const showNumbersCheck = document.getElementById('showNumbersCheck');
+    const showGridCheck = document.getElementById('showGridCheck');
+
+    const exportArtBtn = document.getElementById('exportArtBtn');
+    const exportTemplateBtn = document.getElementById('exportTemplateBtn');
+    const saveJsonBtn = document.getElementById('saveJsonBtn');
+    const loadJsonInput = document.getElementById('loadJsonInput');
+
+    const clearAllBtn = document.getElementById('clearAllBtn');
+    const confirmResetModal = document.getElementById('confirmResetModal');
+    const cancelResetBtn = document.getElementById('cancelResetBtn');
+    const executeResetBtn = document.getElementById('executeResetBtn');
+
+    // Zoom & HUD Handles
+    const zoomInBtn = document.getElementById('zoomInBtn');
+    const zoomOutBtn = document.getElementById('zoomOutBtn');
+    const zoomResetBtn = document.getElementById('zoomResetBtn');
+    const zoomDisplay = document.getElementById('zoomDisplay');
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    const hudHoleCount = document.getElementById('hudHoleCount');
+    const hudThreadCount = document.getElementById('hudThreadCount');
+
+    // Current pointer coordinates
+    let mouseWorldX = 0;
+    let mouseWorldY = 0;
+    let mouseScreenX = 0;
+    let mouseScreenY = 0;
+    let isLongPressing = false;
+    let longPressTimer = null;
+    let spaceKeyDown = false;
+
+    function pushHistory() {
+      state.undoStack.push({
+        holes: JSON.parse(JSON.stringify(state.holes)),
+        threads: JSON.parse(JSON.stringify(state.threads))
+      });
+      // Cap stack
+      if (state.undoStack.length > 40) state.undoStack.shift();
+      state.redoStack = [];
+      updateUndoRedoButtons();
+    }
+
+    function undo() {
+      if (state.undoStack.length === 0) return;
+      state.redoStack.push({
+        holes: JSON.parse(JSON.stringify(state.holes)),
+        threads: JSON.parse(JSON.stringify(state.threads))
+      });
+      const previous = state.undoStack.pop();
+      state.holes = previous.holes;
+      state.threads = previous.threads;
+      state.threadStartHole = null;
+      updateMetricsHUD();
+      updateUndoRedoButtons();
+      requestRender();
+      showToast('Undone', 'fa-rotate-left');
+    }
+
+    function redo() {
+      if (state.redoStack.length === 0) return;
+      state.undoStack.push({
+        holes: JSON.parse(JSON.stringify(state.holes)),
+        threads: JSON.parse(JSON.stringify(state.threads))
+      });
+      const next = state.redoStack.pop();
+      state.holes = next.holes;
+      state.threads = next.threads;
+      state.threadStartHole = null;
+      updateMetricsHUD();
+      updateUndoRedoButtons();
+      requestRender();
+      showToast('Redone', 'fa-rotate-right');
+    }
+
+    function updateUndoRedoButtons() {
+      undoBtn.disabled = state.undoStack.length === 0;
+      redoBtn.disabled = state.redoStack.length === 0;
+    }
+
+    let toastTimeout = null;
+    function showToast(message, iconClass = 'fa-circle-check') {
+      const toast = document.getElementById('toastNotification');
+      const toastIcon = document.getElementById('toastIcon');
+      const toastMsg = document.getElementById('toastMsg');
+
+      toastIcon.className = `fa-solid ${iconClass} text-cyan-400 text-xs`;
+      toastMsg.textContent = message;
+
+      toast.classList.remove('opacity-0', 'translate-y-2');
+      toast.classList.add('opacity-100', 'translate-y-0');
+
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        toast.classList.remove('opacity-100', 'translate-y-0');
+      }, 2200);
+    }
+
+    function updateMetricsHUD() {
+      hudHoleCount.innerHTML = `<i class="fa-solid fa-circle-dot text-cyan-400 mr-1"></i>${state.holes.length} Holes`;
+      hudThreadCount.innerHTML = `<i class="fa-solid fa-lines-leaning text-emerald-400 mr-1"></i>${state.threads.length} Strands`;
+      hudModeName.innerHTML = `<i class="fa-solid fa-layer-group text-slate-400 mr-1"></i>${state.craftMode === 'embroidery' ? 'Embroidery Mode' : 'Nail Art Mode'}`;
+    }
+
+    function setTool(toolName) {
+      state.tool = toolName;
+      toolBtns.forEach(btn => {
+        if (btn.dataset.tool === toolName) {
+          btn.classList.add('active', 'bg-cyan-500/20', 'text-cyan-400', 'border', 'border-cyan-500/40');
+          btn.classList.remove('text-slate-300');
+        } else {
+          btn.classList.remove('active', 'bg-cyan-500/20', 'text-cyan-400', 'border', 'border-cyan-500/40');
+          btn.classList.add('text-slate-300');
+        }
+      });
+
+      if (toolName !== 'thread') state.threadStartHole = null;
+      if (toolName !== 'ruler') state.rulerStartHole = null;
+
+      // Update property bar visibility
+      propSectionHole.classList.add('hidden');
+      propSectionThread.classList.add('hidden');
+      propSectionRuler.classList.add('hidden');
+      propSectionCircle.classList.add('hidden');
+      propSectionGeneric.classList.add('hidden');
+
+      if (toolName === 'hole') {
+        propSectionHole.classList.remove('hidden');
+      } else if (toolName === 'thread') {
+        propSectionThread.classList.remove('hidden');
+      } else if (toolName === 'ruler') {
+        propSectionRuler.classList.remove('hidden');
+      } else if (toolName === 'circle') {
+        propSectionCircle.classList.remove('hidden');
+      } else if (toolName === 'erase') {
+        propSectionGeneric.classList.remove('hidden');
+        genericPropText.textContent = 'Eraser: Click needle hole to delete (with strands) or click individual strand';
+      } else if (toolName === 'select') {
+        propSectionGeneric.classList.remove('hidden');
+        genericPropText.textContent = 'Pan Hand: Drag to move canvas (or hold Space anywhere)';
+      } else if (toolName === 'eyedropper') {
+        propSectionGeneric.classList.remove('hidden');
+        genericPropText.textContent = 'Eyedropper: Click on image to sample raw unmuted pixel color';
+      }
+
+      updateCanvasCursor();
+      requestRender();
+    }
+
+    toolBtns.forEach(btn => {
+      btn.addEventListener('click', () => setTool(btn.dataset.tool));
+    });
+
+    // Needle Gauge Buttons
+    gaugeBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        gaugeBtns.forEach(b => {
+          b.classList.remove('active', 'bg-cyan-500/20', 'text-cyan-400', 'font-semibold', 'border', 'border-cyan-500/40');
+          b.classList.add('text-slate-300');
+        });
+        btn.classList.add('active', 'bg-cyan-500/20', 'text-cyan-400', 'font-semibold', 'border', 'border-cyan-500/40');
+        btn.classList.remove('text-slate-300');
+        state.needleGauge = parseFloat(btn.dataset.gauge);
+        showToast(`Needle gauge: ${btn.textContent.trim()}`, 'fa-needle');
+      });
+    });
+
+    // Tool Properties Inputs
+    threadThicknessInput.addEventListener('input', (e) => {
+      state.activeThickness = parseFloat(e.target.value);
+      thicknessValDisplay.textContent = `${state.activeThickness.toFixed(1)}px`;
+      threadSampleLine.style.height = `${Math.max(1, state.activeThickness)}px`;
+    });
+
+    continuousWindingCheckbox.addEventListener('change', (e) => {
+      state.continuousWinding = e.target.checked;
+      showToast(state.continuousWinding ? 'Continuous Stitch ON' : 'Single Segment Mode', 'fa-bezier-curve');
+    });
+
+    rulerDivisionsSlider.addEventListener('input', (e) => {
+      state.rulerDivisions = parseInt(e.target.value);
+      rulerDivisionsVal.textContent = state.rulerDivisions;
+    });
+
+    circlePinsSlider.addEventListener('input', (e) => {
+      state.circlePins = parseInt(e.target.value);
+      circlePinsVal.textContent = state.circlePins;
+    });
+
+    circleRadiusSlider.addEventListener('input', (e) => {
+      state.circleRadius = parseInt(e.target.value);
+      circleRadiusVal.textContent = `${state.circleRadius}px`;
+      requestRender();
+    });
+
+    stampCircleCenterBtn.addEventListener('click', () => {
+      pushHistory();
+      const cx = state.refImage ? (state.refX + state.refWidth / 2) : 0;
+      const cy = state.refImage ? (state.refY + state.refHeight / 2) : 0;
+      const count = state.circlePins;
+      const r = state.circleRadius;
+
+      for (let i = 0; i < count; i++) {
+        const theta = (i * 2 * Math.PI) / count - Math.PI / 2;
+        state.holes.push({
+          id: 'h_' + Date.now() + '_' + i + '_' + Math.random().toString(36).substr(2, 4),
+          x: Math.round(cx + Math.cos(theta) * r),
+          y: Math.round(cy + Math.sin(theta) * r),
+          gauge: state.needleGauge
+        });
+      }
+      updateMetricsHUD();
+      requestRender();
+      showToast(`Stamped ring with ${count} needlepoint holes!`, 'fa-circle-dot');
+    });
+
+    function setCraftMode(mode) {
+      state.craftMode = mode;
+      if (mode === 'embroidery') {
+        modeEmbroideryBtn.classList.add('border-cyan-500/50', 'bg-cyan-500/10', 'text-cyan-300');
+        modeEmbroideryBtn.classList.remove('border-white/10', 'bg-studio-950', 'text-slate-400');
+        modeNailsBtn.classList.remove('border-cyan-500/50', 'bg-cyan-500/10', 'text-cyan-300');
+        modeNailsBtn.classList.add('border-white/10', 'bg-studio-950', 'text-slate-400');
+        
+        quickModeIcon.className = 'fa-solid fa-needle text-cyan-400';
+        quickModeText.textContent = 'Needlepoint Card';
+        showToast('Craft Mode: Needlepoint Perforations', 'fa-needle');
+      } else {
+        modeNailsBtn.classList.add('border-cyan-500/50', 'bg-cyan-500/10', 'text-cyan-300');
+        modeNailsBtn.classList.remove('border-white/10', 'bg-studio-950', 'text-slate-400');
+        modeEmbroideryBtn.classList.remove('border-cyan-500/50', 'bg-cyan-500/10', 'text-cyan-300');
+        modeEmbroideryBtn.classList.add('border-white/10', 'bg-studio-950', 'text-slate-400');
+
+        quickModeIcon.className = 'fa-solid fa-thumbtack text-cyan-400';
+        quickModeText.textContent = 'Nail String Art';
+        showToast('Craft Mode: Raised String Nails', 'fa-thumbtack');
+      }
+      updateMetricsHUD();
+      requestRender();
+    }
+
+    modeEmbroideryBtn.addEventListener('click', () => setCraftMode('embroidery'));
+    modeNailsBtn.addEventListener('click', () => setCraftMode('nails'));
+    quickModeBadge.addEventListener('click', () => {
+      setCraftMode(state.craftMode === 'embroidery' ? 'nails' : 'embroidery');
+    });
+
+    themeBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        themeBtns.forEach(b => {
+          b.classList.remove('active', 'border-cyan-500/40');
+          b.classList.add('border-white/10', 'text-slate-400');
+        });
+        btn.classList.add('active', 'border-cyan-500/40');
+        btn.classList.remove('border-white/10', 'text-slate-400');
+        state.surfaceTheme = btn.dataset.theme;
+        requestRender();
+        showToast(`Surface: ${btn.textContent.trim()}`, 'fa-palette');
+      });
+    });
+
+    function setColor(hex) {
+      if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) return;
+      state.activeColor = hex.toLowerCase();
+      activeColorIndicator.style.backgroundColor = state.activeColor;
+      activeHexLabel.textContent = state.activeColor;
+      nativeColorPicker.value = state.activeColor;
+      hexTextInput.value = state.activeColor;
+      threadSampleLine.style.background = state.activeColor;
+    }
+
+    function renderSwatches() {
+      swatchGrid.innerHTML = '';
+      state.palette.forEach(color => {
+        const btn = document.createElement('button');
+        btn.className = 'w-7 h-7 rounded-lg border border-white/20 transition-all hover:scale-110 active:scale-95 shadow-sm relative group';
+        btn.style.backgroundColor = color;
+        btn.title = color;
+
+        btn.addEventListener('click', () => {
+          setColor(color);
+        });
+
+        btn.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          if (state.palette.length > 1) {
+            state.palette = state.palette.filter(c => c !== color);
+            renderSwatches();
+            showToast(`Swatch ${color} removed`, 'fa-trash');
+          }
+        });
+
+        swatchGrid.appendChild(btn);
+      });
+    }
+
+    nativeColorPicker.addEventListener('input', (e) => setColor(e.target.value));
+    hexTextInput.addEventListener('change', (e) => setColor(e.target.value));
+
+    addSwatchBtn.addEventListener('click', () => {
+      if (!state.palette.includes(state.activeColor)) {
+        state.palette.push(state.activeColor);
+        renderSwatches();
+        showToast(`Added ${state.activeColor} to palette`, 'fa-plus');
+      }
+    });
+
+    // Palette fold toggle
+    paletteHeader.addEventListener('click', () => {
+      state.paletteFolded = !state.paletteFolded;
+      if (state.paletteFolded) {
+        paletteBody.classList.add('hidden');
+        paletteFoldIcon.classList.add('rotate-180');
+        paletteWindow.classList.add('w-52');
+        paletteWindow.classList.remove('w-64');
+      } else {
+        paletteBody.classList.remove('hidden');
+        paletteFoldIcon.classList.remove('rotate-180');
+        paletteWindow.classList.remove('w-52');
+        paletteWindow.classList.add('w-64');
+      }
+    });
+
+    paletteEyedropperBtn.addEventListener('click', () => {
+      setTool('eyedropper');
+      showToast('Click unmuted reference image to sample pixel', 'fa-eye-dropper');
+    });
+
+    // Raw Pixel Color Sampling directly from unmuted buffer
+    function sampleRawImagePixel(worldX, worldY) {
+      if (!state.refImageOffscreen || !state.refImage) {
+        showToast('No reference image loaded to sample from!', 'fa-circle-exclamation');
+        return false;
+      }
+
+      // Convert world coord into original image pixel space
+      const imgLocalX = (worldX - state.refX);
+      const imgLocalY = (worldY - state.refY);
+
+      if (imgLocalX < 0 || imgLocalX > state.refWidth || imgLocalY < 0 || imgLocalY > state.refHeight) {
+        showToast('Cursor outside reference image bounds', 'fa-circle-exclamation');
+        return false;
+      }
+
+      const pixelX = Math.floor((imgLocalX / state.refWidth) * state.refImageOffscreen.width);
+      const pixelY = Math.floor((imgLocalY / state.refHeight) * state.refImageOffscreen.height);
+
+      try {
+        const offCtx = state.refImageOffscreen.getContext('2d', { willReadFrequently: true });
+        const data = offCtx.getImageData(pixelX, pixelY, 1, 1).data;
+        const hex = rgbToHex(data[0], data[1], data[2]);
+        setColor(hex);
+        showToast(`Sampled Unmuted Color: ${hex}`, 'fa-eye-dropper');
+        return true;
+      } catch (err) {
+        console.error('Eyedropper sample error:', err);
+        return false;
+      }
+    }
+
+    function rgbToHex(r, g, b) {
+      return '#' + [r, g, b].map(x => {
+        const h = x.toString(16);
+        return h.length === 1 ? '0' + h : h;
+      }).join('');
+    }
+
+    function setupOffscreenReference(img) {
+      state.refImage = img;
+      state.refImageOffscreen = document.createElement('canvas');
+      state.refImageOffscreen.width = img.naturalWidth || img.width;
+      state.refImageOffscreen.height = img.naturalHeight || img.height;
+      const offCtx = state.refImageOffscreen.getContext('2d', { willReadFrequently: true });
+      offCtx.drawImage(img, 0, 0);
+
+      // Center reference image in world space
+      state.refWidth = state.refImageOffscreen.width;
+      state.refHeight = state.refImageOffscreen.height;
+      state.refX = -state.refWidth / 2;
+      state.refY = -state.refHeight / 2;
+
+      fitViewToContent();
+      requestRender();
+    }
+
+    imageFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          setupOffscreenReference(img);
+          showToast('Reference blueprint image loaded', 'fa-image');
+          closeSettingsDrawer();
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Generate procedural geometric mandala reference image
+    loadSamplePatternBtn.addEventListener('click', () => {
+      const sampleCanvas = document.createElement('canvas');
+      sampleCanvas.width = 900;
+      sampleCanvas.height = 900;
+      const sCtx = sampleCanvas.getContext('2d');
+
+      // Dark card base
+      sCtx.fillStyle = '#111216';
+      sCtx.fillRect(0, 0, 900, 900);
+
+      const cx = 450, cy = 450;
+      const points = 16;
+      const outerR = 360;
+      const innerR = 170;
+
+      // Draw beautiful parabolic curves and radial string art guide
+      const starCoords = [];
+      for (let i = 0; i < points; i++) {
+        const theta = (i * 2 * Math.PI) / points - Math.PI / 2;
+        const r = i % 2 === 0 ? outerR : innerR;
+        starCoords.push({
+          x: cx + Math.cos(theta) * r,
+          y: cy + Math.sin(theta) * r
+        });
+      }
+
+      // Draw rich colored straight edge line art in background
+      const colors = ['#f43f5e', '#ec4899', '#8b5cf6', '#3b82f6', '#06b6d4', '#10b981', '#eab308', '#f97316'];
+      sCtx.lineWidth = 1.2;
+      for (let i = 0; i < starCoords.length; i++) {
+        for (let j = i + 1; j < starCoords.length; j++) {
+          if ((j - i) % 2 === 1 || (j - i) === 4) {
+            sCtx.strokeStyle = colors[(i + j) % colors.length];
+            sCtx.globalAlpha = 0.65;
+            sCtx.beginPath();
+            sCtx.moveTo(starCoords[i].x, starCoords[i].y);
+            sCtx.lineTo(starCoords[j].x, starCoords[j].y);
+            sCtx.stroke();
+          }
+        }
+      }
+      sCtx.globalAlpha = 1.0;
+
+      // Draw delicate needle points in guide
+      starCoords.forEach((p, idx) => {
+        sCtx.fillStyle = '#ffffff';
+        sCtx.beginPath();
+        sCtx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+        sCtx.fill();
+        sCtx.fillStyle = '#38bdf8';
+        sCtx.font = '10px monospace';
+        sCtx.fillText(`${idx + 1}`, p.x + 6, p.y - 4);
+      });
+
+      const img = new Image();
+      img.onload = () => {
+        setupOffscreenReference(img);
+        showToast('Sample geometric mandala loaded!', 'fa-dice-d20');
+        closeSettingsDrawer();
+      };
+      img.src = sampleCanvas.toDataURL();
+    });
+
+    refOpacitySlider.addEventListener('input', (e) => {
+      state.refOpacity = parseInt(e.target.value) / 100;
+      refOpacityDisplay.textContent = `${e.target.value}%`;
+      requestRender();
+    });
+
+    toggleRefVisibleBtn.addEventListener('click', () => {
+      state.refVisible = !state.refVisible;
+      toggleRefVisibleBtn.textContent = state.refVisible ? 'Hide Image' : 'Show Image';
+      requestRender();
+      showToast(state.refVisible ? 'Reference shown' : 'Reference hidden', 'fa-image');
+    });
+
+    threadShadowCheck.addEventListener('change', (e) => {
+      state.threadShadow = e.target.checked;
+      requestRender();
+    });
+
+    showNumbersCheck.addEventListener('change', (e) => {
+      state.showHoleNumbers = e.target.checked;
+      requestRender();
+    });
+
+    showGridCheck.addEventListener('change', (e) => {
+      state.showGrid = e.target.checked;
+      requestRender();
+    });
+
+    function openSettingsDrawer() {
+      settingsDrawer.classList.remove('-translate-x-full');
+      settingsOverlay.classList.remove('hidden');
+      setTimeout(() => settingsOverlay.classList.remove('opacity-0'), 10);
+    }
+
+    function closeSettingsDrawer() {
+      settingsDrawer.classList.add('-translate-x-full');
+      settingsOverlay.classList.add('opacity-0');
+      setTimeout(() => settingsOverlay.classList.add('hidden'), 260);
+    }
+
+    openSettingsBtn.addEventListener('click', openSettingsDrawer);
+    closeSettingsBtn.addEventListener('click', closeSettingsDrawer);
+    settingsOverlay.addEventListener('click', closeSettingsDrawer);
+
+    // Reset Canvas Modal
+    clearAllBtn.addEventListener('click', () => {
+      closeSettingsDrawer();
+      confirmResetModal.classList.remove('hidden');
+    });
+
+    cancelResetBtn.addEventListener('click', () => {
+      confirmResetModal.classList.add('hidden');
+    });
+
+    executeResetBtn.addEventListener('click', () => {
+      confirmResetModal.classList.add('hidden');
+      state.holes = [];
+      state.threads = [];
+      state.threadStartHole = null;
+      state.rulerStartHole = null;
+      state.refImage = null;
+      state.refImageOffscreen = null;
+      state.undoStack = [];
+      state.redoStack = [];
+      updateMetricsHUD();
+      updateUndoRedoButtons();
+      requestRender();
+      showToast('Canvas cleared & reset', 'fa-trash-can');
+    });
+
+    let animFrameReq = null;
+    function requestRender() {
+      if (!animFrameReq) {
+        animFrameReq = requestAnimationFrame(() => {
+          renderCanvas();
+          animFrameReq = null;
+        });
+      }
+    }
+
+    function resizeCanvas() {
+      const rect = container.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(rect.width * dpr);
+      canvas.height = Math.round(rect.height * dpr);
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${rect.height}px`;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+      requestRender();
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+
+    function screenToWorld(sx, sy) {
+      return {
+        x: (sx - state.panX) / state.zoom,
+        y: (sy - state.panY) / state.zoom
+      };
+    }
+
+    function worldToScreen(wx, wy) {
+      return {
+        x: wx * state.zoom + state.panX,
+        y: wy * state.zoom + state.panY
+      };
+    }
+
+    function renderCanvas() {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      if (w === 0 || h === 0) return;
+
+      // 1. Board Background Surface
+      renderBoardSurface(ctx, w, h);
+
+      ctx.save();
+      ctx.translate(state.panX, state.panY);
+      ctx.scale(state.zoom, state.zoom);
+
+      // 2. Subtle Layout Grid
+      if (state.showGrid) {
+        renderSubtleGrid(ctx, w, h);
+      }
+
+      // 3. Reference Image Layer (Respects Opacity)
+      if (state.refImage && state.refVisible) {
+        ctx.save();
+        ctx.globalAlpha = state.refOpacity;
+        ctx.drawImage(state.refImage, state.refX, state.refY, state.refWidth, state.refHeight);
+        ctx.restore();
+      }
+
+      // 4. Thread Realistic 3D Directional Shadows
+      if (state.threadShadow && state.threads.length > 0) {
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.48)';
+        ctx.shadowBlur = 2.5 / state.zoom;
+        ctx.shadowOffsetX = 1.2 / state.zoom;
+        ctx.shadowOffsetY = 1.8 / state.zoom;
+        ctx.lineCap = 'round';
+
+        state.threads.forEach(thread => {
+          const h1 = state.holes.find(h => h.id === thread.fromId);
+          const h2 = state.holes.find(h => h.id === thread.toId);
+          if (h1 && h2) {
+            ctx.beginPath();
+            ctx.moveTo(h1.x, h1.y);
+            ctx.lineTo(h2.x, h2.y);
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.lineWidth = thread.thickness / state.zoom;
+            ctx.stroke();
+          }
+        });
+        ctx.restore();
+      }
+
+      // 5. Realistic Thread Strands
+      ctx.save();
+      ctx.lineCap = 'round';
+      state.threads.forEach(thread => {
+        const h1 = state.holes.find(h => h.id === thread.fromId);
+        const h2 = state.holes.find(h => h.id === thread.toId);
+        if (h1 && h2) {
+          const isHovered = state.hoveredThread && state.hoveredThread.id === thread.id;
+          ctx.beginPath();
+          ctx.moveTo(h1.x, h1.y);
+          ctx.lineTo(h2.x, h2.y);
+          ctx.strokeStyle = (isHovered && state.tool === 'erase') ? '#f43f5e' : thread.color;
+          ctx.lineWidth = (thread.thickness || 1.5) / state.zoom;
+          ctx.stroke();
+        }
+      });
+      ctx.restore();
+
+      // 6. Active Dynamic Rubber-Band Thread Preview
+      if (state.tool === 'thread' && state.threadStartHole) {
+        const startHole = state.holes.find(h => h.id === state.threadStartHole);
+        if (startHole) {
+          const targetX = state.hoveredHole ? state.hoveredHole.x : mouseWorldX;
+          const targetY = state.hoveredHole ? state.hoveredHole.y : mouseWorldY;
+
+          ctx.save();
+          // Rubber band shadow
+          if (state.threadShadow) {
+            ctx.beginPath();
+            ctx.moveTo(startHole.x + 1.2 / state.zoom, startHole.y + 1.8 / state.zoom);
+            ctx.lineTo(targetX + 1.2 / state.zoom, targetY + 1.8 / state.zoom);
+            ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+            ctx.lineWidth = state.activeThickness / state.zoom;
+            ctx.stroke();
+          }
+
+          // Rubber band strand
+          ctx.beginPath();
+          ctx.moveTo(startHole.x, startHole.y);
+          ctx.lineTo(targetX, targetY);
+          ctx.strokeStyle = state.activeColor;
+          ctx.lineWidth = state.activeThickness / state.zoom;
+          ctx.lineCap = 'round';
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      // Active Ruler Scaffolding Line Preview
+      if (state.tool === 'ruler' && state.rulerStartHole) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(state.rulerStartHole.x, state.rulerStartHole.y);
+        ctx.lineTo(mouseWorldX, mouseWorldY);
+        ctx.strokeStyle = '#10b981';
+        ctx.lineWidth = 1.0 / state.zoom;
+        ctx.setLineDash([4 / state.zoom, 4 / state.zoom]);
+        ctx.stroke();
+
+        // Equidistant preview dots
+        const count = state.rulerDivisions;
+        for (let i = 0; i < count; i++) {
+          const t = i / (count - 1);
+          const px = state.rulerStartHole.x + (mouseWorldX - state.rulerStartHole.x) * t;
+          const py = state.rulerStartHole.y + (mouseWorldY - state.rulerStartHole.y) * t;
+          ctx.beginPath();
+          ctx.arc(px, py, 1.8 / state.zoom, 0, Math.PI * 2);
+          ctx.fillStyle = '#10b981';
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      // 7. Holes / Pins Rendering
+      renderHolesOrPins(ctx);
+
+      // Magnetic Snap Targeting Reticle
+      if (state.hoveredHole) {
+        ctx.save();
+        const hx = state.hoveredHole.x;
+        const hy = state.hoveredHole.y;
+        const ringR = Math.max(5.5, 7.5 / Math.sqrt(state.zoom));
+
+        // Precision snap circle
+        ctx.beginPath();
+        ctx.arc(hx, hy, ringR, 0, Math.PI * 2);
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.2 / state.zoom;
+        ctx.stroke();
+
+        // 4 hairline crosshair indicators outside the ring
+        const tickGap = ringR + 1.5 / state.zoom;
+        const tickLen = 4.5 / state.zoom;
+        ctx.beginPath();
+        ctx.moveTo(hx - tickGap - tickLen, hy); ctx.lineTo(hx - tickGap, hy);
+        ctx.moveTo(hx + tickGap, hy); ctx.lineTo(hx + tickGap + tickLen, hy);
+        ctx.moveTo(hx, hy - tickGap - tickLen); ctx.lineTo(hx, hy - tickGap);
+        ctx.moveTo(hx, hy + tickGap); ctx.lineTo(hx, hy + tickGap + tickLen);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      ctx.restore(); // Restore world transform
+    }
+
+    function renderBoardSurface(ctx, w, h) {
+      const theme = state.surfaceTheme;
+      let bgGrad;
+
+      if (theme === 'black-card') {
+        bgGrad = ctx.createRadialGradient(w/2, h/2, 50, w/2, h/2, Math.max(w, h));
+        bgGrad.addColorStop(0, '#1c1d24');
+        bgGrad.addColorStop(1, '#111216');
+      } else if (theme === 'deep-slate') {
+        bgGrad = ctx.createRadialGradient(w/2, h/2, 50, w/2, h/2, Math.max(w, h));
+        bgGrad.addColorStop(0, '#151d28');
+        bgGrad.addColorStop(1, '#090d13');
+      } else if (theme === 'walnut') {
+        bgGrad = ctx.createRadialGradient(w/2, h/2, 50, w/2, h/2, Math.max(w, h));
+        bgGrad.addColorStop(0, '#2b1b13');
+        bgGrad.addColorStop(1, '#170e0a');
+      } else if (theme === 'birch') {
+        bgGrad = ctx.createRadialGradient(w/2, h/2, 50, w/2, h/2, Math.max(w, h));
+        bgGrad.addColorStop(0, '#d9ceb6');
+        bgGrad.addColorStop(1, '#b5a78d');
+      } else if (theme === 'linen') {
+        bgGrad = ctx.createRadialGradient(w/2, h/2, 50, w/2, h/2, Math.max(w, h));
+        bgGrad.addColorStop(0, '#f2ede2');
+        bgGrad.addColorStop(1, '#dbd3c2');
+      } else {
+        bgGrad = '#050608';
+      }
+
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    function renderSubtleGrid(ctx, w, h) {
+      const step = 40;
+      const startX = Math.floor((-state.panX / state.zoom) / step) * step;
+      const endX = startX + (w / state.zoom) + step * 2;
+      const startY = Math.floor((-state.panY / state.zoom) / step) * step;
+      const endY = startY + (h / state.zoom) + step * 2;
+
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+      ctx.lineWidth = 0.5 / state.zoom;
+
+      ctx.beginPath();
+      for (let x = startX; x <= endX; x += step) {
+        ctx.moveTo(x, startY);
+        ctx.lineTo(x, endY);
+      }
+      for (let y = startY; y <= endY; y += step) {
+        ctx.moveTo(startX, y);
+        ctx.lineTo(endX, y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function renderHolesOrPins(ctx) {
+      const isEmbroidery = state.craftMode === 'embroidery';
+      const isLightBg = state.surfaceTheme === 'linen' || state.surfaceTheme === 'birch';
+
+      state.holes.forEach((hole, idx) => {
+        const isHovered = state.hoveredHole && state.hoveredHole.id === hole.id;
+        const isStart = state.threadStartHole === hole.id;
+
+        // Needlepoint hole radius based on realistic gauge (1.2px - 2.8px diameter)
+        const gauge = hole.gauge || state.needleGauge || 1.8;
+        const punctureR = (gauge / 2) * 0.95; // Needle hole aperture radius in world space
+        const minScreenR = 1.0;
+        const effectiveR = Math.max(minScreenR / state.zoom, punctureR);
+
+        ctx.save();
+
+        if (isEmbroidery) {
+          // REALISTIC NEEDLEPOINT PERFORATION
+          // Subtle paper fiber deboss halo around the pierced hole
+          ctx.beginPath();
+          ctx.arc(hole.x + 0.35 / state.zoom, hole.y + 0.45 / state.zoom, effectiveR + 0.75 / state.zoom, 0, Math.PI * 2);
+          ctx.fillStyle = isLightBg ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.11)';
+          ctx.fill();
+
+          // Dark pierced cavity (drawn over thread ends so thread dips inside cleanly)
+          ctx.beginPath();
+          ctx.arc(hole.x, hole.y, effectiveR, 0, Math.PI * 2);
+          ctx.fillStyle = isLightBg ? '#2d231e' : '#030406';
+          ctx.fill();
+
+          // Very fine puncture rim
+          ctx.lineWidth = 0.5 / state.zoom;
+          ctx.strokeStyle = isStart
+            ? '#38bdf8'
+            : (isHovered ? (state.tool === 'erase' ? '#f43f5e' : '#38bdf8') : (isLightBg ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.18)'));
+          ctx.stroke();
+
+        } else {
+          // NAIL STRING ART (RAISED METALLIC PINS)
+          const nailR = Math.max(2.2, effectiveR * 1.5);
+          // Drop shadow
+          ctx.beginPath();
+          ctx.arc(hole.x + 1.6 / state.zoom, hole.y + 2.2 / state.zoom, nailR, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(0,0,0,0.55)';
+          ctx.fill();
+
+          // Metallic nail pin
+          ctx.beginPath();
+          ctx.arc(hole.x, hole.y, nailR, 0, Math.PI * 2);
+          const nailGrad = ctx.createRadialGradient(hole.x - nailR * 0.3, hole.y - nailR * 0.3, nailR * 0.1, hole.x, hole.y, nailR);
+          if (isStart || isHovered) {
+            nailGrad.addColorStop(0, '#7dd3fc');
+            nailGrad.addColorStop(1, '#0284c7');
+          } else {
+            nailGrad.addColorStop(0, '#ffffff');
+            nailGrad.addColorStop(0.3, '#cbd5e1');
+            nailGrad.addColorStop(0.85, '#475569');
+            nailGrad.addColorStop(1, '#1e293b');
+          }
+          ctx.fillStyle = nailGrad;
+          ctx.fill();
+        }
+
+        // Sequential Number Guide (compact monospace)
+        if (state.showHoleNumbers) {
+          ctx.font = `${Math.max(7, 9 / state.zoom)}px monospace`;
+          ctx.fillStyle = isLightBg ? '#334155' : '#94a3b8';
+          ctx.fillText(`${idx + 1}`, hole.x + effectiveR + 2 / state.zoom, hole.y - 1.5 / state.zoom);
+        }
+
+        ctx.restore();
+      });
+    }
+
+    function findNearestHole(worldX, worldY, maxDistPx) {
+      const maxDistWorld = maxDistPx / state.zoom;
+      let closest = null;
+      let minD = Infinity;
+
+      for (let i = 0; i < state.holes.length; i++) {
+        const h = state.holes[i];
+        const dx = h.x - worldX;
+        const dy = h.y - worldY;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < maxDistWorld && d < minD) {
+          minD = d;
+          closest = h;
+        }
+      }
+      return closest;
+    }
+
+    function findNearestThread(worldX, worldY, maxDistPx) {
+      const maxDistWorld = maxDistPx / state.zoom;
+      let closest = null;
+      let minD = Infinity;
+
+      for (let i = 0; i < state.threads.length; i++) {
+        const t = state.threads[i];
+        const h1 = state.holes.find(h => h.id === t.fromId);
+        const h2 = state.holes.find(h => h.id === t.toId);
+        if (!h1 || !h2) continue;
+
+        const d = distToSegment({ x: worldX, y: worldY }, h1, h2);
+        if (d < maxDistWorld && d < minD) {
+          minD = d;
+          closest = t;
+        }
+      }
+      return closest;
+    }
+
+    function distToSegment(p, v, w) {
+      const l2 = (v.x - w.x) * (v.x - w.x) + (v.y - w.y) * (v.y - w.y);
+      if (l2 === 0) return Math.hypot(p.x - v.x, p.y - v.y);
+      let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+      t = Math.max(0, Math.min(1, t));
+      return Math.hypot(p.x - (v.x + t * (w.x - v.x)), p.y - (v.y + t * (w.y - v.y)));
+    }
+
+    function updateCanvasCursor() {
+      canvas.className = 'block w-full h-full';
+      if (state.isPanning) {
+        canvas.classList.add('canvas-tool-select', 'panning');
+      } else if (spaceKeyDown || state.tool === 'select') {
+        canvas.classList.add('canvas-tool-select');
+      } else {
+        canvas.classList.add(`canvas-tool-${state.tool}`);
+      }
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+      mouseScreenX = e.clientX;
+      mouseScreenY = e.clientY;
+      const world = screenToWorld(mouseScreenX, mouseScreenY);
+      mouseWorldX = world.x;
+      mouseWorldY = world.y;
+
+      // Handle Pan Start (Middle Mouse or Space or Hand Tool)
+      if (e.button === 1 || spaceKeyDown || state.tool === 'select') {
+        state.isPanning = true;
+        state.lastMouseX = e.clientX;
+        state.lastMouseY = e.clientY;
+        updateCanvasCursor();
+        return;
+      }
+
+      if (e.button !== 0) return; // Only primary click from here
+
+      // Long press detection for quick eyedropper on canvas
+      isLongPressing = false;
+      longPressTimer = setTimeout(() => {
+        isLongPressing = true;
+        if (sampleRawImagePixel(world.x, world.y)) {
+          showToast('Sampled unmuted color via hold-click', 'fa-eye-dropper');
+        }
+      }, 500);
+
+      // Handle Quick Eyedropper Tool
+      if (state.tool === 'eyedropper' || e.altKey) {
+        clearTimeout(longPressTimer);
+        sampleRawImagePixel(world.x, world.y);
+        return;
+      }
+
+      // Execute Tool Logic
+      if (state.tool === 'hole') {
+        pushHistory();
+        state.holes.push({
+          id: 'h_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+          x: Math.round(world.x),
+          y: Math.round(world.y),
+          gauge: state.needleGauge
+        });
+        updateMetricsHUD();
+        requestRender();
+        showToast(`Needlepoint hole pierced (${state.needleGauge}mm)`, 'fa-needle');
+
+      } else if (state.tool === 'thread') {
+        const targetHole = state.hoveredHole || findNearestHole(world.x, world.y, state.snapThresholdPx);
+        if (!targetHole) return;
+
+        if (!state.threadStartHole) {
+          state.threadStartHole = targetHole.id;
+          requestRender();
+          showToast('Stitch started. Click next hole to thread.', 'fa-bezier-curve');
+        } else {
+          if (state.threadStartHole !== targetHole.id) {
+            pushHistory();
+            state.threads.push({
+              id: 't_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+              fromId: state.threadStartHole,
+              toId: targetHole.id,
+              color: state.activeColor,
+              thickness: state.activeThickness
+            });
+            updateMetricsHUD();
+            showToast('Strand strung!', 'fa-lines-leaning');
+
+            if (state.continuousWinding) {
+              state.threadStartHole = targetHole.id; // Chain stitch!
+            } else {
+              state.threadStartHole = null;
+            }
+          } else {
+            // Clicked same hole - cancel active thread
+            state.threadStartHole = null;
+          }
+          requestRender();
+        }
+
+      } else if (state.tool === 'ruler') {
+        if (!state.rulerStartHole) {
+          state.rulerStartHole = { x: world.x, y: world.y };
+          showToast('Point A set. Click Point B.', 'fa-ruler-horizontal');
+        } else {
+          pushHistory();
+          const count = state.rulerDivisions;
+          for (let i = 0; i < count; i++) {
+            const t = i / (count - 1);
+            const nx = state.rulerStartHole.x + (world.x - state.rulerStartHole.x) * t;
+            const ny = state.rulerStartHole.y + (world.y - state.rulerStartHole.y) * t;
+            state.holes.push({
+              id: 'h_' + Date.now() + '_' + i + '_' + Math.random().toString(36).substr(2, 4),
+              x: Math.round(nx),
+              y: Math.round(ny),
+              gauge: state.needleGauge
+            });
+          }
+          state.rulerStartHole = null;
+          setTool('thread');
+          updateMetricsHUD();
+          requestRender();
+          showToast(`Scaffolded ${count} needlepoint holes!`, 'fa-check');
+        }
+
+      } else if (state.tool === 'circle') {
+        pushHistory();
+        const count = state.circlePins;
+        const r = state.circleRadius;
+        for (let i = 0; i < count; i++) {
+          const theta = (i * 2 * Math.PI) / count - Math.PI / 2;
+          state.holes.push({
+            id: 'h_' + Date.now() + '_' + i + '_' + Math.random().toString(36).substr(2, 4),
+            x: Math.round(world.x + Math.cos(theta) * r),
+            y: Math.round(world.y + Math.sin(theta) * r),
+            gauge: state.needleGauge
+          });
+        }
+        setTool('thread');
+        updateMetricsHUD();
+        requestRender();
+        showToast(`Ring with ${count} holes stamped!`, 'fa-circle-notch');
+
+      } else if (state.tool === 'erase') {
+        const h = state.hoveredHole || findNearestHole(world.x, world.y, state.snapThresholdPx);
+        if (h) {
+          pushHistory();
+          state.holes = state.holes.filter(item => item.id !== h.id);
+          state.threads = state.threads.filter(t => t.fromId !== h.id && t.toId !== h.id);
+          if (state.threadStartHole === h.id) state.threadStartHole = null;
+          updateMetricsHUD();
+          requestRender();
+          showToast('Hole & connected strands removed', 'fa-trash');
+          return;
+        }
+
+        const t = state.hoveredThread || findNearestThread(world.x, world.y, state.snapThresholdPx);
+        if (t) {
+          pushHistory();
+          state.threads = state.threads.filter(item => item.id !== t.id);
+          updateMetricsHUD();
+          requestRender();
+          showToast('Strand removed', 'fa-trash');
+        }
+      }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      mouseScreenX = e.clientX;
+      mouseScreenY = e.clientY;
+      const world = screenToWorld(mouseScreenX, mouseScreenY);
+      mouseWorldX = world.x;
+      mouseWorldY = world.y;
+
+      if (longPressTimer && Math.hypot(e.clientX - state.lastMouseX, e.clientY - state.lastMouseY) > 6) {
+        clearTimeout(longPressTimer);
+      }
+
+      if (state.isPanning) {
+        const dx = e.clientX - state.lastMouseX;
+        const dy = e.clientY - state.lastMouseY;
+        state.panX += dx;
+        state.panY += dy;
+        state.lastMouseX = e.clientX;
+        state.lastMouseY = e.clientY;
+        requestRender();
+        return;
+      }
+
+      // Update hover highlights and magnetic snap
+      const prevHole = state.hoveredHole;
+      const prevThread = state.hoveredThread;
+
+      state.hoveredHole = findNearestHole(world.x, world.y, state.snapThresholdPx);
+      state.hoveredThread = state.hoveredHole ? null : findNearestThread(world.x, world.y, 8);
+
+      if (prevHole !== state.hoveredHole || prevThread !== state.hoveredThread || (state.tool === 'thread' && state.threadStartHole) || (state.tool === 'ruler' && state.rulerStartHole)) {
+        requestRender();
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      clearTimeout(longPressTimer);
+      if (state.isPanning) {
+        state.isPanning = false;
+        updateCanvasCursor();
+      }
+    });
+
+    // Right-click cancels active thread or line scaffold
+    canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      if (state.threadStartHole) {
+        state.threadStartHole = null;
+        requestRender();
+        showToast('Stitch threading canceled', 'fa-xmark');
+      }
+      if (state.rulerStartHole) {
+        state.rulerStartHole = null;
+        requestRender();
+        showToast('Line divider canceled', 'fa-xmark');
+      }
+    });
+
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.14 : 0.88;
+      applyZoom(zoomFactor, e.clientX, e.clientY);
+    }, { passive: false });
+
+    function applyZoom(factor, centerX, centerY) {
+      const newZoom = Math.min(14.0, Math.max(0.08, state.zoom * factor));
+      state.panX = centerX - (centerX - state.panX) * (newZoom / state.zoom);
+      state.panY = centerY - (centerY - state.panY) * (newZoom / state.zoom);
+      state.zoom = newZoom;
+      zoomDisplay.textContent = `${Math.round(state.zoom * 100)}%`;
+      requestRender();
+    }
+
+    zoomInBtn.addEventListener('click', () => {
+      const rect = container.getBoundingClientRect();
+      applyZoom(1.25, rect.width / 2, rect.height / 2);
+    });
+
+    zoomOutBtn.addEventListener('click', () => {
+      const rect = container.getBoundingClientRect();
+      applyZoom(0.80, rect.width / 2, rect.height / 2);
+    });
+
+    function fitViewToContent() {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      if (state.refImage) {
+        const scaleX = (w * 0.82) / state.refWidth;
+        const scaleY = (h * 0.82) / state.refHeight;
+        state.zoom = Math.min(scaleX, scaleY, 2.0);
+        state.panX = w / 2;
+        state.panY = h / 2;
+      } else if (state.holes.length > 0) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        state.holes.forEach(h => {
+          minX = Math.min(minX, h.x);
+          minY = Math.min(minY, h.y);
+          maxX = Math.max(maxX, h.x);
+          maxY = Math.max(maxY, h.y);
+        });
+        const spanW = Math.max(100, maxX - minX);
+        const spanH = Math.max(100, maxY - minY);
+        state.zoom = Math.min((w * 0.8) / spanW, (h * 0.8) / spanH, 2.0);
+        state.panX = w / 2 - ((minX + maxX) / 2) * state.zoom;
+        state.panY = h / 2 - ((minY + maxY) / 2) * state.zoom;
+      } else {
+        state.zoom = 1.0;
+        state.panX = w / 2;
+        state.panY = h / 2;
+      }
+      zoomDisplay.textContent = `${Math.round(state.zoom * 100)}%`;
+      requestRender();
+    }
+
+    zoomResetBtn.addEventListener('click', fitViewToContent);
+
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+
+      if (e.key === ' ' && !spaceKeyDown) {
+        spaceKeyDown = true;
+        updateCanvasCursor();
+      } else if (e.key === 't' || e.key === 'T') {
+        setTool('thread');
+      } else if (e.key === 'h' || e.key === 'H') {
+        setTool('hole');
+      } else if (e.key === 'l' || e.key === 'L') {
+        setTool('ruler');
+      } else if (e.key === 'c' || e.key === 'C') {
+        setTool('circle');
+      } else if (e.key === 'e' || e.key === 'E') {
+        setTool('erase');
+      } else if (e.key === 'i' || e.key === 'I') {
+        setTool('eyedropper');
+      } else if (e.key === 'Escape') {
+        state.threadStartHole = null;
+        state.rulerStartHole = null;
+        closeSettingsDrawer();
+        closeBlueprintModal();
+        requestRender();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) redo(); else undo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault();
+        redo();
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.key === ' ') {
+        spaceKeyDown = false;
+        updateCanvasCursor();
+      }
+    });
+
+    undoBtn.addEventListener('click', undo);
+    redoBtn.addEventListener('click', redo);
+
+    let initialTouchDist = null;
+    let initialTouchCenter = null;
+
+    canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        initialTouchDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        initialTouchCenter = {
+          x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+          y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+        };
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2 && initialTouchDist) {
+        e.preventDefault();
+        const dist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        const center = {
+          x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+          y: (e.touches[0].clientY + e.touches[1].clientY) / 2
+        };
+
+        const zoomDelta = dist / initialTouchDist;
+        applyZoom(zoomDelta, center.x, center.y);
+
+        state.panX += (center.x - initialTouchCenter.x);
+        state.panY += (center.y - initialTouchCenter.y);
+
+        initialTouchDist = dist;
+        initialTouchCenter = center;
+        requestRender();
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', () => {
+      initialTouchDist = null;
+      initialTouchCenter = null;
+    });
+
+    exportArtBtn.addEventListener('click', () => {
+      closeSettingsDrawer();
+      if (state.holes.length === 0 && !state.refImage) {
+        showToast('Canvas is empty!', 'fa-circle-exclamation');
+        return;
+      }
+
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      state.holes.forEach(h => {
+        minX = Math.min(minX, h.x);
+        minY = Math.min(minY, h.y);
+        maxX = Math.max(maxX, h.x);
+        maxY = Math.max(maxY, h.y);
+      });
+
+      if (state.refImage) {
+        minX = Math.min(minX, state.refX);
+        minY = Math.min(minY, state.refY);
+        maxX = Math.max(maxX, state.refX + state.refWidth);
+        maxY = Math.max(maxY, state.refY + state.refHeight);
+      }
+
+      const pad = 60;
+      const expW = Math.max(800, (maxX - minX) + pad * 2);
+      const expH = Math.max(800, (maxY - minY) + pad * 2);
+
+      const expCanvas = document.createElement('canvas');
+      expCanvas.width = expW;
+      expCanvas.height = expH;
+      const expCtx = expCanvas.getContext('2d');
+
+      renderBoardSurface(expCtx, expW, expH);
+
+      const cx = expW / 2 - (minX + maxX) / 2;
+      const cy = expH / 2 - (minY + maxY) / 2;
+      expCtx.translate(cx, cy);
+
+      // Render threads with shadows
+      if (state.threadShadow) {
+        expCtx.shadowColor = 'rgba(0, 0, 0, 0.55)';
+        expCtx.shadowBlur = 3.0;
+        expCtx.shadowOffsetX = 1.5;
+        expCtx.shadowOffsetY = 2.2;
+        state.threads.forEach(t => {
+          const h1 = state.holes.find(h => h.id === t.fromId);
+          const h2 = state.holes.find(h => h.id === t.toId);
+          if (h1 && h2) {
+            expCtx.beginPath();
+            expCtx.moveTo(h1.x, h1.y);
+            expCtx.lineTo(h2.x, h2.y);
+            expCtx.strokeStyle = 'rgba(0,0,0,0.5)';
+            expCtx.lineWidth = t.thickness;
+            expCtx.stroke();
+          }
+        });
+      }
+
+      expCtx.shadowColor = 'transparent';
+      state.threads.forEach(t => {
+        const h1 = state.holes.find(h => h.id === t.fromId);
+        const h2 = state.holes.find(h => h.id === t.toId);
+        if (h1 && h2) {
+          expCtx.beginPath();
+          expCtx.moveTo(h1.x, h1.y);
+          expCtx.lineTo(h2.x, h2.y);
+          expCtx.strokeStyle = t.color;
+          expCtx.lineWidth = t.thickness;
+          expCtx.stroke();
+        }
+      });
+
+      // Render punched holes or pins over threads
+      state.holes.forEach(h => {
+        const gauge = h.gauge || state.needleGauge || 1.8;
+        const punctureR = (gauge / 2) * 0.95;
+
+        if (state.craftMode === 'embroidery') {
+          // Delicate needlepoint puncture
+          expCtx.beginPath();
+          expCtx.arc(h.x, h.y, Math.max(1.1, punctureR), 0, Math.PI * 2);
+          expCtx.fillStyle = '#050608';
+          expCtx.fill();
+        } else {
+          expCtx.beginPath();
+          expCtx.arc(h.x, h.y, 2.4, 0, Math.PI * 2);
+          expCtx.fillStyle = '#cbd5e1';
+          expCtx.fill();
+        }
+      });
+
+      const link = document.createElement('a');
+      link.download = `filament-art-${Date.now()}.png`;
+      link.href = expCanvas.toDataURL('image/png');
+      link.click();
+      showToast('Artwork exported (PNG)', 'fa-image');
+    });
+
+    // Needlepoint Piercing Blueprint Modal & Generation
+    exportTemplateBtn.addEventListener('click', () => {
+      closeSettingsDrawer();
+      if (state.holes.length === 0) {
+        showToast('No holes pierced yet!', 'fa-circle-exclamation');
+        return;
+      }
+      blueprintModal.classList.remove('hidden');
+    });
+
+    function closeBlueprintModal() {
+      blueprintModal.classList.add('hidden');
+    }
+
+    closeBlueprintModalBtn.addEventListener('click', closeBlueprintModal);
+    cancelBlueprintBtn.addEventListener('click', closeBlueprintModal);
+
+    bstyleBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        bstyleBtns.forEach(b => {
+          b.classList.remove('active', 'bg-emerald-500/15', 'border-emerald-400/40', 'text-emerald-300');
+          b.classList.add('bg-studio-950', 'border-white/10', 'text-slate-400');
+        });
+        btn.classList.add('active', 'bg-emerald-500/15', 'border-emerald-400/40', 'text-emerald-300');
+        btn.classList.remove('bg-studio-950', 'border-white/10', 'text-slate-400');
+        state.blueprintStyle = btn.dataset.bstyle;
+      });
+    });
+
+    downloadBlueprintFinalBtn.addEventListener('click', () => {
+      closeBlueprintModal();
+      generateNeedlepointBlueprint();
+    });
+
+    function generateNeedlepointBlueprint() {
+      if (state.holes.length === 0) return;
+
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      state.holes.forEach(h => {
+        minX = Math.min(minX, h.x);
+        minY = Math.min(minY, h.y);
+        maxX = Math.max(maxX, h.x);
+        maxY = Math.max(maxY, h.y);
+      });
+
+      const pad = 70;
+      const baseW = Math.max(600, (maxX - minX) + pad * 2);
+      const baseH = Math.max(600, (maxY - minY) + pad * 2);
+
+      // Resolution factor (300 DPI = ~3.125x, 150 DPI = 1.56x, 72 DPI = 1x)
+      const dpi = parseInt(blueprintDpiSelect.value);
+      const scale = dpi === 300 ? 3.125 : (dpi === 150 ? 1.56 : 1.0);
+
+      const pCanvas = document.createElement('canvas');
+      pCanvas.width = Math.round(baseW * scale);
+      pCanvas.height = Math.round(baseH * scale);
+      const pCtx = pCanvas.getContext('2d');
+      pCtx.scale(scale, scale);
+
+      const bgType = blueprintBgSelect.value;
+      const isDark = bgType === 'dark';
+      const isTransparent = bgType === 'transparent';
+
+      if (!isTransparent) {
+        pCtx.fillStyle = isDark ? '#111216' : '#ffffff';
+        pCtx.fillRect(0, 0, baseW, baseH);
+      } else {
+        pCtx.clearRect(0, 0, baseW, baseH);
+      }
+
+      const cx = baseW / 2 - (minX + maxX) / 2;
+      const cy = baseH / 2 - (minY + maxY) / 2;
+      pCtx.translate(cx, cy);
+
+      // Header title & instructions
+      pCtx.fillStyle = isDark ? '#f1f5f9' : '#0f172a';
+      pCtx.font = 'bold 12px sans-serif';
+      pCtx.fillText('FILAMENT — NEEDLEPOINT PIERCING BLUEPRINT', minX, minY - 45);
+      pCtx.font = '10px monospace';
+      pCtx.fillStyle = isDark ? '#94a3b8' : '#64748b';
+      pCtx.fillText(`${state.holes.length} Needle Piercings | Prick center marks with fine awl or needle before threading`, minX, minY - 30);
+
+      // Optional ultra-light stitch guides
+      if (blueprintGuidesCheck.checked) {
+        pCtx.save();
+        pCtx.strokeStyle = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)';
+        pCtx.lineWidth = 0.5;
+        pCtx.setLineDash([2, 2]);
+        state.threads.forEach(t => {
+          const h1 = state.holes.find(h => h.id === t.fromId);
+          const h2 = state.holes.find(h => h.id === t.toId);
+          if (h1 && h2) {
+            pCtx.beginPath();
+            pCtx.moveTo(h1.x, h1.y);
+            pCtx.lineTo(h2.x, h2.y);
+            pCtx.stroke();
+          }
+        });
+        pCtx.restore();
+      }
+
+      // Draw Needlepoint Piercing Marks
+      const markColor = isDark ? '#ffffff' : '#000000';
+      const showNumbers = blueprintNumbersCheck.checked;
+      const style = state.blueprintStyle;
+
+      state.holes.forEach((h, idx) => {
+        pCtx.save();
+        pCtx.strokeStyle = markColor;
+        pCtx.fillStyle = markColor;
+
+        if (style === 'crosshair' || style === 'both') {
+          // Precision hairline crosshair (+)
+          const arm = 3.5;
+          pCtx.lineWidth = 0.6;
+          pCtx.beginPath();
+          pCtx.moveTo(h.x - arm, h.y);
+          pCtx.lineTo(h.x + arm, h.y);
+          pCtx.moveTo(h.x, h.y - arm);
+          pCtx.lineTo(h.x, h.y + arm);
+          pCtx.stroke();
+        }
+
+        if (style === 'dot' || style === 'both') {
+          // Tiny micro-prick dot (needlepoint size: 0.9px radius)
+          pCtx.beginPath();
+          pCtx.arc(h.x, h.y, 0.9, 0, Math.PI * 2);
+          pCtx.fill();
+        }
+
+        // Sequential numbers offset crisply
+        if (showNumbers) {
+          pCtx.font = '8px monospace';
+          pCtx.fillStyle = isDark ? '#cbd5e1' : '#334155';
+          pCtx.fillText(`${idx + 1}`, h.x + 5, h.y - 2);
+        }
+
+        pCtx.restore();
+      });
+
+      const link = document.createElement('a');
+      link.download = `needlepoint-blueprint-${Date.now()}.png`;
+      link.href = pCanvas.toDataURL('image/png');
+      link.click();
+      showToast('Needlepoint blueprint exported!', 'fa-print');
+    }
+
+    // Save & Load Project JSON
+    saveJsonBtn.addEventListener('click', () => {
+      closeSettingsDrawer();
+      const projectData = {
+        version: '1.0',
+        craftMode: state.craftMode,
+        surfaceTheme: state.surfaceTheme,
+        holes: state.holes,
+        threads: state.threads,
+        palette: state.palette
+      };
+      const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.download = `filament-project-${Date.now()}.json`;
+      link.href = url;
+      link.click();
+      URL.revokeObjectURL(url);
+      showToast('Project JSON saved', 'fa-download');
+    });
+
+    loadJsonInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const data = JSON.parse(event.target.result);
+          if (data.holes && data.threads) {
+            pushHistory();
+            state.holes = data.holes;
+            state.threads = data.threads;
+            if (data.craftMode) setCraftMode(data.craftMode);
+            if (data.surfaceTheme) state.surfaceTheme = data.surfaceTheme;
+            if (data.palette) {
+              state.palette = data.palette;
+              renderSwatches();
+            }
+            updateMetricsHUD();
+            fitViewToContent();
+            requestRender();
+            showToast('Project loaded successfully', 'fa-upload');
+            closeSettingsDrawer();
+          }
+        } catch (err) {
+          showToast('Invalid project JSON file', 'fa-circle-exclamation');
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    window.addEventListener('load', () => {
+      resizeCanvas();
+      renderSwatches();
+      setColor('#f8fafc');
+      setTool('thread');
+      updateMetricsHUD();
+      updateUndoRedoButtons();
+
+      // Pan to screen center
+      state.panX = container.clientWidth / 2;
+      state.panY = container.clientHeight / 2;
+      requestRender();
+    });
+  </script>
+</body>
+</html>
