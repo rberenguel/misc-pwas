@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Spin</title>
+  <link rel="icon" type="image/png" href="./icon.png">
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#000000">
+  <link rel="apple-touch-icon" href="./icon.png">
+  <!-- DO NOT ADD CACHE BUSTER INCLUDES -->
+  <link rel="stylesheet" href="fonts/phosphor/phosphor.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="game-container">
+  <header>
+    <div id="server-indicator">SERVER: CPU</div>
+    <div class="score-box" id="score-display">0 - 0</div>
+    <button class="audio-toggle" id="audio-btn">SND: OFF</button>
+  </header>
+
+  <div id="cpu-hand-container" class="hand-container opp-hand">
+    <div class="hand-header">
+      <span class="hand-title">CPU HAND</span>
+    </div>
+    <div id="cpu-cards-scroll" class="cards-scroll"></div>
+  </div>
+
+  <div id="court-stage">
+    <div id="court">
+      <!-- CPU HALF (Top) -->
+      <div class="cell" id="c-opp-dp-l">
+        <div class="cell corner-cell corner-tl" id="c-opp-cn-l" title="Deep Left Corner Pocket (High Risk / +1 Distance Punish)"></div>
+      </div>
+      <div class="cell" id="c-opp-dp-c"></div>
+      <div class="cell" id="c-opp-dp-r">
+        <div class="cell corner-cell corner-tr" id="c-opp-cn-r" title="Deep Right Corner Pocket (High Risk / +1 Distance Punish)"></div>
+      </div>
+      <div class="cell" id="c-opp-sv-l"></div>
+      <div class="cell" id="c-opp-sv-c"></div>
+      <div class="cell" id="c-opp-sv-r"></div>
+
+      <!-- NET -->
+      <div class="net-separator" style="grid-column: span 3;"></div>
+
+      <!-- PLAYER HALF (Bottom) -->
+      <div class="cell" id="c-ply-sv-l"></div>
+      <div class="cell" id="c-ply-sv-c"></div>
+      <div class="cell" id="c-ply-sv-r"></div>
+      <div class="cell" id="c-ply-dp-l">
+        <div class="cell corner-cell corner-bl" id="c-ply-cn-l"></div>
+      </div>
+      <div class="cell" id="c-ply-dp-c"></div>
+      <div class="cell" id="c-ply-dp-r">
+        <div class="cell corner-cell corner-br" id="c-ply-cn-r"></div>
+      </div>
+    </div>
+
+    <!-- Tokens -->
+    <div id="player-entity" class="entity"></div>
+    <div id="cpu-entity" class="entity"></div>
+    <div id="ball-entity"></div>
+  </div>
+
+  <div id="feed-panel">
+    <div id="feed-main">Awaiting serve...</div>
+    <div id="feed-sub" class="feed-sub"></div>
+  </div>
+
+  <div id="hand-container" class="hand-container user-hand">
+    <div class="hand-header">
+      <div class="hand-header-info">
+        <span id="stamina-label">STAMINA: 3 / 3</span>
+      </div>
+      <div class="deck-piles-bar">
+        <button id="deck-menu-btn" class="pile-btn">CARDS (7)</button>
+        <span id="discard-status-label" class="discard-status">DISCARD: 1 AVAILABLE</span>
+      </div>
+    </div>
+    <div id="cards-scroll" class="cards-scroll"></div>
+  </div>
+
+  <div id="modal-overlay">
+    <div class="modal-top-bar">
+      <div id="modal-title">POINT WON</div>
+      <button id="modal-close-btn" class="modal-close-btn">CLOSE</button>
+    </div>
+    <div id="modal-body">Winner down the line.</div>
+  </div>
+</div>
+
+  <div id="update-banner">
+    <span>Update available — <a href="#" id="update-link">reload</a></span>
+    <span id="update-close">&#x2715;</span>
+  </div>
+
+  <!-- DO NOT ADD CACHE BUSTER INCLUDES -->
+  <script type="module" src="main.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(registration => {
+            registration.addEventListener('updatefound', () => {
+              const newWorker = registration.installing;
+              if (!newWorker) return;
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
+                  const banner = document.getElementById('update-banner');
+                  if (banner) banner.style.display = 'flex';
+                }
+              });
+            });
+          })
+          .catch(err => console.error('SW registration failed:', err));
+      });
+
+      const updateLink = document.getElementById('update-link');
+      if (updateLink) {
+        updateLink.addEventListener('click', e => {
+          e.preventDefault();
+          window.location.reload();
+        });
+      }
+
+      const updateClose = document.getElementById('update-close');
+      if (updateClose) {
+        updateClose.addEventListener('click', () => {
+          const banner = document.getElementById('update-banner');
+          if (banner) banner.style.display = 'none';
+        });
+      }
+    }
+  </script>
+</body>
+</html>
