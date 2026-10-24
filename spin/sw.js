@@ -1,4 +1,4 @@
-const CACHE = 'spin-v0.1.20';
+const CACHE = 'spin-v0.1.34';
 const PRECACHE = [
   './',
   './index.html',
@@ -11,6 +11,7 @@ const PRECACHE = [
   './ai.js',
   './ui.js',
   './audio.js',
+  './artifact.js',
   './icon.png',
   './fonts/phosphor/phosphor.css',
   './fonts/phosphor/Phosphor-Light.woff2'

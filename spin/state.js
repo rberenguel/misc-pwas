@@ -1,9 +1,12 @@
 /* --- GAME STATE & POINT LIFECYCLE --- */
 import {
+  CARD_LIBRARY,
   SERVE_DECK_TEMPLATE,
   RALLY_DECK_TEMPLATE,
+  DRAFT_ONLY_CARDS,
   SAFE_SERVE_CARD,
   SAFE_RALLY_CARD,
+  isServeCard,
   createDeck,
   shuffleDeck
 } from './cards.js';
@@ -11,6 +14,8 @@ import {
 export const gameState = {
   playerScore: 0,
   cpuScore: 0,
+  playerGames: 0,
+  cpuGames: 0,
   pointsPlayed: 0,
   currentServer: 'CPU', // Default to CPU so player returns first
   serveAttempt: 1,     // 1 or 2
@@ -26,7 +31,11 @@ export const gameState = {
   cpuCoords: null,
   ballPos: null,
 
-  // Player Decks & Discard Piles
+  // Player Persistent Master Decks (customized after each game)
+  playerMasterServeDeck: createDeck(SERVE_DECK_TEMPLATE),
+  playerMasterRallyDeck: createDeck(RALLY_DECK_TEMPLATE),
+
+  // Player Active Draw Decks & Discard Piles
   playerServeDeck: createDeck(SERVE_DECK_TEMPLATE),
   playerServeDiscard: [],
   playerRallyDeck: createDeck(RALLY_DECK_TEMPLATE),
@@ -60,13 +69,31 @@ export const gameState = {
 
   // Discard mechanics
   discardUsedThisTurn: false,
-  discardMode: false
+  discardMode: false,
+
+  // Match commentary history trail
+  gameTrail: [],
+
+  // Match shot vectors & statistics for game artifact generation
+  matchShots: [],
+  matchStats: {
+    playerAces: 0,
+    cpuAces: 0,
+    playerWinners: 0,
+    cpuWinners: 0,
+    playerErrors: 0,
+    cpuErrors: 0,
+    longestRally: 0,
+    totalShots: 0
+  }
 };
 
 export function resetPlayerDecks() {
-  gameState.playerServeDeck = shuffleDeck(createDeck(SERVE_DECK_TEMPLATE));
+  gameState.playerMasterServeDeck = createDeck(SERVE_DECK_TEMPLATE);
+  gameState.playerMasterRallyDeck = createDeck(RALLY_DECK_TEMPLATE);
+  gameState.playerServeDeck = shuffleDeck(createDeck(gameState.playerMasterServeDeck));
   gameState.playerServeDiscard = [];
-  gameState.playerRallyDeck = shuffleDeck(createDeck(RALLY_DECK_TEMPLATE));
+  gameState.playerRallyDeck = shuffleDeck(createDeck(gameState.playerMasterRallyDeck));
   gameState.playerRallyDiscard = [];
 }
 
@@ -75,6 +102,124 @@ export function resetCpuDecks() {
   gameState.cpuServeDiscard = [];
   gameState.cpuRallyDeck = shuffleDeck(createDeck(RALLY_DECK_TEMPLATE));
   gameState.cpuRallyDiscard = [];
+}
+
+/**
+ * Refreshes active draw & discard piles from the player's customized master decks
+ * at the start of a new game.
+ */
+export function refreshDecksForNewGame() {
+  gameState.playerHand = [];
+  gameState.cpuHand = [];
+  gameState.playerServeDeck = shuffleDeck(createDeck(gameState.playerMasterServeDeck));
+  gameState.playerServeDiscard = [];
+  gameState.playerRallyDeck = shuffleDeck(createDeck(gameState.playerMasterRallyDeck));
+  gameState.playerRallyDiscard = [];
+  resetCpuDecks();
+}
+
+/**
+ * Returns how many copies of a card exist in the player's customized master deck.
+ * Safe cards and situational smashes always return 1 (no duplicate mastery bonus).
+ */
+export function getPlayerCardCopyCount(cardKey) {
+  if (!cardKey || cardKey === SAFE_SERVE_CARD || cardKey === SAFE_RALLY_CARD || cardKey === 'smash_winner') {
+    return 1;
+  }
+  const masterDeck = isServeCard(cardKey)
+    ? gameState.playerMasterServeDeck
+    : gameState.playerMasterRallyDeck;
+  let count = 0;
+  for (let i = 0; i < masterDeck.length; i++) {
+    if (masterDeck[i] === cardKey) count++;
+  }
+  return count;
+}
+
+/**
+ * Performs a 1-for-1 card replacement in the player's master deck (Serve or Rally).
+ */
+export function swapPlayerDeckCard(addCardKey, removeCardKey) {
+  if (!addCardKey || !removeCardKey || !CARD_LIBRARY[addCardKey]) return null;
+  const targetIsServe = isServeCard(addCardKey);
+  const masterDeck = targetIsServe
+    ? gameState.playerMasterServeDeck
+    : gameState.playerMasterRallyDeck;
+
+  const idx = masterDeck.indexOf(removeCardKey);
+  if (idx === -1) return null;
+
+  masterDeck[idx] = addCardKey;
+  refreshDecksForNewGame();
+
+  const newCopyCount = getPlayerCardCopyCount(addCardKey);
+  const remainingRemovedCount = getPlayerCardCopyCount(removeCardKey);
+
+  console.log('[DEBUG] Deck 1-for-1 swap executed:', {
+    added: addCardKey,
+    removed: removeCardKey,
+    newCopyCount,
+    remainingRemovedCount,
+    masterDeck: [...masterDeck]
+  });
+
+  return {
+    added: addCardKey,
+    removed: removeCardKey,
+    newCopyCount,
+    remainingRemovedCount
+  };
+}
+
+/**
+ * Generates 3 distinct card choices for the post-game deck tweaking modal:
+ * - Slot 1: Reinforcement from the player's current Rally deck (to specialize an existing stroke)
+ * - Slot 2: Another card from the player's current Rally or Serve deck / base pool
+ * - Slot 3: A specialized Draft-Only card (e.g. Inside-Out Laser, Acute Feather Drop, Heavy Spin Looper, Twist Kick Serve)
+ */
+export function generateDraftChoices() {
+  const choices = [];
+  const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  // 1. Pick a card already in the player's rally deck that can still be replaced (i.e. doesn't already fill the whole deck)
+  const rallyCandidates = [...new Set(gameState.playerMasterRallyDeck)].filter(
+    k => getPlayerCardCopyCount(k) < gameState.playerMasterRallyDeck.length
+  );
+  if (rallyCandidates.length > 0) {
+    choices.push(pickRandom(rallyCandidates));
+  }
+
+  // 2. Pick a second card from combined player decks or standard templates
+  const combinedPool = [
+    ...new Set([
+      ...gameState.playerMasterRallyDeck,
+      ...gameState.playerMasterServeDeck,
+      ...RALLY_DECK_TEMPLATE,
+      ...SERVE_DECK_TEMPLATE
+    ])
+  ].filter(k => !choices.includes(k) && k !== SAFE_SERVE_CARD && k !== SAFE_RALLY_CARD);
+
+  if (combinedPool.length > 0) {
+    choices.push(pickRandom(combinedPool));
+  }
+
+  // 3. Pick a specialized draft-only card
+  const draftPool = DRAFT_ONLY_CARDS.filter(k => !choices.includes(k));
+  if (draftPool.length > 0) {
+    choices.push(pickRandom(draftPool));
+  }
+
+  // Fill any remaining slots if needed
+  const fallbackPool = Object.keys(CARD_LIBRARY).filter(
+    k => !choices.includes(k) && k !== SAFE_SERVE_CARD && k !== SAFE_RALLY_CARD && k !== 'smash_winner'
+  );
+  while (choices.length < 3 && fallbackPool.length > 0) {
+    const pick = pickRandom(fallbackPool);
+    choices.push(pick);
+    fallbackPool.splice(fallbackPool.indexOf(pick), 1);
+  }
+
+  return choices;
 }
 
 /**
@@ -110,11 +255,9 @@ function drawFromDeck(drawDeck, discardPile, template, count) {
 export function drawPlayerHand(isServe = false) {
   const targetDeck = isServe ? gameState.playerServeDeck : gameState.playerRallyDeck;
   const targetDiscard = isServe ? gameState.playerServeDiscard : gameState.playerRallyDiscard;
-  const template = isServe ? SERVE_DECK_TEMPLATE : RALLY_DECK_TEMPLATE;
+  const template = isServe ? gameState.playerMasterServeDeck : gameState.playerMasterRallyDeck;
   const safeCard = isServe ? SAFE_SERVE_CARD : SAFE_RALLY_CARD;
   const targetDrawnCount = isServe ? 2 : 3;
-
-  const isServeType = (key) => key === SAFE_SERVE_CARD || SERVE_DECK_TEMPLATE.includes(key);
 
   const keptDrawnCards = [];
   const oldHand = [...gameState.playerHand];
@@ -122,7 +265,7 @@ export function drawPlayerHand(isServe = false) {
   oldHand.forEach((cardKey) => {
     if (cardKey === SAFE_SERVE_CARD || cardKey === SAFE_RALLY_CARD || cardKey === 'smash_winner') return;
 
-    const cardIsServe = isServeType(cardKey);
+    const cardIsServe = isServeCard(cardKey);
     if (cardIsServe !== isServe) {
       if (cardIsServe) {
         gameState.playerServeDiscard.push(cardKey);
@@ -165,7 +308,7 @@ export function discardPlayerCard(cardKey) {
   const isServe = gameState.playerCondition === 'SERVE';
   const drawDeck = isServe ? gameState.playerServeDeck : gameState.playerRallyDeck;
   const discardPile = isServe ? gameState.playerServeDiscard : gameState.playerRallyDiscard;
-  const template = isServe ? SERVE_DECK_TEMPLATE : RALLY_DECK_TEMPLATE;
+  const template = isServe ? gameState.playerMasterServeDeck : gameState.playerMasterRallyDeck;
 
   // Move discarded card to discard pile (unless situational smash_winner)
   if (cardKey !== 'smash_winner') {
@@ -208,7 +351,7 @@ export function onPlayerCardPlayed(cardKey) {
  * Discards a played CPU card into the CPU discard pile upon shot execution.
  */
 export function onCpuCardPlayed(cardKey) {
-  const isServe = SERVE_DECK_TEMPLATE.includes(cardKey) || cardKey === SAFE_SERVE_CARD;
+  const isServe = isServeCard(cardKey);
   const discardPile = isServe ? gameState.cpuServeDiscard : gameState.cpuRallyDiscard;
 
   if (cardKey !== SAFE_SERVE_CARD && cardKey !== SAFE_RALLY_CARD && cardKey !== 'smash_winner') {
@@ -231,12 +374,10 @@ export function drawCpuHand(isServe = false) {
   const safeCard = isServe ? SAFE_SERVE_CARD : SAFE_RALLY_CARD;
   const targetDrawnCount = isServe ? 2 : 3;
 
-  const isServeType = (key) => key === SAFE_SERVE_CARD || SERVE_DECK_TEMPLATE.includes(key);
-
   const kept = [];
   gameState.cpuHand.forEach((cardKey) => {
     if (cardKey === SAFE_SERVE_CARD || cardKey === SAFE_RALLY_CARD || cardKey === 'smash_winner') return;
-    const cardIsServe = isServeType(cardKey);
+    const cardIsServe = isServeCard(cardKey);
     if (cardIsServe !== isServe) {
       if (cardIsServe) gameState.cpuServeDiscard.push(cardKey);
       else gameState.cpuRallyDiscard.push(cardKey);
@@ -256,7 +397,7 @@ export function drawCpuHand(isServe = false) {
 export function cleanUpPointHand() {
   gameState.playerHand.forEach((cardKey) => {
     if (cardKey === SAFE_SERVE_CARD || cardKey === SAFE_RALLY_CARD || cardKey === 'smash_winner') return;
-    if (SERVE_DECK_TEMPLATE.includes(cardKey)) {
+    if (isServeCard(cardKey)) {
       gameState.playerServeDiscard.push(cardKey);
     } else {
       gameState.playerRallyDiscard.push(cardKey);
@@ -266,7 +407,7 @@ export function cleanUpPointHand() {
 
   gameState.cpuHand.forEach((cardKey) => {
     if (cardKey === SAFE_SERVE_CARD || cardKey === SAFE_RALLY_CARD || cardKey === 'smash_winner') return;
-    if (SERVE_DECK_TEMPLATE.includes(cardKey)) {
+    if (isServeCard(cardKey)) {
       gameState.cpuServeDiscard.push(cardKey);
     } else {
       gameState.cpuRallyDiscard.push(cardKey);
@@ -274,3 +415,4 @@ export function cleanUpPointHand() {
   });
   gameState.cpuHand = [];
 }
+

@@ -10,6 +10,8 @@ export const COURT_CELLS = {
   'c-opp-sv-r': { col: 2, depth: 0, half: 'opp', label: 'OP-SR' },
   'c-opp-cn-l': { col: 0, depth: 1, half: 'opp', isCorner: true, parentId: 'c-opp-dp-l', label: 'OP-CN-L' },
   'c-opp-cn-r': { col: 2, depth: 1, half: 'opp', isCorner: true, parentId: 'c-opp-dp-r', label: 'OP-CN-R' },
+  'c-opp-scn-l': { col: 0, depth: 0, half: 'opp', isCorner: true, isFrontCorner: true, parentId: 'c-opp-sv-l', label: 'OP-SCN-L' },
+  'c-opp-scn-r': { col: 2, depth: 0, half: 'opp', isCorner: true, isFrontCorner: true, parentId: 'c-opp-sv-r', label: 'OP-SCN-R' },
 
   // Player half (Bottom)
   'c-ply-sv-l': { col: 0, depth: 0, half: 'ply', label: '1P-SL' },
@@ -19,7 +21,9 @@ export const COURT_CELLS = {
   'c-ply-dp-c': { col: 1, depth: 1, half: 'ply', label: '1P-BC' },
   'c-ply-dp-r': { col: 2, depth: 1, half: 'ply', label: '1P-BR' },
   'c-ply-cn-l': { col: 0, depth: 1, half: 'ply', isCorner: true, parentId: 'c-ply-dp-l', label: '1P-CN-L' },
-  'c-ply-cn-r': { col: 2, depth: 1, half: 'ply', isCorner: true, parentId: 'c-ply-dp-r', label: '1P-CN-R' }
+  'c-ply-cn-r': { col: 2, depth: 1, half: 'ply', isCorner: true, parentId: 'c-ply-dp-r', label: '1P-CN-R' },
+  'c-ply-scn-l': { col: 0, depth: 0, half: 'ply', isCorner: true, isFrontCorner: true, parentId: 'c-ply-sv-l', label: '1P-SCN-L' },
+  'c-ply-scn-r': { col: 2, depth: 0, half: 'ply', isCorner: true, isFrontCorner: true, parentId: 'c-ply-sv-r', label: '1P-SCN-R' }
 };
 
 export function getSpeedConfig(speed) {
@@ -210,11 +214,18 @@ export function getShotLandingCoords(targetId, cardKey = '', isServe = false, sp
   let offsetY = (Math.random() - 0.5) * 2 * maxOffsetY;
 
   if (isCorner) {
-    // Bounce in the front-inner part of the corner pocket so post-bounce carry exits through the corner
     const cornerDirX = (cell.col === 0) ? -1 : 1;
-    const cornerDirY = (cell.half === 'ply') ? 1 : -1;
-    offsetX = cornerDirX * (maxOffsetX * 0.25) + (Math.random() - 0.5) * (maxOffsetX * 0.35);
-    offsetY = -cornerDirY * (maxOffsetY * 0.15) + (Math.random() - 0.5) * (maxOffsetY * 0.35);
+    if (cell.isFrontCorner) {
+      // Front drop pocket: land tight near the net and sideline
+      const netDirY = (cell.half === 'ply') ? -1 : 1;
+      offsetX = cornerDirX * (maxOffsetX * 0.25) + (Math.random() - 0.5) * (maxOffsetX * 0.35);
+      offsetY = netDirY * (maxOffsetY * 0.25) + (Math.random() - 0.5) * (maxOffsetY * 0.30);
+    } else {
+      // Deep corner pocket: bounce in the front-inner part so post-bounce carry exits through the corner
+      const cornerDirY = (cell.half === 'ply') ? 1 : -1;
+      offsetX = cornerDirX * (maxOffsetX * 0.25) + (Math.random() - 0.5) * (maxOffsetX * 0.35);
+      offsetY = -cornerDirY * (maxOffsetY * 0.15) + (Math.random() - 0.5) * (maxOffsetY * 0.35);
+    }
   } else if (isServe) {
     const tDir = (cell && cell.col === 0) ? 1 : -1;
     const deepDir = (cell && cell.half === 'ply') ? 1 : -1;
@@ -222,8 +233,8 @@ export function getShotLandingCoords(targetId, cardKey = '', isServe = false, sp
       // Paint the center T line so post-bounce trajectory cuts sharply toward the middle
       offsetX = tDir * (maxOffsetX * (1.15 + Math.random() * 0.55));
       offsetY = deepDir * (maxOffsetY * 0.55) + (Math.random() - 0.5) * (maxOffsetY * 0.25);
-    } else if (cardKey === 'slice_serve') {
-      // Slice wide toward the outer sideline
+    } else if (cardKey === 'slice_serve' || cardKey === 'kick_twist_serve') {
+      // Slice / twist kick serve pulls wide toward the outer sideline
       offsetX = -tDir * (maxOffsetX * (0.25 + Math.random() * 0.45));
       offsetY = deepDir * (maxOffsetY * 0.15) + (Math.random() - 0.5) * (maxOffsetY * 0.25);
     } else if (cardKey === 'flat_serve') {
@@ -240,14 +251,14 @@ export function getShotLandingCoords(targetId, cardKey = '', isServe = false, sp
     }
   } else {
     const baseDir = (cell && cell.half === 'ply') ? 1 : -1;
-    if (cardKey === 'disguised_drop') {
+    if (cardKey === 'disguised_drop' || cardKey === 'feather_drop') {
       const netDir = -baseDir;
-      offsetY = netDir * (maxOffsetY * 0.75) + (Math.random() - 0.5) * (maxOffsetY * 0.2);
+      offsetY = netDir * (maxOffsetY * 0.78) + (Math.random() - 0.5) * (maxOffsetY * 0.18);
     } else if (cardKey === 'emergency_slice') {
       // Weak defensive floater bounces shallow near the service line
       const netDir = -baseDir;
       offsetY = netDir * (maxOffsetY * 0.85) + (Math.random() - 0.5) * (maxOffsetY * 0.15);
-    } else if (cardKey === 'crosscourt_drive' || cardKey === 'topspin') {
+    } else if (cardKey === 'crosscourt_drive' || cardKey === 'topspin' || cardKey === 'inside_out_laser' || cardKey === 'heavy_looper') {
       // Bounces mid-deep inside the court before kicking through to the baseline
       offsetY = baseDir * (maxOffsetY * 0.15) + (Math.random() - 0.5) * (maxOffsetY * 0.25);
     } else if (cardKey === 'control_slice') {
@@ -291,14 +302,16 @@ export function getPostBounceCoords(landingCoords, fromCoords, targetId, cardKey
     : getCellCenter(targetId);
 
   let carryDist = 38;
-  if (cardKey === 'disguised_drop') {
+  if (cardKey === 'feather_drop') {
+    carryDist = 11;
+  } else if (cardKey === 'disguised_drop') {
     carryDist = 15;
   } else if (cardKey === 'emergency_slice') {
     carryDist = 24;
   } else if (cardKey === 'control_slice') {
     carryDist = 28;
-  } else if (cardKey === 'moonball_lob') {
-    carryDist = 38;
+  } else if (cardKey === 'moonball_lob' || cardKey === 'heavy_looper') {
+    carryDist = 41;
   } else if (speed === 'fast') {
     carryDist = 46;
   } else if (speed === 'normal') {
@@ -430,15 +443,15 @@ export function getServeReturnCoords(receiver, serveTargetId, bounceCoords, from
     // Targets either the T or wide corner
     const dir = Math.random() < 0.55 ? tDir : -tDir;
     targetReturnX = returnCenter.x + dir * (30 + Math.random() * 26);
-  } else if (cardKey === 'slice_serve') {
-    // Slices wide toward the sideline
+  } else if (cardKey === 'slice_serve' || cardKey === 'kick_twist_serve') {
+    // Slices / kicks wide toward the sideline
     targetReturnX = returnCenter.x - tDir * (34 + Math.random() * 22);
   } else {
     // Safe kick serve lands comfortably near the returner
     targetReturnX = returnCenter.x + (Math.random() - 0.5) * 20;
   }
 
-  const padX = (cardKey === 'slice_serve') ? 2 : 8;
+  const padX = (cardKey === 'slice_serve' || cardKey === 'kick_twist_serve') ? 2 : 8;
   const returnX = Math.max(court.left + padX, Math.min(court.right - padX, targetReturnX));
 
   // Keep bounce.x strictly collinear on the line from server -> receiver so the bounce mark never drifts left/right
@@ -546,11 +559,11 @@ export function calculateHitterRecovery(hitter, currentCoords, condition = 'NEUT
     // High-arc defensive chip: buys strong recovery back into center
     ratioX = 0.78;
     ratioY = 0.78;
-  } else if (cardKey === 'control_slice') {
-    // Slow floating slice: plenty of time to recover to center
+  } else if (cardKey === 'control_slice' || cardKey === 'heavy_looper') {
+    // Slow floating slice / high looper: plenty of time to recover to center
     ratioX = 0.88;
     ratioY = 0.88;
-  } else if (cardKey === 'disguised_drop') {
+  } else if (cardKey === 'disguised_drop' || cardKey === 'feather_drop') {
     // Touch drop: recovers laterally toward center while staying slightly closer in depth
     ratioX = 0.78;
     ratioY = 0.50;
@@ -559,7 +572,7 @@ export function calculateHitterRecovery(hitter, currentCoords, condition = 'NEUT
     ratioX = 0.85;
     ratioY = 0.80;
   } else if (condition === 'SCRAMBLE') {
-    if (cardTag === 'HAIL-MARY' || cardKey === 'running_slap' || cardKey === 'topspin') {
+    if (cardTag === 'HAIL-MARY' || cardKey === 'running_slap' || cardKey === 'topspin' || cardKey === 'inside_out_laser') {
       // Desperate fast gamble on the run: limited recovery
       ratioX = 0.42;
       ratioY = 0.42;

@@ -46,6 +46,8 @@ import {
   gameState,
   resetPlayerDecks,
   resetCpuDecks,
+  refreshDecksForNewGame,
+  getPlayerCardCopyCount,
   drawPlayerHand,
   drawCpuHand,
   onPlayerCardPlayed,
@@ -59,8 +61,23 @@ import {
 import {
   updateUI,
   setFeed,
-  showModal
+  showModal,
+  openPostGameDraftModal,
+  openHowToPlayModal
 } from './ui.js';
+import {
+  recordMatchShot,
+  updateLastShotOutcome,
+  openMatchArtifactModal
+} from './artifact.js';
+
+// Setup info / how to play button
+const infoBtn = document.getElementById('info-btn');
+if (infoBtn) {
+  infoBtn.addEventListener('click', () => {
+    openHowToPlayModal();
+  });
+}
 
 // Setup audio toggle button
 const audioBtn = document.getElementById('audio-btn');
@@ -117,7 +134,8 @@ export function initPoint(isSecondServe = false) {
 
     setFeed(
       `${isSecondServe ? 'SECOND SERVE' : 'FIRST SERVE'} (1P)`,
-      ""
+      "",
+      { record: false }
     );
     updateUI(selectCard);
 
@@ -147,7 +165,7 @@ export function initPoint(isSecondServe = false) {
     gameState.cpuCoords = setup.cpuCoords;
     gameState.ballPos = setup.ballCoords;
     renderEntities(gameState.playerCoords, gameState.cpuCoords, setup.ballCoords, true);
-    setFeed(`CPU Serving...`, "");
+    setFeed(`CPU Serving...`, "", { record: false });
     setTimeout(executeCpuServe, 850);
   }
 }
@@ -160,6 +178,8 @@ function selectCard(cardKey) {
 
   const card = CARD_LIBRARY[cardKey];
   if (!card) return;
+
+  setFeed(card.name.toUpperCase(), card.desc || "", { record: false });
 
   if (gameState.playerCondition === 'SERVE') {
     const target = getLegalServeTarget('1P');
@@ -190,8 +210,8 @@ function selectCard(cardKey) {
           highlightTarget(id, executePlayerShot, onCornerEnter, onCornerLeave);
         } else if (card.targets === 'deep' && (!isNet || (isPlayerAtNet && isFrontcourtSide && card.tag !== 'RESET'))) {
           highlightTarget(id, executePlayerShot, onCornerEnter, onCornerLeave);
-        } else if (card.targets === 'short' && isNet && !cell.isCorner) {
-          highlightTarget(id, executePlayerShot);
+        } else if (card.targets === 'short' && isNet) {
+          highlightTarget(id, executePlayerShot, onCornerEnter, onCornerLeave);
         }
       }
     });
@@ -353,6 +373,8 @@ function executePlayerShot(targetId) {
   const incomingSpin = gameState.spinMomentum || 0;
 
   // Nuance dynamic accuracy check
+  const copyCount = getPlayerCardCopyCount(selectedKey);
+  const isFrontCorner = Boolean(COURT_CELLS[targetId]?.isFrontCorner);
   const nuanceContext = {
     distanceMoved: gameState.distanceMoved,
     incomingSpeed: gameState.lastShotSpeed,
@@ -360,14 +382,19 @@ function executePlayerShot(targetId) {
     stamina: gameState.stamina + card.cost,
     playerCondition: gameState.playerCondition,
     isServe: gameState.playerCondition === 'SERVE',
+    serveAttempt: gameState.serveAttempt,
     strokeWing: gameState.playerStrokeWing || 'FOREHAND',
     isCornerTarget,
     spinMomentum: incomingSpin,
-    momentumPenalty: gameState.playerMomentumPenalty || null
+    momentumPenalty: gameState.playerMomentumPenalty || null,
+    copyCount
   };
   const dynamicAcc = calculateDynamicAccuracy(selectedKey, nuanceContext);
 
-  console.log('[DEBUG] 1P Shot executed:', card.name, 'Target:', targetId, 'Spin:', incomingSpin, 'Momentum:', gameState.playerMomentumPenalty, 'Dynamic Accuracy:', dynamicAcc);
+  console.log('[DEBUG] 1P Shot executed:', card.name, 'Copies:', copyCount, 'Target:', targetId, 'Spin:', incomingSpin, 'Momentum:', gameState.playerMomentumPenalty, 'Dynamic Accuracy:', dynamicAcc);
+
+  const ballStart = getEntityCoords('ball-entity') || gameState.playerCoords || getCellCenter(gameState.playerPos);
+  const isServe = (card.tag === 'SERVE' || gameState.playerCondition === 'SERVE');
 
   const roll = Math.random();
   if (roll > dynamicAcc.accuracy) {
@@ -375,7 +402,6 @@ function executePlayerShot(targetId) {
     onPlayerCardPlayed(selectedKey);
     updateUI(selectCard);
 
-    const isServe = (gameState.playerCondition === 'SERVE');
     if (isServe) playServeHit(); else playRallyHit(card.speed === 'fast');
     triggerStrokeArc('player-entity', gameState.playerStrokeWing || 'FOREHAND');
 
@@ -383,7 +409,9 @@ function executePlayerShot(targetId) {
     const errRand = Math.random();
     const wideSide = COURT_CELLS[targetId].col === 0 ? 'wide-left' : 'wide-right';
     let errorType;
-    if (isCornerTarget) {
+    if (isFrontCorner) {
+      errorType = errRand < 0.55 ? 'net' : wideSide;
+    } else if (isCornerTarget) {
       errorType = errRand < 0.15 ? 'net' : (errRand < 0.575 ? 'long' : wideSide);
     } else if (!isServe && incomingSpin <= -2) {
       errorType = errRand < 0.68 ? 'net' : (errRand < 0.84 ? 'long' : wideSide);
@@ -395,6 +423,16 @@ function executePlayerShot(targetId) {
 
     if (errorType === 'net') {
       const netCoords = getNetCoords(gameState.playerCoords || gameState.playerPos, targetId);
+      recordMatchShot({
+        hitter: '1P',
+        cardKey: selectedKey,
+        speed: card.speed,
+        tag: card.tag,
+        from: ballStart,
+        bounce: netCoords,
+        to: netCoords,
+        outcome: isServe ? 'fault' : 'error'
+      });
       animateBallTo(netCoords, 280, 'ease-out', () => {
         triggerNetShake();
         playFaultSound();
@@ -419,6 +457,16 @@ function executePlayerShot(targetId) {
     } else {
       // Long or wide
       const outCoords = getOutOfBoundsCoords(gameState.playerCoords || gameState.playerPos, targetId, errorType);
+      recordMatchShot({
+        hitter: '1P',
+        cardKey: selectedKey,
+        speed: card.speed,
+        tag: card.tag,
+        from: ballStart,
+        bounce: outCoords,
+        to: outCoords,
+        outcome: isServe ? 'fault' : 'error'
+      });
       const speedCfg = getSpeedConfig(card.speed);
       animateBallTo(outCoords, speedCfg.duration, speedCfg.timing, () => {
         spawnBounceMark(outCoords);
@@ -447,7 +495,7 @@ function executePlayerShot(targetId) {
   gameState.spinMomentum = computeNextSpinMomentum(incomingSpin, selectedKey);
   const speedCfg = getSpeedConfig(card.speed);
 
-  if (gameState.playerCondition === 'SERVE') {
+  if (isServe) {
     playServeHit();
   } else {
     playRallyHit(card.speed === 'fast');
@@ -464,8 +512,6 @@ function executePlayerShot(targetId) {
   const tgtCell = COURT_CELLS[targetId];
   const initialDist = Math.abs(tgtCell.col - curCell.col) + Math.abs(tgtCell.depth - curCell.depth);
 
-  const isServe = (card.tag === 'SERVE' || gameState.playerCondition === 'SERVE');
-  const ballStart = getEntityCoords('ball-entity') || gameState.playerCoords || getCellCenter(gameState.playerPos);
   const landingCoords = getShotLandingCoords(targetId, card.id, isServe, gameState.spinMomentum);
 
   if (isServe) {
@@ -477,10 +523,21 @@ function executePlayerShot(targetId) {
       ? getReboundCoords(landingCoords, ballStart, 85)
       : serveReturn.coords;
 
+    recordMatchShot({
+      hitter: '1P',
+      cardKey: card.id,
+      speed: card.speed,
+      tag: card.tag,
+      from: ballStart,
+      bounce: landingCoords,
+      to: endCoords,
+      outcome: (reach && reach.isWinner) ? 'ace' : 'rally'
+    });
+
     animateWinnerBall(ballStart, landingCoords, endCoords, speedCfg.duration, () => {
       playBounce();
     }, () => {
-      const servePressureDist = (card.id === 'slice_serve' || card.id === 't_cannon_serve') ? 1 : 0;
+      const servePressureDist = (card.id === 'slice_serve' || card.id === 't_cannon_serve' || card.id === 'kick_twist_serve') ? 1 : 0;
       resolveShotArrival('CPU', serveReturn.cellId, card.speed, card.tag, servePressureDist, initialPosId, reach, shotVector, true);
     });
     return;
@@ -499,6 +556,18 @@ function executePlayerShot(targetId) {
   startHitterRecovery('1P', card.tag, card.id, gameState.playerCondition, speedCfg.duration);
 
   const isWinnerShot = ((reach && reach.isWinner) || card.tag === 'PUNISH');
+
+  recordMatchShot({
+    hitter: '1P',
+    cardKey: card.id,
+    speed: card.speed,
+    tag: card.tag,
+    from: ballStart,
+    bounce: landingCoords,
+    to: isWinnerShot ? getReboundCoords(landingCoords, ballStart, 75) : strikeCoords,
+    outcome: isWinnerShot ? 'winner' : 'rally'
+  });
+
   if (isWinnerShot) {
     // Unreturnable Winner: Single smooth continuous flight -> bounce -> rebound (NO PAUSE!)
     const reboundCoords = getReboundCoords(landingCoords, ballStart, 75);
@@ -532,13 +601,16 @@ function executeCpuServe() {
 
   updateUI(selectCard);
 
+  const ballStart = getEntityCoords('ball-entity') || gameState.cpuCoords || getCellCenter(gameState.cpuPos);
+
   const nuanceContext = {
     distanceMoved: 0,
     incomingSpeed: 'normal',
     rallyLength: 0,
     stamina: preShotStamina,
     playerCondition: 'SERVE',
-    isServe: true
+    isServe: true,
+    serveAttempt: gameState.serveAttempt
   };
   const dynamicAcc = calculateDynamicAccuracy(chosenKey, nuanceContext);
 
@@ -551,6 +623,16 @@ function executeCpuServe() {
 
     if (errorType === 'net') {
       const netCoords = getNetCoords(gameState.cpuCoords || gameState.cpuPos, targetId);
+      recordMatchShot({
+        hitter: 'CPU',
+        cardKey: chosenKey,
+        speed: card.speed,
+        tag: card.tag,
+        from: ballStart,
+        bounce: netCoords,
+        to: netCoords,
+        outcome: 'fault'
+      });
       animateBallTo(netCoords, 280, 'ease-out', () => {
         triggerNetShake();
         playFaultSound();
@@ -569,6 +651,16 @@ function executeCpuServe() {
       return;
     } else {
       const outCoords = getOutOfBoundsCoords(gameState.cpuCoords || gameState.cpuPos, targetId, errorType);
+      recordMatchShot({
+        hitter: 'CPU',
+        cardKey: chosenKey,
+        speed: card.speed,
+        tag: card.tag,
+        from: ballStart,
+        bounce: outCoords,
+        to: outCoords,
+        outcome: 'fault'
+      });
       const speedCfg = getSpeedConfig(card.speed);
       animateBallTo(outCoords, speedCfg.duration, speedCfg.timing, () => {
         spawnBounceMark(outCoords);
@@ -597,7 +689,6 @@ function executeCpuServe() {
   gameState.ballPos = targetId;
 
   const initialPosId = gameState.playerPos;
-  const ballStart = getEntityCoords('ball-entity') || gameState.cpuCoords || getCellCenter(gameState.cpuPos);
   const landingCoords = getShotLandingCoords(targetId, chosenKey, true, gameState.spinMomentum);
   const serveReturn = getServeReturnCoords('1P', targetId, landingCoords, ballStart, chosenKey);
   const shotVector = { from: ballStart, to: serveReturn.coords };
@@ -611,6 +702,17 @@ function executeCpuServe() {
   const endCoords = (reach && reach.isWinner)
     ? getReboundCoords(landingCoords, ballStart, 85)
     : serveReturn.coords;
+
+  recordMatchShot({
+    hitter: 'CPU',
+    cardKey: chosenKey,
+    speed: card.speed,
+    tag: card.tag,
+    from: ballStart,
+    bounce: landingCoords,
+    to: endCoords,
+    outcome: (reach && reach.isWinner) ? 'ace' : 'rally'
+  });
 
   // Animate serve through service-box bounce to baseline return spot (or past baseline on an Ace)
   animateWinnerBall(ballStart, landingCoords, endCoords, speedCfg.duration, () => {
@@ -626,6 +728,7 @@ function executeCpuRally() {
   const validKey = (cardKey && CARD_LIBRARY[cardKey]) ? cardKey : 'safe_drive';
   const card = CARD_LIBRARY[validKey];
   const isCornerTarget = Boolean(COURT_CELLS[targetId]?.isCorner);
+  const isFrontCorner = Boolean(COURT_CELLS[targetId]?.isFrontCorner);
   const incomingSpin = gameState.spinMomentum || 0;
   const preShotStamina = gameState.cpuStamina ?? 3;
   gameState.cpuStamina = Math.max(0, preShotStamina - card.cost);
@@ -648,6 +751,8 @@ function executeCpuRally() {
 
   console.log('[DEBUG] CPU Shot executed:', card.name, 'Target:', targetId, 'Spin:', incomingSpin, 'Momentum:', gameState.cpuMomentumPenalty, 'Dynamic Accuracy:', dynamicAcc);
 
+  const ballStart = getEntityCoords('ball-entity') || gameState.cpuCoords || getCellCenter(gameState.cpuPos);
+
   if (Math.random() > dynamicAcc.accuracy) {
     onCpuCardPlayed(validKey);
     playRallyHit(card.speed === 'fast');
@@ -655,7 +760,9 @@ function executeCpuRally() {
     const errRand = Math.random();
     const wideSide = COURT_CELLS[targetId].col === 0 ? 'wide-left' : 'wide-right';
     let errorType;
-    if (isCornerTarget) {
+    if (isFrontCorner) {
+      errorType = errRand < 0.55 ? 'net' : wideSide;
+    } else if (isCornerTarget) {
       errorType = errRand < 0.15 ? 'net' : (errRand < 0.575 ? 'long' : wideSide);
     } else if (incomingSpin <= -2) {
       errorType = errRand < 0.68 ? 'net' : (errRand < 0.84 ? 'long' : wideSide);
@@ -667,6 +774,16 @@ function executeCpuRally() {
 
     if (errorType === 'net') {
       const netCoords = getNetCoords(gameState.cpuCoords || gameState.cpuPos, targetId);
+      recordMatchShot({
+        hitter: 'CPU',
+        cardKey: validKey,
+        speed: card.speed,
+        tag: card.tag,
+        from: ballStart,
+        bounce: netCoords,
+        to: netCoords,
+        outcome: 'error'
+      });
       animateBallTo(netCoords, 280, 'ease-out', () => {
         triggerNetShake();
         playFaultSound();
@@ -679,6 +796,16 @@ function executeCpuRally() {
       return;
     } else {
       const outCoords = getOutOfBoundsCoords(gameState.cpuCoords || gameState.cpuPos, targetId, errorType);
+      recordMatchShot({
+        hitter: 'CPU',
+        cardKey: validKey,
+        speed: card.speed,
+        tag: card.tag,
+        from: ballStart,
+        bounce: outCoords,
+        to: outCoords,
+        outcome: 'error'
+      });
       const speedCfg = getSpeedConfig(card.speed);
       animateBallTo(outCoords, speedCfg.duration, speedCfg.timing, () => {
         spawnBounceMark(outCoords);
@@ -706,7 +833,6 @@ function executeCpuRally() {
   const tgtCell = COURT_CELLS[targetId];
   const initialDist = Math.abs(tgtCell.col - curCell.col) + Math.abs(tgtCell.depth - curCell.depth);
 
-  const ballStart = getEntityCoords('ball-entity') || gameState.cpuCoords || getCellCenter(gameState.cpuPos);
   const landingCoords = getShotLandingCoords(targetId, validKey, false, gameState.spinMomentum);
   const isSmashSetup = (card.tag === 'RESET' || card.tag === 'DEFENSE' || (curCell && curCell.depth === 0 && card.speed !== 'fast'));
   const strikeCoords = isSmashSetup
@@ -722,6 +848,18 @@ function executeCpuRally() {
 
   // Animate ball from its current position on court through bounce to strike/rebound coords
   const isWinnerShot = (reach && reach.isWinner) || card.tag === 'PUNISH';
+
+  recordMatchShot({
+    hitter: 'CPU',
+    cardKey: validKey,
+    speed: card.speed,
+    tag: card.tag,
+    from: ballStart,
+    bounce: landingCoords,
+    to: isWinnerShot ? getReboundCoords(landingCoords, ballStart, 75) : strikeCoords,
+    outcome: isWinnerShot ? 'winner' : 'rally'
+  });
+
   if (isWinnerShot) {
     const reboundCoords = getReboundCoords(landingCoords, ballStart, 75);
     animateWinnerBall(ballStart, landingCoords, reboundCoords, speedCfg.duration, () => {
@@ -785,6 +923,7 @@ function resolveShotArrival(receiver, targetId, shotSpeed, incomingTag, initialD
     }
 
     playWinnerSound();
+    updateLastShotOutcome(isServe ? 'ace' : 'winner');
     if (isServe) {
       setFeed("ACE!", `${winner} fired an unreturnable Ace!`);
     } else {
@@ -850,7 +989,7 @@ function resolveShotArrival(receiver, targetId, shotSpeed, incomingTag, initialD
     } else {
       const nextStamina = Math.max(1, 3 - cornerStaminaTax);
       enterPlayerTurn('IN_POSITION', nextStamina, dist, shotSpeed, incomingTag);
-      setFeed("In Position", "");
+      setFeed("In Position", "", { record: false });
     }
   }
 }
@@ -895,15 +1034,34 @@ function registerPointWin(winner, reason = "") {
 
   if (isGameWon) {
     const pWon = p > c;
-    setFeed(pWon ? "GAME TO 1P!" : "GAME TO CPU!", `${reason} Switching server...`);
+    if (pWon) {
+      gameState.playerGames = (gameState.playerGames || 0) + 1;
+    } else {
+      gameState.cpuGames = (gameState.cpuGames || 0) + 1;
+    }
+
+    gameState.turn = 'OVER';
+    setFeed(pWon ? "GAME TO 1P!" : "GAME TO CPU!", `${reason} Preparing deck tweak...`);
     updateUI();
+
     setTimeout(() => {
-      gameState.playerScore = 0;
-      gameState.cpuScore = 0;
-      gameState.pointsPlayed = 0;
-      gameState.currentServer = gameState.currentServer === '1P' ? 'CPU' : '1P';
-      initPoint();
-    }, 1600);
+      openPostGameDraftModal(pWon, reason, (draftRes) => {
+        gameState.playerScore = 0;
+        gameState.cpuScore = 0;
+        gameState.pointsPlayed = 0;
+        gameState.currentServer = gameState.currentServer === '1P' ? 'CPU' : '1P';
+        refreshDecksForNewGame();
+        initPoint();
+        if (draftRes && draftRes.swapped) {
+          const addedName = CARD_LIBRARY[draftRes.added]?.name || draftRes.added;
+          const removedName = CARD_LIBRARY[draftRes.removed]?.name || draftRes.removed;
+          setFeed(
+            `DECK UPDATED: +${addedName.toUpperCase()} (×${draftRes.newCopyCount})`,
+            `Replaced ${removedName} · Next game starting`
+          );
+        }
+      });
+    }, 600);
     return;
   }
 
@@ -919,7 +1077,9 @@ function registerPointWin(winner, reason = "") {
 function boot() {
   resetPlayerDecks();
   resetCpuDecks();
-  initPoint();
+  openHowToPlayModal(() => {
+    initPoint();
+  });
 }
 
 if (document.readyState === 'loading') {

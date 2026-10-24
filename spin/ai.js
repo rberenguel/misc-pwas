@@ -74,7 +74,8 @@ export function chooseCpuRally() {
     const hasDrop = available.includes('disguised_drop');
     if (hasDrop && pCoord.depth === 1 && Math.random() < 0.25) {
       chosenKey = 'disguised_drop';
-      targetId = pCoord.col === 0 ? 'c-ply-sv-r' : 'c-ply-sv-l';
+      const openSide = pCoord.col === 0 ? 'r' : 'l';
+      targetId = Math.random() < 0.35 ? `c-ply-scn-${openSide}` : `c-ply-sv-${openSide}`;
     } else {
       const attacks = available.filter(k => k === 'topspin' || k === 'crosscourt_drive');
       if (attacks.length > 0 && Math.random() > 0.3) {

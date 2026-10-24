@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Spin</title>
   <link rel="icon" type="image/png" href="./icon.png">
   <link rel="manifest" href="./manifest.json">
@@ -18,7 +18,10 @@
   <header>
     <div id="server-indicator">SERVER: CPU</div>
     <div class="score-box" id="score-display">0 - 0</div>
-    <button class="audio-toggle" id="audio-btn">SND: OFF</button>
+    <div class="header-actions">
+      <button class="info-toggle" id="info-btn" title="How to Play">?</button>
+      <button class="audio-toggle" id="audio-btn">SND: OFF</button>
+    </div>
   </header>
 
   <div id="cpu-hand-container" class="hand-container opp-hand">
@@ -38,17 +41,25 @@
       <div class="cell" id="c-opp-dp-r">
         <div class="cell corner-cell corner-tr" id="c-opp-cn-r" title="Deep Right Corner Pocket (High Risk / +1 Distance Punish)"></div>
       </div>
-      <div class="cell" id="c-opp-sv-l"></div>
+      <div class="cell" id="c-opp-sv-l">
+        <div class="cell corner-cell corner-bl" id="c-opp-scn-l" title="Front Left Drop Pocket (High Risk / +1 Distance Punish)"></div>
+      </div>
       <div class="cell" id="c-opp-sv-c"></div>
-      <div class="cell" id="c-opp-sv-r"></div>
+      <div class="cell" id="c-opp-sv-r">
+        <div class="cell corner-cell corner-br" id="c-opp-scn-r" title="Front Right Drop Pocket (High Risk / +1 Distance Punish)"></div>
+      </div>
 
       <!-- NET -->
       <div class="net-separator" style="grid-column: span 3;"></div>
 
       <!-- PLAYER HALF (Bottom) -->
-      <div class="cell" id="c-ply-sv-l"></div>
+      <div class="cell" id="c-ply-sv-l">
+        <div class="cell corner-cell corner-tl" id="c-ply-scn-l"></div>
+      </div>
       <div class="cell" id="c-ply-sv-c"></div>
-      <div class="cell" id="c-ply-sv-r"></div>
+      <div class="cell" id="c-ply-sv-r">
+        <div class="cell corner-cell corner-tr" id="c-ply-scn-r"></div>
+      </div>
       <div class="cell" id="c-ply-dp-l">
         <div class="cell corner-cell corner-bl" id="c-ply-cn-l"></div>
       </div>

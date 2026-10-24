@@ -171,8 +171,87 @@ export const CARD_LIBRARY = {
     isSafeOption: false,
     trajectoryPath: 'M 2,15 L 28,13 L 48,24 Q 53,21 58,19',
     desc: 'All-or-nothing running gamble. High risk of spraying wide.'
+  },
+
+  // DRAFT-ONLY SPECIALIZED CARDS
+  inside_out_laser: {
+    id: 'inside_out_laser',
+    name: 'Inside-Out Laser',
+    cost: 2,
+    speed: 'fast',
+    targets: 'deep',
+    tag: 'ATTACK',
+    spin: 'topspin',
+    baseAccuracy: 0.78,
+    isSafeOption: false,
+    isDraftOnly: true,
+    trajectoryPath: 'M 2,16 C 18,9 32,11 46,24 Q 53,16 58,13',
+    desc: 'Penetrating flat-topspin laser. Extra lethal on inside-out forehand setups.'
+  },
+  feather_drop: {
+    id: 'feather_drop',
+    name: 'Acute Feather Drop',
+    cost: 1,
+    speed: 'slow',
+    targets: 'short',
+    tag: 'TOUCH',
+    spin: 'slice',
+    baseAccuracy: 0.76,
+    isSafeOption: false,
+    isDraftOnly: true,
+    trajectoryPath: 'M 2,17 C 12,6 22,8 34,24 Q 36,21 38,24',
+    desc: '1-stamina acute touch drop with heavy underspin that dies right over the net.'
+  },
+  heavy_looper: {
+    id: 'heavy_looper',
+    name: 'Heavy Spin Looper',
+    cost: 1,
+    speed: 'normal',
+    targets: 'deep',
+    tag: 'RALLY',
+    spin: 'topspin',
+    baseAccuracy: 0.86,
+    isSafeOption: false,
+    isDraftOnly: true,
+    trajectoryPath: 'M 2,20 C 12,1 38,1 46,24 Q 51,10 58,7',
+    desc: 'High-margin heavy topspin grinder (+2 spin pushback) that pins opponents deep.'
+  },
+  kick_twist_serve: {
+    id: 'kick_twist_serve',
+    name: 'Twist Kick Serve',
+    cost: 1,
+    speed: 'normal',
+    targets: 'serve',
+    tag: 'SERVE',
+    spin: 'topspin',
+    baseAccuracy: 0.82,
+    isSafeOption: false,
+    isDraftOnly: true,
+    trajectoryPath: 'M 4,8 C 16,-2 32,0 41,24 Q 49,9 58,6',
+    desc: '1-stamina aggressive kick serve that leaps high and forces wide return pressure.'
   }
 };
+
+export const DRAFT_ONLY_CARDS = [
+  'inside_out_laser',
+  'feather_drop',
+  'heavy_looper',
+  'kick_twist_serve'
+];
+
+export const MASTERY_ACC_PER_EXTRA_COPY = 0.04;
+export const SERVE_MASTERY_ACC_PER_EXTRA_COPY = 0.015;
+
+export function getMasteryBonus(copyCount = 1, isServe = false) {
+  const extra = Math.max(0, (copyCount || 1) - 1);
+  const perCopy = isServe ? SERVE_MASTERY_ACC_PER_EXTRA_COPY : MASTERY_ACC_PER_EXTRA_COPY;
+  return extra * perCopy;
+}
+
+export function isServeCard(cardKey) {
+  const card = CARD_LIBRARY[cardKey];
+  return Boolean(card && (card.tag === 'SERVE' || card.targets === 'serve'));
+}
 
 export function renderTrajectorySvg(pathString) {
   return `
@@ -249,7 +328,7 @@ export function shuffleDeck(deck) {
 
 /**
  * Calculates nuanced dynamic accuracy for a shot based on rally momentum,
- * movement distance, incoming pressure, stamina strain, and fatigue.
+ * movement distance, incoming pressure, stamina strain, fatigue, and deck mastery.
  */
 export function calculateDynamicAccuracy(cardKey, context = {}) {
   const card = CARD_LIBRARY[cardKey];
@@ -257,11 +336,27 @@ export function calculateDynamicAccuracy(cardKey, context = {}) {
 
   let acc = card.baseAccuracy;
   const modifiers = [];
+  const cardIsServe = isServeCard(cardKey);
 
   // 1. Safe Option Resilience
   if (card.isSafeOption) {
     modifiers.push({ label: 'Safe Resilience', delta: +0.05 });
     acc += 0.05;
+  }
+
+  // 1b. Deck Specialization / Shot Mastery Bonus (+4% per extra rally copy, +1.5% per extra serve copy)
+  const copyCount = context.copyCount || 1;
+  if (copyCount > 1 && !card.isSafeOption) {
+    const masteryBonus = getMasteryBonus(copyCount, cardIsServe);
+    acc += masteryBonus;
+    modifiers.push({ label: `Shot Mastery (x${copyCount})`, delta: +masteryBonus });
+  }
+
+  // 1c. Second Serve Risk Penalty for non-safe serves
+  if (context.isServe && context.serveAttempt === 2 && !card.isSafeOption) {
+    const secondServePen = card.speed === 'fast' ? -0.14 : -0.06;
+    acc += secondServePen;
+    modifiers.push({ label: '2nd serve risk', delta: secondServePen });
   }
 
   // 2. Movement / Stretch Strain
@@ -305,12 +400,12 @@ export function calculateDynamicAccuracy(cardKey, context = {}) {
     modifiers.push({ label: `Rally fatigue (${rallyCount} shots)`, delta: -appliedFatigue });
   }
 
-  // 5. Stamina Strain
+  // 5. Stamina Strain (only award full-energy bonus during rallies, not on serve where stamina always resets to 3)
   if (context.stamina !== undefined) {
     if (context.stamina === 1 && card.cost >= 1) {
       acc -= 0.06;
       modifiers.push({ label: 'Low stamina strain', delta: -0.06 });
-    } else if (context.stamina >= 3) {
+    } else if (context.stamina >= 3 && !context.isServe) {
       acc += 0.03;
       modifiers.push({ label: 'Full energy', delta: +0.03 });
     }
@@ -343,7 +438,10 @@ export function calculateDynamicAccuracy(cardKey, context = {}) {
       }
     }
   } else if (context.strokeWing === 'INSIDE_OUT_FOREHAND') {
-    if (cardKey === 'crosscourt_drive' || cardKey === 'topspin' || cardKey === 'flat_drive') {
+    if (cardKey === 'inside_out_laser') {
+      acc += 0.08;
+      modifiers.push({ label: 'Inside-out laser specialty', delta: +0.08 });
+    } else if (cardKey === 'crosscourt_drive' || cardKey === 'topspin' || cardKey === 'heavy_looper') {
       acc += 0.06;
       modifiers.push({ label: 'Inside-out forehand setup', delta: +0.06 });
     }
@@ -360,22 +458,22 @@ export function calculateDynamicAccuracy(cardKey, context = {}) {
   const spin = context.spinMomentum || 0;
   if (!context.isServe && spin >= 2) {
     // Heavy accumulated topspin pushes receiver deep behind the baseline
-    if (cardKey === 'topspin' || cardKey === 'running_slap') {
+    if (cardKey === 'topspin' || cardKey === 'running_slap' || cardKey === 'inside_out_laser') {
       const pen = -0.04 * (spin - 1);
       acc += pen;
       modifiers.push({ label: `Deep topspin pushback (+${spin})`, delta: pen });
-    } else if (cardKey === 'control_slice') {
+    } else if (cardKey === 'control_slice' || cardKey === 'heavy_looper') {
       acc += 0.04;
-      modifiers.push({ label: 'Slice absorbs high kick', delta: +0.04 });
+      modifiers.push({ label: 'Spin absorbs high kick', delta: +0.04 });
     }
   } else if (!context.isServe && spin <= -2) {
     // Heavy accumulated slice skids low below net level
     const sliceDepth = Math.abs(spin);
-    if (cardKey === 'topspin' || cardKey === 'running_slap') {
+    if (cardKey === 'topspin' || cardKey === 'running_slap' || cardKey === 'inside_out_laser') {
       const pen = -0.05 * (sliceDepth - 1);
       acc += pen;
       modifiers.push({ label: `Low slice skid (-${sliceDepth})`, delta: pen });
-    } else if (cardKey === 'control_slice' || cardKey === 'disguised_drop') {
+    } else if (cardKey === 'control_slice' || cardKey === 'disguised_drop' || cardKey === 'feather_drop') {
       acc += 0.04;
       modifiers.push({ label: 'Knife slice synergy', delta: +0.04 });
     }
@@ -410,14 +508,18 @@ export function calculateDynamicAccuracy(cardKey, context = {}) {
 export function computeNextSpinMomentum(currentSpin = 0, cardKey = '') {
   const topspinDeltas = {
     topspin: +2,
+    heavy_looper: +2,
+    kick_twist_serve: +2,
     moonball_lob: +2,
     safe_kick_serve: +1,
-    crosscourt_drive: +1
+    crosscourt_drive: +1,
+    inside_out_laser: +1
   };
   const sliceDeltas = {
     control_slice: -2,
     slice_serve: -2,
     disguised_drop: -2,
+    feather_drop: -2,
     emergency_slice: -1
   };
 
