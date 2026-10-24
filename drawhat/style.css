@@ -1,15 +1,20 @@
 :root{--bg:#f4efe6;--fg:#1b1a17;--mute:#8a8273;--a:#c4532d}
 @media (prefers-color-scheme:dark){:root{--bg:#1b1a17;--fg:#f4efe6;--mute:#8a8273;--a:#e07a52}}
 *{box-sizing:border-box;margin:0}
-body{background:var(--bg);color:var(--fg);font:16px/1.3 Georgia,serif;min-height:100svh;display:flex;flex-direction:column;justify-content:center;padding:24px 16px env(safe-area-inset-bottom)}
-header{display:flex;justify-content:space-between;align-items:center;max-width:520px;width:100%;margin:0 auto 40px;font-family:ui-monospace,monospace;font-size:13px;color:var(--mute)}
-button{background:none;border:0;color:inherit;font:inherit;padding:8px 12px;cursor:pointer}
+body{background:var(--bg);color:var(--fg);font:16px/1.3 Georgia,serif;min-height:100svh;display:flex;flex-direction:column;justify-content:flex-start;padding:2em 24px calc(2em + env(safe-area-inset-bottom))}
+header{display:flex;justify-content:space-between;align-items:center;max-width:520px;width:100%;margin:0 auto 16px;font-family:ui-monospace,monospace;font-size:13px;color:var(--mute)}
+button{background:none;border:0;color:inherit;font:inherit;padding:4px;cursor:pointer}
+button i{font-size:28px;line-height:1;color:var(--fg)}
 #d{cursor:pointer}
-main{max-width:520px;width:100%;margin:0 auto}
-.l{margin-bottom:28px}
+main{flex:1;display:flex;flex-direction:column;justify-content:center;max-width:520px;width:100%;margin:0 auto}
+.l{margin-bottom:28px;padding-left:8px}
 .k{font:11px ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
 .w{font-size:clamp(36px,11vw,64px);font-style:italic;line-height:1.05}
 .l{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .w{transition:filter .6s cubic-bezier(.2,.7,.2,1),opacity .6s,letter-spacing .6s}
 .l:not(.on) .w{filter:blur(14px);opacity:.45;letter-spacing:.08em;user-select:none}
 footer{text-align:center;margin-top:24px;font:12px ui-monospace,monospace;color:var(--mute)}
+#update-banner{position:fixed;bottom:0;left:0;right:0;background:rgba(27,26,23,.96);border-top:1px solid #333;color:#e07a52;padding:10px 12px;text-align:center;font-family:ui-monospace,monospace;font-size:12px;z-index:10000;display:none;align-items:center;justify-content:center;gap:12px}
+#update-banner a{color:#f4efe6;text-decoration:underline;cursor:pointer}
+#update-close{position:absolute;right:12px;color:#8a8273;cursor:pointer;font-size:16px;line-height:1}
+#update-close:hover{color:var(--fg)}

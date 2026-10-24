@@ -1,0 +1,21 @@
+{
+  "name": "Drawhat",
+  "short_name": "Drawhat",
+  "version": "0.9.0",
+  "display": "standalone",
+  "background_color": "#1b1a17",
+  "theme_color": "#1b1a17",
+  "start_url": ".",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
