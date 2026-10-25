@@ -1,4 +1,4 @@
-const CACHE = 'spin-v0.1.34';
+const CACHE = 'spin-v0.1.36';
 const PRECACHE = [
   './',
   './index.html',
